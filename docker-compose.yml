@@ -1,0 +1,18 @@
+services:
+  arx-rootca:
+    image: arx-rootca:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arx-rootca
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      CA_API_LISTEN_ADDR: ":8080"
+      CA_API_CA_CONFIG: "/app/data/config/ca.json"
+      CA_API_JWT_SECRET: ${CA_API_JWT_SECRET:?Set CA_API_JWT_SECRET in the environment or a .env file}
+      CA_API_JWT_ISSUER: ${CA_API_JWT_ISSUER:-arx-rootca}
+      CA_API_JWT_EXPIRY: ${CA_API_JWT_EXPIRY:-24h}
+    volumes:
+      - ./data/ca:/app/data

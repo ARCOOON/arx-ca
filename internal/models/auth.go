@@ -1,0 +1,29 @@
+package models
+
+import "time"
+
+// LoginRequest is the JSON body for POST /api/v1/auth/login.
+type LoginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// LoginResponse is returned after a successful admin login.
+type LoginResponse struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	TokenType string    `json:"token_type"`
+}
+
+// CreateServiceAccountRequest is the JSON body for POST /api/v1/auth/service-accounts.
+type CreateServiceAccountRequest struct {
+	Name string `json:"name"`
+}
+
+// ServiceAccountResponse is returned when a service account is created.
+type ServiceAccountResponse struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	APIKey    string    `json:"api_key"`
+	CreatedAt time.Time `json:"created_at"`
+}

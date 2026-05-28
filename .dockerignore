@@ -1,0 +1,16 @@
+.git
+.gitignore
+.cursorrules
+.cursor
+bin/
+dist/
+build/
+.pki/
+.pki-test/
+data/
+*.md
+coverage.out
+coverage.txt
+*.test
+.env
+.env.*

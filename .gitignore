@@ -53,3 +53,10 @@ debug
 # Local configuration overrides
 config.local.yaml
 config.local.json
+
+# Local PKI material generated at runtime or during tests
+.pki/
+.pki-test/
+
+# Docker Compose persistent PKI volume
+data/

@@ -1,0 +1,110 @@
+package main
+
+import (
+	"context"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/your-org/ca-api/internal/api/handlers"
+	"github.com/your-org/ca-api/internal/api/middleware"
+	"github.com/your-org/ca-api/internal/auth"
+	"github.com/your-org/ca-api/internal/ca"
+)
+
+const (
+	defaultListenAddr   = ":8080"
+	defaultCAConfigPath = ".pki/config/ca.json"
+	shutdownTimeout     = 10 * time.Second
+)
+
+func main() {
+	listenAddr := envOrDefault("CA_API_LISTEN_ADDR", defaultListenAddr)
+	caConfigPath := envOrDefault("CA_API_CA_CONFIG", defaultCAConfigPath)
+
+	pkiEngine, err := ca.InitCA(caConfigPath)
+	if err != nil {
+		log.Fatalf("CA initialization failed: %v", err)
+	}
+	defer func() {
+		if err := pkiEngine.Shutdown(); err != nil {
+			log.Printf("CA shutdown error: %v", err)
+		}
+	}()
+
+	startTime := time.Now()
+	healthHandler := handlers.NewHealthHandler(startTime, pkiEngine)
+	caHandler := handlers.NewCAHandler(pkiEngine)
+	certHandler := handlers.NewCertificateHandler(pkiEngine)
+
+	jwtManager, err := auth.LoadJWTManagerFromEnv()
+	if err != nil {
+		log.Fatalf("jwt configuration error: %v", err)
+	}
+	apiKeyStore := auth.NewAPIKeyStore()
+	authHandler := handlers.NewAuthHandler(jwtManager, apiKeyStore)
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /api/v1/health", healthHandler)
+	mux.Handle("GET /api/v1/ca/root", caHandler.RootCert())
+	mux.Handle("POST /api/v1/auth/login", authHandler.Login())
+	mux.Handle(
+		"POST /api/v1/auth/service-accounts",
+		middleware.RequireAdmin(jwtManager, authHandler.CreateServiceAccount()),
+	)
+
+	certAuth := func(h http.Handler) http.Handler {
+		return middleware.RequireServiceAccountOrAdmin(jwtManager, apiKeyStore, h)
+	}
+	mux.Handle("POST /api/v1/certificates/issue", certAuth(certHandler.Issue()))
+	mux.Handle("POST /api/v1/certificates/auto", certAuth(certHandler.Auto()))
+	mux.Handle("POST /api/v1/certificates/revoke", certAuth(certHandler.Revoke()))
+	mux.Handle("GET /api/v1/certificates", certAuth(certHandler.List()))
+
+	handler := middleware.Logger(mux)
+
+	server := &http.Server{
+		Addr:         listenAddr,
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		log.Printf("ca-api server listening on %s", listenAddr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case err := <-errCh:
+		log.Fatalf("server error: %v", err)
+	case sig := <-sigCh:
+		log.Printf("shutdown signal received: %s", sig)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("graceful shutdown failed: %v", err)
+	}
+	log.Println("server stopped")
+}
+
+func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
