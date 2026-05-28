@@ -1,0 +1,17 @@
+# Project: Go Root CA API Server (step-ca SDK based)
+
+## Core Directives
+- **Language:** All code, variables, strictly technical documentation, and code comments MUST be written in English.
+- **Completeness:** ALWAYS implement all functions and modules completely. NEVER use placeholders, `// TODO`, or mock implementations. Do not leave any code for the user to write.
+- **Tech Stack:** Use Go 1.22+. Use the standard library `net/http` for routing (utilizing the new Go 1.22 multiplexer features). Avoid unnecessary third-party web frameworks to keep the binary lean and secure.
+- **PKI Engine:** Use `github.com/smallstep/certificates` and `github.com/smallstep/cli` Go SDKs for the underlying CA mechanics.
+- **Tone & Style:** Professional, highly technical, concise, and forward-thinking.
+
+## Architecture Guidelines
+- Follow Domain-Driven Design (DDD) principles: separate Handlers (API), Services (Business Logic), and Repositories (Data/CA Engine).
+- Standardize all API JSON responses. Include an `error` field (null if successful) and a `data` field.
+- Ensure robust, contextual error handling. Log internally, but return sanitized error messages via the API.
+
+## Future-Proofing
+- The API will eventually serve a WebUI. Keep endpoints RESTful and stateless.
+- Any future frontend code or HTML/CSS templates MUST default to a dark mode, flat, modern UI aesthetic.
