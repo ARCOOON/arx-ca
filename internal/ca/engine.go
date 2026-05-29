@@ -1,12 +1,14 @@
 package ca
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +17,7 @@ import (
 	"github.com/smallstep/cli-utils/step"
 	"go.step.sm/crypto/pemutil"
 
+	"github.com/smallstep/certificates/acme"
 	"github.com/smallstep/certificates/authority"
 	authconfig "github.com/smallstep/certificates/authority/config"
 	"github.com/smallstep/certificates/cas/apiv1"
@@ -45,6 +48,12 @@ type PKIEngine struct {
 	auth       *authority.Authority
 	password   []byte
 	rootPEM    []byte
+
+	acmeDB      acme.DB
+	acmeLinker  acme.Linker
+	acmeDNS     string
+	acmeHandler http.Handler
+	baseCtx     context.Context
 }
 
 // InitCA initializes or loads a local Root CA and Intermediate CA using the step-ca SDK.
@@ -71,6 +80,10 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		}
 	}
 
+	if err := ensureACMEProvisioner(resolvedConfig); err != nil {
+		return nil, fmt.Errorf("configure ACME provisioner: %w", err)
+	}
+
 	if err := ensureAdvancedProvisioners(resolvedConfig); err != nil {
 		return nil, fmt.Errorf("configure advanced provisioners: %w", err)
 	}
@@ -94,14 +107,23 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		return nil, fmt.Errorf("initialize step-ca authority: %w", err)
 	}
 
-	return &PKIEngine{
+	engine := &PKIEngine{
 		configPath: resolvedConfig,
 		basePath:   basePath,
 		config:     cfg,
 		auth:       authInstance,
 		password:   password,
 		rootPEM:    rootPEM,
-	}, nil
+	}
+
+	if err := engine.initACME(); err != nil {
+		return nil, fmt.Errorf("initialize ACME: %w", err)
+	}
+	if engine.baseCtx == nil {
+		engine.baseCtx = authority.NewContext(context.Background(), authInstance)
+	}
+
+	return engine, nil
 }
 
 // ConfigPath returns the absolute path to ca.json.
@@ -250,6 +272,7 @@ func bootstrapPKI(configPath, basePath string, password []byte) error {
 		pki.WithAddress(defaultCAAddress),
 		pki.WithDNSNames([]string{defaultCADNS}),
 		pki.WithProvisioner(defaultProvisioner),
+		pki.WithACME(),
 		pki.WithDeploymentType(pki.StandaloneDeployment),
 	)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -41,6 +42,7 @@ func main() {
 	caHandler := handlers.NewCAHandler(pkiEngine)
 	certHandler := handlers.NewCertificateHandler(pkiEngine)
 	provisionerHandler := handlers.NewProvisionerHandler(pkiEngine)
+	renewalHandler := handlers.NewRenewalHandler(pkiEngine, listenAddr)
 
 	jwtManager, err := auth.LoadJWTManagerFromEnv()
 	if err != nil {
@@ -68,6 +70,14 @@ func main() {
 	mux.Handle("POST /api/v1/certificates/lint", certAuth(certHandler.Lint()))
 	mux.Handle("GET /api/v1/certificates", certAuth(certHandler.List()))
 	mux.Handle("POST /api/v1/provisioners/token", certAuth(provisionerHandler.Token()))
+	mux.Handle("POST /api/v1/certificates/renew", certAuth(renewalHandler.Renew()))
+	mux.Handle("POST /api/v1/certificates/rekey", certAuth(renewalHandler.Rekey()))
+	mux.Handle("GET /api/v1/acme/status", certAuth(renewalHandler.ACMEStatus()))
+
+	if pkiEngine.ACMEEnabled() {
+		mux.Handle("/acme/", http.StripPrefix("/acme", pkiEngine.ACMEHandler()))
+		log.Printf("ACME enabled; directory available at /acme/acme/directory")
+	}
 
 	handler := middleware.Logger(mux)
 
@@ -77,6 +87,9 @@ func main() {
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 		IdleTimeout:  60 * time.Second,
+		BaseContext: func(_ net.Listener) context.Context {
+			return pkiEngine.BaseContext()
+		},
 	}
 
 	errCh := make(chan error, 1)
