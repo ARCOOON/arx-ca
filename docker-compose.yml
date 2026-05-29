@@ -1,6 +1,6 @@
 services:
   arx-ca:
-    image: arx-ca:latest
+    image: arx-ca-server:latest
     build:
       context: .
       dockerfile: Dockerfile
