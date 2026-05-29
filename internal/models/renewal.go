@@ -12,12 +12,3 @@ type RekeyCertificateRequest struct {
 	RenewToken     string `json:"renew_token,omitempty"`
 	CSR            string `json:"csr"`
 }
-
-// ACMEStatusResponse exposes ACME directory metadata for operators.
-type ACMEStatusResponse struct {
-	Enabled       bool     `json:"enabled"`
-	DirectoryURL  string   `json:"directory_url,omitempty"`
-	Provisioner   string   `json:"provisioner,omitempty"`
-	Challenges    []string `json:"challenges,omitempty"`
-	DNSName       string   `json:"dns_name,omitempty"`
-}

@@ -9,16 +9,16 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/smallstep/certificates/authority/provisioner"
 	authconfig "github.com/smallstep/certificates/authority/config"
+	"github.com/smallstep/certificates/authority/provisioner"
 
 	"github.com/your-org/arx-ca/internal/models"
 )
 
 const (
-	defaultTokenTTL       = 5 * time.Minute
+	defaultTokenTTL        = 5 * time.Minute
 	maxProvisionerTokenTTL = 15 * time.Minute
-	oidcProvisionerName   = "oidc-sso"
+	oidcProvisionerName    = "oidc-sso"
 )
 
 // ListProvisioners returns provisioners configured in the step-ca authority.
@@ -191,6 +191,10 @@ func ensureAdvancedProvisioners(configPath string) error {
 		ClientID:              clientID,
 		ClientSecret:          os.Getenv("CA_API_OIDC_CLIENT_SECRET"),
 		ConfigurationEndpoint: configEndpoint,
+	}
+	enableSSH := true
+	oidcProv.Claims = &provisioner.Claims{
+		EnableSSHCA: &enableSSH,
 	}
 	if tenant := strings.TrimSpace(os.Getenv("CA_API_OIDC_TENANT_ID")); tenant != "" {
 		oidcProv.TenantID = tenant

@@ -24,19 +24,20 @@ import (
 	"github.com/smallstep/certificates/db"
 	"github.com/smallstep/certificates/pki"
 
+	"github.com/your-org/arx-ca/internal/config"
 	"github.com/your-org/arx-ca/internal/models"
 
 	_ "github.com/smallstep/certificates/cas/softcas"
 )
 
 const (
-	engineName        = "step-ca"
-	defaultConfigRel  = "config/ca.json"
-	defaultPKIName    = "Arx CA"
-	defaultOrg        = "Arx CA"
-	defaultResource   = "arx-ca"
-	defaultCAAddress  = "127.0.0.1:9443"
-	defaultCADNS      = "localhost"
+	engineName         = "step-ca"
+	defaultConfigRel   = "config/ca.json"
+	defaultPKIName     = "Arx CA"
+	defaultOrg         = "Arx CA"
+	defaultResource    = "arx-ca"
+	defaultCAAddress   = "127.0.0.1:9443"
+	defaultCADNS       = "localhost"
 	defaultProvisioner = "ca-admin"
 )
 
@@ -49,17 +50,29 @@ type PKIEngine struct {
 	password   []byte
 	rootPEM    []byte
 
-	acmeDB      acme.DB
-	acmeLinker  acme.Linker
-	acmeDNS     string
-	acmeHandler http.Handler
-	baseCtx     context.Context
+	acmeDB       acme.DB
+	acmeLinker   acme.Linker
+	acmeDNS      string
+	acmeHandler  http.Handler
+	scepHandler  http.Handler
+	ndesHandler  http.Handler
+	ndesRegistry *NDESRegistry
+	baseCtx      context.Context
+	templates    *TemplateStore
+
+	appConfig   config.Config
+	k8sReviewer *K8sTokenReviewer
 }
 
 // InitCA initializes or loads a local Root CA and Intermediate CA using the step-ca SDK.
 // configPath must point to ca.json or to the PKI base directory containing config/ca.json.
 // If the PKI artifacts do not exist, they are generated with ECDSA P-256 keys automatically.
 func InitCA(configPath string) (*PKIEngine, error) {
+	appCfg := config.LoadFromEnv()
+	if err := appCfg.KMS.Validate(); err != nil {
+		return nil, fmt.Errorf("kms configuration: %w", err)
+	}
+
 	resolvedConfig, basePath, err := resolvePaths(configPath)
 	if err != nil {
 		return nil, err
@@ -75,9 +88,13 @@ func InitCA(configPath string) (*PKIEngine, error) {
 	}
 
 	if !pkiExists(resolvedConfig, basePath) {
-		if err := bootstrapPKI(resolvedConfig, basePath, password); err != nil {
+		if err := bootstrapPKI(resolvedConfig, basePath, password, appCfg); err != nil {
 			return nil, fmt.Errorf("bootstrap PKI: %w", err)
 		}
+	}
+
+	if err := ensureKMSConfig(resolvedConfig, appCfg); err != nil {
+		return nil, fmt.Errorf("configure KMS: %w", err)
 	}
 
 	if err := ensureACMEProvisioner(resolvedConfig); err != nil {
@@ -86,6 +103,22 @@ func InitCA(configPath string) (*PKIEngine, error) {
 
 	if err := ensureAdvancedProvisioners(resolvedConfig); err != nil {
 		return nil, fmt.Errorf("configure advanced provisioners: %w", err)
+	}
+
+	if err := ensureK8sSAProvisioner(resolvedConfig, appCfg.K8s); err != nil {
+		return nil, fmt.Errorf("configure kubernetes service account provisioner: %w", err)
+	}
+
+	if err := ensureSSHCA(resolvedConfig, basePath, password); err != nil {
+		return nil, fmt.Errorf("configure SSH CA: %w", err)
+	}
+
+	if err := ensureSCEPProvisioner(resolvedConfig, basePath, password); err != nil {
+		return nil, fmt.Errorf("configure SCEP provisioner: %w", err)
+	}
+
+	if err := ensureCRLConfig(resolvedConfig); err != nil {
+		return nil, fmt.Errorf("configure CRL: %w", err)
 	}
 
 	cfg, err := authority.LoadConfiguration(resolvedConfig)
@@ -107,20 +140,39 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		return nil, fmt.Errorf("initialize step-ca authority: %w", err)
 	}
 
+	templateStore, err := newTemplateStore(basePath)
+	if err != nil {
+		return nil, fmt.Errorf("initialize template store: %w", err)
+	}
+
+	k8sReviewer, err := initK8sReviewer(appCfg.K8s)
+	if err != nil {
+		return nil, fmt.Errorf("initialize kubernetes token reviewer: %w", err)
+	}
+
 	engine := &PKIEngine{
-		configPath: resolvedConfig,
-		basePath:   basePath,
-		config:     cfg,
-		auth:       authInstance,
-		password:   password,
-		rootPEM:    rootPEM,
+		configPath:  resolvedConfig,
+		basePath:    basePath,
+		config:      cfg,
+		auth:        authInstance,
+		password:    password,
+		rootPEM:     rootPEM,
+		templates:   templateStore,
+		appConfig:   appCfg,
+		k8sReviewer: k8sReviewer,
 	}
 
 	if err := engine.initACME(); err != nil {
 		return nil, fmt.Errorf("initialize ACME: %w", err)
 	}
+	if err := engine.initSCEP(); err != nil {
+		return nil, fmt.Errorf("initialize SCEP: %w", err)
+	}
+	if err := engine.initNDES(); err != nil {
+		return nil, fmt.Errorf("initialize NDES: %w", err)
+	}
 	if engine.baseCtx == nil {
-		engine.baseCtx = authority.NewContext(context.Background(), authInstance)
+		engine.rebuildBaseContext()
 	}
 
 	return engine, nil
@@ -149,6 +201,22 @@ func (e *PKIEngine) RootCertPEM() []byte {
 	out := make([]byte, len(e.rootPEM))
 	copy(out, e.rootPEM)
 	return out
+}
+
+// IntermediateCertPEM returns the Intermediate CA certificate encoded in PEM format.
+func (e *PKIEngine) IntermediateCertPEM() []byte {
+	if e == nil || e.auth == nil {
+		return nil
+	}
+	cert := e.auth.GetIntermediateCertificate()
+	if cert == nil {
+		return nil
+	}
+	block := &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert.Raw,
+	}
+	return pem.EncodeToMemory(block)
 }
 
 // RootFingerprint returns the SHA-256 fingerprint of the root certificate.
@@ -185,10 +253,14 @@ func (e *PKIEngine) Status() models.CABackendStatus {
 	if e.config.DB != nil && e.config.DB.Type != "" {
 		dbStatus = e.config.DB.Type
 	}
+	cryptoBackend := string(e.appConfig.Crypto.Backend)
+	if cryptoBackend == "" {
+		cryptoBackend = string(config.CryptoBackendLocal)
+	}
 
 	return models.CABackendStatus{
 		Status:      "healthy",
-		Message:     fmt.Sprintf("CA operational; storage=%s; fingerprint=%s", dbStatus, e.RootFingerprint()),
+		Message:     fmt.Sprintf("CA operational; crypto=%s; storage=%s; fingerprint=%s", cryptoBackend, dbStatus, e.RootFingerprint()),
 		Engine:      engineName,
 		Initialized: true,
 	}
@@ -249,7 +321,7 @@ func pkiExists(configPath, basePath string) bool {
 	return true
 }
 
-func bootstrapPKI(configPath, basePath string, password []byte) error {
+func bootstrapPKI(configPath, basePath string, password []byte, appCfg config.Config) error {
 	for _, dir := range []string{
 		filepath.Join(basePath, "config"),
 		filepath.Join(basePath, "certs"),
@@ -273,6 +345,7 @@ func bootstrapPKI(configPath, basePath string, password []byte) error {
 		pki.WithDNSNames([]string{defaultCADNS}),
 		pki.WithProvisioner(defaultProvisioner),
 		pki.WithACME(),
+		pki.WithSSH(),
 		pki.WithDeploymentType(pki.StandaloneDeployment),
 	)
 	if err != nil {
@@ -292,11 +365,23 @@ func bootstrapPKI(configPath, basePath string, password []byte) error {
 		return fmt.Errorf("generate intermediate certificate: %w", err)
 	}
 
+	if err := bootstrapSSHKeys(p, password); err != nil {
+		return fmt.Errorf("generate SSH signing keys: %w", err)
+	}
+
 	dbType, dbSource := resolveDBConfig(basePath)
-	if err := p.Save(
+	saveOpts := []pki.ConfigOption{
 		withConfigPassword(password),
 		withDBConfig(dbType, dbSource),
-	); err != nil {
+	}
+	if kmsOpts, err := applyKMSBootstrapOptions(appCfg); err != nil {
+		return err
+	} else {
+		for _, opt := range kmsOpts {
+			saveOpts = append(saveOpts, opt)
+		}
+	}
+	if err := p.Save(saveOpts...); err != nil {
 		return fmt.Errorf("persist PKI: %w", err)
 	}
 

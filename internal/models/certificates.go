@@ -4,16 +4,20 @@ import "time"
 
 // IssueCertificateRequest carries a PEM-encoded CSR to be signed by the intermediate CA.
 type IssueCertificateRequest struct {
-	CSR string `json:"csr"`
-	TTL string `json:"ttl,omitempty"`
+	CSR        string         `json:"csr"`
+	TTL        string         `json:"ttl,omitempty"`
+	TemplateID string         `json:"template_id,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
 // AutoCertificateRequest describes a certificate to be generated and signed in one step.
 type AutoCertificateRequest struct {
-	CommonName string   `json:"common_name"`
-	DNSSANs    []string `json:"dns_sans,omitempty"`
-	IPSANs     []string `json:"ip_sans,omitempty"`
-	TTL        string   `json:"ttl,omitempty"`
+	CommonName string         `json:"common_name"`
+	DNSSANs    []string       `json:"dns_sans,omitempty"`
+	IPSANs     []string       `json:"ip_sans,omitempty"`
+	TTL        string         `json:"ttl,omitempty"`
+	TemplateID string         `json:"template_id,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
 // RevokeCertificateRequest revokes a previously issued certificate by serial number.
@@ -62,14 +66,16 @@ type CertificateSummary struct {
 // ListCertificatesResponse returns all certificates known to the CA database.
 type ListCertificatesResponse struct {
 	Certificates []CertificateSummary `json:"certificates"`
-	Total        int                `json:"total"`
+	Total        int                  `json:"total"`
 }
 
 // IssueCertificateWithTokenRequest signs a CSR using a provisioner-issued single-use token.
 type IssueCertificateWithTokenRequest struct {
-	Token string `json:"token"`
-	CSR   string `json:"csr"`
-	TTL   string `json:"ttl,omitempty"`
+	Token      string         `json:"token"`
+	CSR        string         `json:"csr"`
+	TTL        string         `json:"ttl,omitempty"`
+	TemplateID string         `json:"template_id,omitempty"`
+	Metadata   map[string]any `json:"metadata,omitempty"`
 }
 
 // LintCertificateRequest carries a PEM-encoded certificate to inspect.

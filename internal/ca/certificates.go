@@ -34,7 +34,7 @@ import (
 var x509CertsTable = []byte("x509_certs")
 
 // IssueCertificateWithToken validates a provisioner token and signs the provided CSR.
-func (e *PKIEngine) IssueCertificateWithToken(ctx context.Context, token, csrPEM, ttl string) (*models.CertificatePEMResponse, error) {
+func (e *PKIEngine) IssueCertificateWithToken(ctx context.Context, token, csrPEM, ttl, templateID string, metadata map[string]any) (*models.CertificatePEMResponse, error) {
 	if e == nil || e.auth == nil {
 		return nil, errors.New("CA engine is not initialized")
 	}
@@ -54,7 +54,12 @@ func (e *PKIEngine) IssueCertificateWithToken(ctx context.Context, token, csrPEM
 		return nil, err
 	}
 
-	chain, err := e.signCSRWithToken(ctx, csr, signOpts, token)
+	templateOpts, err := e.templateSignOptions(templateID, metadata, csr, csr.Subject.CommonName)
+	if err != nil {
+		return nil, err
+	}
+
+	chain, err := e.signCSRWithToken(ctx, csr, signOpts, token, templateOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +68,7 @@ func (e *PKIEngine) IssueCertificateWithToken(ctx context.Context, token, csrPEM
 }
 
 // IssueCertificate signs a PEM-encoded CSR using the intermediate CA via step-ca SignWithContext.
-func (e *PKIEngine) IssueCertificate(ctx context.Context, csrPEM, ttl string) (*models.CertificatePEMResponse, error) {
+func (e *PKIEngine) IssueCertificate(ctx context.Context, csrPEM, ttl, templateID string, metadata map[string]any) (*models.CertificatePEMResponse, error) {
 	if e == nil || e.auth == nil {
 		return nil, errors.New("CA engine is not initialized")
 	}
@@ -78,7 +83,12 @@ func (e *PKIEngine) IssueCertificate(ctx context.Context, csrPEM, ttl string) (*
 		return nil, err
 	}
 
-	chain, err := e.signCSR(ctx, csr, signOpts)
+	templateOpts, err := e.templateSignOptions(templateID, metadata, csr, csr.Subject.CommonName)
+	if err != nil {
+		return nil, err
+	}
+
+	chain, err := e.signCSR(ctx, csr, signOpts, templateOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +128,12 @@ func (e *PKIEngine) AutoCertificate(ctx context.Context, req models.AutoCertific
 		return nil, err
 	}
 
-	chain, err := e.signCSR(ctx, csr, signOpts)
+	templateOpts, err := e.templateSignOptions(req.TemplateID, req.Metadata, csr, cn)
+	if err != nil {
+		return nil, err
+	}
+
+	chain, err := e.signCSR(ctx, csr, signOpts, templateOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -213,12 +228,12 @@ func (e *PKIEngine) ListCertificates(ctx context.Context) (*models.ListCertifica
 		revoked, _ := e.auth.IsRevoked(serial)
 
 		summary := models.CertificateSummary{
-			Serial:      serial,
-			Subject:     cert.Subject.String(),
-			DNSNames:    append([]string(nil), cert.DNSNames...),
-			NotBefore:   cert.NotBefore.UTC(),
-			NotAfter:    cert.NotAfter.UTC(),
-			Revoked:     revoked,
+			Serial:    serial,
+			Subject:   cert.Subject.String(),
+			DNSNames:  append([]string(nil), cert.DNSNames...),
+			NotBefore: cert.NotBefore.UTC(),
+			NotAfter:  cert.NotAfter.UTC(),
+			Revoked:   revoked,
 		}
 
 		for _, ip := range cert.IPAddresses {
@@ -243,16 +258,71 @@ func (e *PKIEngine) ListCertificates(ctx context.Context) (*models.ListCertifica
 	}, nil
 }
 
-func (e *PKIEngine) signCSR(ctx context.Context, csr *x509.CertificateRequest, signOpts provisioner.SignOptions) ([]*x509.Certificate, error) {
+// ListPublicCertificates returns read-only certificate metadata for unauthenticated clients.
+func (e *PKIEngine) ListPublicCertificates(ctx context.Context) (*models.PublicListCertificatesResponse, error) {
+	list, err := e.ListCertificates(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	public := make([]models.PublicCertificateSummary, 0, len(list.Certificates))
+	for _, c := range list.Certificates {
+		public = append(public, models.PublicCertificateSummary{
+			Serial:      c.Serial,
+			Subject:     c.Subject,
+			DNSNames:    c.DNSNames,
+			IPAddresses: c.IPAddresses,
+			NotBefore:   c.NotBefore.UTC().Format(time.RFC3339),
+			NotAfter:    c.NotAfter.UTC().Format(time.RFC3339),
+			Revoked:     c.Revoked,
+		})
+	}
+
+	return &models.PublicListCertificatesResponse{
+		Certificates: public,
+		Total:        list.Total,
+	}, nil
+}
+
+// GetCertificatePEM returns a single issued certificate in PEM encoding by serial number.
+func (e *PKIEngine) GetCertificatePEM(ctx context.Context, serial string) (string, error) {
+	_ = ctx
+	if e == nil || e.auth == nil {
+		return "", errors.New("CA engine is not initialized")
+	}
+
+	normalizedSerial, err := normalizeSerial(serial)
+	if err != nil {
+		return "", err
+	}
+
+	cert, err := e.auth.GetDatabase().GetCertificate(normalizedSerial)
+	if err != nil {
+		return "", fmt.Errorf("certificate not found")
+	}
+
+	block := &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert.Raw,
+	}
+	return string(pem.EncodeToMemory(block)), nil
+}
+
+func (e *PKIEngine) signCSR(ctx context.Context, csr *x509.CertificateRequest, signOpts provisioner.SignOptions, extraOpts ...provisioner.SignOption) ([]*x509.Certificate, error) {
 	sans := collectCSRSubjectAlternativeNames(csr)
 	token, _, _, err := e.createProvisionerSignToken(defaultProvisioner, csr.Subject.CommonName, sans, defaultTokenTTL)
 	if err != nil {
 		return nil, fmt.Errorf("create signing token: %w", err)
 	}
-	return e.signCSRWithToken(ctx, csr, signOpts, token)
+	return e.signCSRWithToken(ctx, csr, signOpts, token, extraOpts...)
 }
 
-func (e *PKIEngine) signCSRWithToken(ctx context.Context, csr *x509.CertificateRequest, signOpts provisioner.SignOptions, token string) ([]*x509.Certificate, error) {
+func (e *PKIEngine) signCSRWithToken(ctx context.Context, csr *x509.CertificateRequest, signOpts provisioner.SignOptions, token string, extraOpts ...provisioner.SignOption) ([]*x509.Certificate, error) {
+	token, err := e.prepareEnrollmentToken(ctx, csr, token)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx = provisioner.NewContextWithMethod(ctx, provisioner.SignMethod)
 	ctx = authority.NewContext(ctx, e.auth)
 
@@ -261,7 +331,11 @@ func (e *PKIEngine) signCSRWithToken(ctx context.Context, csr *x509.CertificateR
 		return nil, err
 	}
 
-	chain, err := e.auth.SignWithContext(ctx, csr, signOpts, authOpts...)
+	signArgs := make([]provisioner.SignOption, 0, len(authOpts)+len(extraOpts))
+	signArgs = append(signArgs, authOpts...)
+	signArgs = append(signArgs, extraOpts...)
+
+	chain, err := e.auth.SignWithContext(ctx, csr, signOpts, signArgs...)
 	if err != nil {
 		return nil, err
 	}
