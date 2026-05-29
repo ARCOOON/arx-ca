@@ -7,6 +7,7 @@ type contextKey int
 const (
 	contextKeyAdminUsername contextKey = iota + 1
 	contextKeyServiceAccount
+	contextKeyRoles
 )
 
 // WithAdminUsername stores the authenticated admin username in the request context.
@@ -29,4 +30,20 @@ func WithServiceAccount(ctx context.Context, account *ServiceAccount) context.Co
 func ServiceAccountFromContext(ctx context.Context) (*ServiceAccount, bool) {
 	account, ok := ctx.Value(contextKeyServiceAccount).(*ServiceAccount)
 	return account, ok
+}
+
+// WithRoles stores RBAC roles in the request context.
+func WithRoles(ctx context.Context, roles []Role) context.Context {
+	return context.WithValue(ctx, contextKeyRoles, NormalizeRoles(roles))
+}
+
+// RolesFromContext returns roles set by authentication middleware.
+func RolesFromContext(ctx context.Context) ([]Role, bool) {
+	roles, ok := ctx.Value(contextKeyRoles).([]Role)
+	if !ok || len(roles) == 0 {
+		return nil, false
+	}
+	out := make([]Role, len(roles))
+	copy(out, roles)
+	return out, true
 }

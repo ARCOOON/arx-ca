@@ -9,10 +9,10 @@ import (
 )
 
 const (
-	defaultJWTIssuer        = "arx-ca"
-	defaultJWTExpiry        = 24 * time.Hour
-	jwtSigningMethod        = "HS256"
-	adminTokenType          = "Bearer"
+	defaultJWTIssuer = "arx-ca"
+	defaultJWTExpiry = 24 * time.Hour
+	jwtSigningMethod = "HS256"
+	adminTokenType   = "Bearer"
 )
 
 var (
@@ -32,6 +32,7 @@ type JWTManager struct {
 // AdminClaims are embedded in admin JWT access tokens.
 type AdminClaims struct {
 	Username string `json:"username"`
+	Roles    []Role `json:"roles,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -53,13 +54,18 @@ func NewJWTManager(secret string, issuer string, expiry time.Duration) (*JWTMana
 	}, nil
 }
 
-// GenerateToken creates a signed JWT for the given admin username.
-func (m *JWTManager) GenerateToken(username string) (token string, expiresAt time.Time, err error) {
+// GenerateToken creates a signed JWT for the given admin username and roles.
+func (m *JWTManager) GenerateToken(username string, roles []Role) (token string, expiresAt time.Time, err error) {
 	now := time.Now().UTC()
 	expiresAt = now.Add(m.expiry)
+	roles = NormalizeRoles(roles)
+	if len(roles) == 0 {
+		roles = RolesForAdmin(username)
+	}
 
 	claims := AdminClaims{
 		Username: username,
+		Roles:    roles,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    m.issuer,
 			Subject:   username,

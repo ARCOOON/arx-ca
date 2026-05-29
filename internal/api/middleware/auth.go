@@ -32,6 +32,11 @@ func RequireAdmin(jwtManager *auth.JWTManager, next http.Handler) http.Handler {
 		}
 
 		ctx := auth.WithAdminUsername(r.Context(), claims.Username)
+		roles := claims.Roles
+		if len(roles) == 0 {
+			roles = auth.RolesForAdmin(claims.Username)
+		}
+		ctx = auth.WithRoles(ctx, roles)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -42,6 +47,11 @@ func RequireServiceAccountOrAdmin(jwtManager *auth.JWTManager, store *auth.APIKe
 		if token, err := extractBearerToken(r.Header.Get(headerAuthorization)); err == nil {
 			if claims, jwtErr := jwtManager.ValidateToken(token); jwtErr == nil {
 				ctx := auth.WithAdminUsername(r.Context(), claims.Username)
+				roles := claims.Roles
+				if len(roles) == 0 {
+					roles = auth.RolesForAdmin(claims.Username)
+				}
+				ctx = auth.WithRoles(ctx, roles)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			}
@@ -70,6 +80,7 @@ func RequireServiceAccountOrAdmin(jwtManager *auth.JWTManager, store *auth.APIKe
 		}
 
 		ctx := auth.WithServiceAccount(r.Context(), account)
+		ctx = auth.WithRoles(ctx, account.Roles)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -98,6 +109,7 @@ func RequireServiceAccount(store *auth.APIKeyStore, next http.Handler) http.Hand
 		}
 
 		ctx := auth.WithServiceAccount(r.Context(), account)
+		ctx = auth.WithRoles(ctx, account.Roles)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

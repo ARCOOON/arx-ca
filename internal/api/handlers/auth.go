@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/your-org/arx-ca/internal/api"
 	"github.com/your-org/arx-ca/internal/auth"
@@ -52,17 +53,24 @@ func (h *AuthHandler) Login() http.Handler {
 			return
 		}
 
-		token, expiresAt, err := h.jwtManager.GenerateToken(req.Username)
+		roles := auth.RolesForAdmin(req.Username)
+		token, expiresAt, err := h.jwtManager.GenerateToken(req.Username, roles)
 		if err != nil {
 			log.Printf("auth: generate jwt: %v", err)
 			api.WriteError(w, http.StatusInternalServerError, "login failed")
 			return
 		}
 
+		roleNames := make([]string, len(roles))
+		for i, role := range roles {
+			roleNames[i] = string(role)
+		}
+
 		api.WriteSuccess(w, http.StatusOK, models.LoginResponse{
 			Token:     token,
 			ExpiresAt: expiresAt,
 			TokenType: h.jwtManager.TokenType(),
+			Roles:     roleNames,
 		})
 	})
 }
@@ -81,7 +89,15 @@ func (h *AuthHandler) CreateServiceAccount() http.Handler {
 			return
 		}
 
-		account, plaintextKey, err := h.keyStore.CreateServiceAccount(req.Name)
+		roles := make([]auth.Role, 0, len(req.Roles))
+		for _, name := range req.Roles {
+			role := auth.Role(strings.TrimSpace(name))
+			if auth.ValidRole(role) {
+				roles = append(roles, role)
+			}
+		}
+
+		account, plaintextKey, err := h.keyStore.CreateServiceAccount(req.Name, roles)
 		if err != nil {
 			switch {
 			case errors.Is(err, auth.ErrInvalidServiceAccountName):
@@ -95,9 +111,15 @@ func (h *AuthHandler) CreateServiceAccount() http.Handler {
 			return
 		}
 
+		roleNames := make([]string, len(account.Roles))
+		for i, role := range account.Roles {
+			roleNames[i] = string(role)
+		}
+
 		api.WriteSuccess(w, http.StatusCreated, models.ServiceAccountResponse{
 			ID:        account.ID,
 			Name:      account.Name,
+			Roles:     roleNames,
 			APIKey:    plaintextKey,
 			CreatedAt: account.CreatedAt,
 		})
