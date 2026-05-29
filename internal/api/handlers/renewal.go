@@ -93,28 +93,6 @@ func (h *RenewalHandler) Rekey() http.Handler {
 	})
 }
 
-// ACMEStatus handles GET /api/v1/acme/status.
-func (h *RenewalHandler) ACMEStatus() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-
-		resp := models.ACMEStatusResponse{
-			Enabled:     h.engine.ACMEEnabled(),
-			Provisioner: "acme",
-			Challenges:  []string{"http-01", "dns-01", "tls-alpn-01"},
-		}
-		if resp.Enabled {
-			resp.DirectoryURL = h.engine.ACMEDirectoryURL(h.listenHost)
-			resp.DNSName = h.engine.ACMEDNS()
-		}
-
-		api.WriteSuccess(w, http.StatusOK, resp)
-	})
-}
-
 func isRenewalClientError(err error) bool {
 	if err == nil {
 		return false

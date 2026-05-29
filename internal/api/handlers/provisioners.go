@@ -57,6 +57,17 @@ func (h *ProvisionerHandler) Token() http.Handler {
 	})
 }
 
+// K8sStatus handles GET /api/v1/k8s/status.
+func (h *ProvisionerHandler) K8sStatus() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+		api.WriteSuccess(w, http.StatusOK, h.engine.K8sProvisionerStatus())
+	})
+}
+
 func isClientProvisionerError(err error) bool {
 	if err == nil {
 		return false
