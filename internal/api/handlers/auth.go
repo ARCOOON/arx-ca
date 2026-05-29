@@ -7,9 +7,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/your-org/ca-api/internal/api"
-	"github.com/your-org/ca-api/internal/auth"
-	"github.com/your-org/ca-api/internal/models"
+	"github.com/your-org/arx-ca/internal/api"
+	"github.com/your-org/arx-ca/internal/auth"
+	"github.com/your-org/arx-ca/internal/models"
 )
 
 const maxAuthBodyBytes = 1 << 20 // 1 MiB

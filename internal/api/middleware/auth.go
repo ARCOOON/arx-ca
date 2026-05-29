@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/your-org/ca-api/internal/api"
-	"github.com/your-org/ca-api/internal/auth"
+	"github.com/your-org/arx-ca/internal/api"
+	"github.com/your-org/arx-ca/internal/auth"
 )
 
 const (

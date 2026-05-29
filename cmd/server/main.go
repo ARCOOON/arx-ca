@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/your-org/ca-api/internal/api/handlers"
-	"github.com/your-org/ca-api/internal/api/middleware"
-	"github.com/your-org/ca-api/internal/auth"
-	"github.com/your-org/ca-api/internal/ca"
+	"github.com/your-org/arx-ca/internal/api/handlers"
+	"github.com/your-org/arx-ca/internal/api/middleware"
+	"github.com/your-org/arx-ca/internal/auth"
+	"github.com/your-org/arx-ca/internal/ca"
 )
 
 const (
@@ -77,7 +77,7 @@ func main() {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("ca-api server listening on %s", listenAddr)
+		log.Printf("arx-ca server listening on %s", listenAddr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

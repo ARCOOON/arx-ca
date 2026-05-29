@@ -27,7 +27,7 @@ import (
 	"github.com/smallstep/certificates/errs"
 	"github.com/smallstep/nosql/database"
 
-	"github.com/your-org/ca-api/internal/models"
+	"github.com/your-org/arx-ca/internal/models"
 )
 
 // x509CertsTable is the step-ca database bucket for issued X.509 certificates.
