@@ -47,6 +47,7 @@ func main() {
 	}
 	apiKeyStore := auth.NewAPIKeyStore()
 	authHandler := handlers.NewAuthHandler(jwtManager, apiKeyStore)
+	sshHandler := handlers.NewSSHHandler(pkiEngine, jwtManager, apiKeyStore)
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/v1/health", healthHandler)
@@ -64,6 +65,11 @@ func main() {
 	mux.Handle("POST /api/v1/certificates/auto", certAuth(certHandler.Auto()))
 	mux.Handle("POST /api/v1/certificates/revoke", certAuth(certHandler.Revoke()))
 	mux.Handle("GET /api/v1/certificates", certAuth(certHandler.List()))
+
+	mux.Handle("GET /api/v1/ssh/roots", sshHandler.Roots())
+	mux.Handle("POST /api/v1/ssh/sign-user", sshHandler.SignUser())
+	mux.Handle("POST /api/v1/ssh/sign-host", certAuth(sshHandler.SignHost()))
+	mux.Handle("POST /api/v1/ssh/inspect", certAuth(sshHandler.Inspect()))
 
 	handler := middleware.Logger(mux)
 

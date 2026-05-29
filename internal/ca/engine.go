@@ -71,6 +71,10 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		}
 	}
 
+	if err := ensureSSHCA(resolvedConfig, basePath, password); err != nil {
+		return nil, fmt.Errorf("ensure SSH CA: %w", err)
+	}
+
 	cfg, err := authority.LoadConfiguration(resolvedConfig)
 	if err != nil {
 		return nil, fmt.Errorf("load CA configuration: %w", err)
@@ -247,6 +251,7 @@ func bootstrapPKI(configPath, basePath string, password []byte) error {
 		pki.WithDNSNames([]string{defaultCADNS}),
 		pki.WithProvisioner(defaultProvisioner),
 		pki.WithDeploymentType(pki.StandaloneDeployment),
+		pki.WithSSH(),
 	)
 	if err != nil {
 		return fmt.Errorf("create PKI builder: %w", err)
@@ -265,6 +270,10 @@ func bootstrapPKI(configPath, basePath string, password []byte) error {
 		return fmt.Errorf("generate intermediate certificate: %w", err)
 	}
 
+	if err := p.GenerateSSHSigningKeys(password); err != nil {
+		return fmt.Errorf("generate SSH signing keys: %w", err)
+	}
+
 	dbType, dbSource := resolveDBConfig(basePath)
 	if err := p.Save(
 		withConfigPassword(password),
@@ -277,6 +286,10 @@ func bootstrapPKI(configPath, basePath string, password []byte) error {
 		if err := copyFile(p.GetCAConfigPath(), configPath); err != nil {
 			return fmt.Errorf("align CA config path: %w", err)
 		}
+	}
+
+	if err := ensureOIDCProvisioner(configPath, nil); err != nil {
+		return fmt.Errorf("configure OIDC provisioner: %w", err)
 	}
 
 	return nil
