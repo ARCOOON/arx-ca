@@ -40,6 +40,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler(startTime, pkiEngine)
 	caHandler := handlers.NewCAHandler(pkiEngine)
 	certHandler := handlers.NewCertificateHandler(pkiEngine)
+	provisionerHandler := handlers.NewProvisionerHandler(pkiEngine)
 
 	jwtManager, err := auth.LoadJWTManagerFromEnv()
 	if err != nil {
@@ -61,9 +62,12 @@ func main() {
 		return middleware.RequireServiceAccountOrAdmin(jwtManager, apiKeyStore, h)
 	}
 	mux.Handle("POST /api/v1/certificates/issue", certAuth(certHandler.Issue()))
+	mux.Handle("POST /api/v1/certificates/issue-with-token", certAuth(certHandler.IssueWithToken()))
 	mux.Handle("POST /api/v1/certificates/auto", certAuth(certHandler.Auto()))
 	mux.Handle("POST /api/v1/certificates/revoke", certAuth(certHandler.Revoke()))
+	mux.Handle("POST /api/v1/certificates/lint", certAuth(certHandler.Lint()))
 	mux.Handle("GET /api/v1/certificates", certAuth(certHandler.List()))
+	mux.Handle("POST /api/v1/provisioners/token", certAuth(provisionerHandler.Token()))
 
 	handler := middleware.Logger(mux)
 

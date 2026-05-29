@@ -121,6 +121,81 @@ func (h *CertificateHandler) Revoke() http.Handler {
 	})
 }
 
+// IssueWithToken handles POST /api/v1/certificates/issue-with-token.
+func (h *CertificateHandler) IssueWithToken() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		var req models.IssueCertificateWithTokenRequest
+		if err := decodeJSONBody(w, r, &req); err != nil {
+			api.WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if strings.TrimSpace(req.Token) == "" {
+			api.WriteError(w, http.StatusBadRequest, "token is required")
+			return
+		}
+		if strings.TrimSpace(req.CSR) == "" {
+			api.WriteError(w, http.StatusBadRequest, "csr is required")
+			return
+		}
+
+		resp, err := h.engine.IssueCertificateWithToken(r.Context(), req.Token, req.CSR, req.TTL)
+		if err != nil {
+			if strings.Contains(err.Error(), "token is required") || strings.Contains(err.Error(), "parse certificate signing request") {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			status, message := ca.MapCAError(err)
+			if status >= http.StatusInternalServerError {
+				log.Printf("certificates: issue-with-token: %v", err)
+			}
+			api.WriteError(w, status, message)
+			return
+		}
+
+		api.WriteSuccess(w, http.StatusCreated, resp)
+	})
+}
+
+// Lint handles POST /api/v1/certificates/lint.
+func (h *CertificateHandler) Lint() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		var req models.LintCertificateRequest
+		if err := decodeJSONBody(w, r, &req); err != nil {
+			api.WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if strings.TrimSpace(req.CertificatePEM) == "" {
+			api.WriteError(w, http.StatusBadRequest, "certificate_pem is required")
+			return
+		}
+
+		resp, err := h.engine.LintCertificate(req.CertificatePEM)
+		if err != nil {
+			if strings.Contains(err.Error(), "certificate_pem") || strings.Contains(err.Error(), "parse certificate") {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			log.Printf("certificates: lint: %v", err)
+			api.WriteError(w, http.StatusInternalServerError, "certificate lint failed")
+			return
+		}
+
+		api.WriteSuccess(w, http.StatusOK, resp)
+	})
+}
+
 // List handles GET /api/v1/certificates.
 func (h *CertificateHandler) List() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
