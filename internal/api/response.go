@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/your-org/ca-api/internal/models"
+	"github.com/your-org/arx-ca/internal/models"
 )
 
 // WriteJSON encodes payload as JSON with the given HTTP status code.

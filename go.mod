@@ -1,4 +1,4 @@
-module github.com/your-org/ca-api
+module github.com/your-org/arx-ca
 
 go 1.25.0
 
@@ -8,6 +8,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/smallstep/certificates v0.30.2
 	github.com/smallstep/cli-utils v0.12.2
+	github.com/smallstep/nosql v0.8.0
 	go.step.sm/crypto v0.77.1
 	golang.org/x/crypto v0.52.0
 )
@@ -79,7 +80,6 @@ require (
 	github.com/slackhq/nebula v1.10.3 // indirect
 	github.com/smallstep/go-attestation v0.4.4-0.20241119153605-2306d5b464ca // indirect
 	github.com/smallstep/linkedca v0.25.0 // indirect
-	github.com/smallstep/nosql v0.8.0 // indirect
 	github.com/smallstep/pkcs7 v0.2.1 // indirect
 	github.com/smallstep/scep v0.0.0-20250318231241-a25cabb69492 // indirect
 	github.com/spf13/cast v1.7.0 // indirect

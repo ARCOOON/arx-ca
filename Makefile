@@ -1,9 +1,9 @@
 .PHONY: build clean test docker-build docker-up docker-down
 
-BINARY_NAME := arx-rootca
+BINARY_NAME := arx-ca
 BIN_DIR := bin
 MAIN_PKG := ./cmd/server
-DOCKER_IMAGE := arx-rootca:latest
+DOCKER_IMAGE := arx-ca:latest
 COMPOSE := docker compose
 
 # Default build target for convenience.

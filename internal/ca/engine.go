@@ -21,7 +21,7 @@ import (
 	"github.com/smallstep/certificates/db"
 	"github.com/smallstep/certificates/pki"
 
-	"github.com/your-org/ca-api/internal/models"
+	"github.com/your-org/arx-ca/internal/models"
 
 	_ "github.com/smallstep/certificates/cas/softcas"
 )
@@ -29,9 +29,9 @@ import (
 const (
 	engineName        = "step-ca"
 	defaultConfigRel  = "config/ca.json"
-	defaultPKIName    = "Arx Root CA"
-	defaultOrg        = "Arx Root CA"
-	defaultResource   = "arx-rootca"
+	defaultPKIName    = "Arx CA"
+	defaultOrg        = "Arx CA"
+	defaultResource   = "arx-ca"
 	defaultCAAddress  = "127.0.0.1:9443"
 	defaultCADNS      = "localhost"
 	defaultProvisioner = "ca-admin"

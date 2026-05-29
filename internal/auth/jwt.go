@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	defaultJWTIssuer        = "arx-rootca"
+	defaultJWTIssuer        = "arx-ca"
 	defaultJWTExpiry        = 24 * time.Hour
 	jwtSigningMethod        = "HS256"
 	adminTokenType          = "Bearer"
