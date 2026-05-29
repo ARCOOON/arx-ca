@@ -68,6 +68,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/newrelic/go-agent/v3 v3.42.0 // indirect
+	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
@@ -84,7 +85,10 @@ require (
 	github.com/smallstep/scep v0.0.0-20250318231241-a25cabb69492 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
 	github.com/urfave/cli v1.22.17 // indirect
+	github.com/weppos/publicsuffix-go v0.50.4-0.20260507075217-1bd47f85b3da // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	github.com/zmap/zcrypto v0.0.0-20260514033604-a1159eb3cad9 // indirect
+	github.com/zmap/zlint/v3 v3.7.1 // indirect
 	go.etcd.io/bbolt v1.4.3 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect

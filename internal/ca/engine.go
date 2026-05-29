@@ -71,6 +71,10 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		}
 	}
 
+	if err := ensureAdvancedProvisioners(resolvedConfig); err != nil {
+		return nil, fmt.Errorf("configure advanced provisioners: %w", err)
+	}
+
 	cfg, err := authority.LoadConfiguration(resolvedConfig)
 	if err != nil {
 		return nil, fmt.Errorf("load CA configuration: %w", err)

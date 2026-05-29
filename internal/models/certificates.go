@@ -64,3 +64,37 @@ type ListCertificatesResponse struct {
 	Certificates []CertificateSummary `json:"certificates"`
 	Total        int                `json:"total"`
 }
+
+// IssueCertificateWithTokenRequest signs a CSR using a provisioner-issued single-use token.
+type IssueCertificateWithTokenRequest struct {
+	Token string `json:"token"`
+	CSR   string `json:"csr"`
+	TTL   string `json:"ttl,omitempty"`
+}
+
+// LintCertificateRequest carries a PEM-encoded certificate to inspect.
+type LintCertificateRequest struct {
+	CertificatePEM string `json:"certificate_pem"`
+}
+
+// CertificateLintFinding is a single RFC 5280 or CA/Browser Forum lint result.
+type CertificateLintFinding struct {
+	Lint     string `json:"lint"`
+	Source   string `json:"source"`
+	Severity string `json:"severity"`
+	Message  string `json:"message,omitempty"`
+}
+
+// LintCertificateSummary aggregates lint outcomes by severity.
+type LintCertificateSummary struct {
+	Errors   int `json:"errors"`
+	Warnings int `json:"warnings"`
+	Notices  int `json:"notices"`
+	Fatals   int `json:"fatals"`
+}
+
+// LintCertificateResponse returns compliance findings for a certificate.
+type LintCertificateResponse struct {
+	Findings []CertificateLintFinding `json:"findings"`
+	Summary  LintCertificateSummary   `json:"summary"`
+}

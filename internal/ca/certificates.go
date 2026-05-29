@@ -33,6 +33,35 @@ import (
 // x509CertsTable is the step-ca database bucket for issued X.509 certificates.
 var x509CertsTable = []byte("x509_certs")
 
+// IssueCertificateWithToken validates a provisioner token and signs the provided CSR.
+func (e *PKIEngine) IssueCertificateWithToken(ctx context.Context, token, csrPEM, ttl string) (*models.CertificatePEMResponse, error) {
+	if e == nil || e.auth == nil {
+		return nil, errors.New("CA engine is not initialized")
+	}
+
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, errors.New("token is required")
+	}
+
+	csr, err := pemutil.ParseCertificateRequest([]byte(strings.TrimSpace(csrPEM)))
+	if err != nil {
+		return nil, fmt.Errorf("parse certificate signing request: %w", err)
+	}
+
+	signOpts, err := e.buildSignOptions(ttl)
+	if err != nil {
+		return nil, err
+	}
+
+	chain, err := e.signCSRWithToken(ctx, csr, signOpts, token)
+	if err != nil {
+		return nil, err
+	}
+
+	return certificateResponse(chain[0]), nil
+}
+
 // IssueCertificate signs a PEM-encoded CSR using the intermediate CA via step-ca SignWithContext.
 func (e *PKIEngine) IssueCertificate(ctx context.Context, csrPEM, ttl string) (*models.CertificatePEMResponse, error) {
 	if e == nil || e.auth == nil {
@@ -216,11 +245,14 @@ func (e *PKIEngine) ListCertificates(ctx context.Context) (*models.ListCertifica
 
 func (e *PKIEngine) signCSR(ctx context.Context, csr *x509.CertificateRequest, signOpts provisioner.SignOptions) ([]*x509.Certificate, error) {
 	sans := collectCSRSubjectAlternativeNames(csr)
-	token, err := e.createSignToken(csr.Subject.CommonName, sans)
+	token, _, _, err := e.createProvisionerSignToken(defaultProvisioner, csr.Subject.CommonName, sans, defaultTokenTTL)
 	if err != nil {
 		return nil, fmt.Errorf("create signing token: %w", err)
 	}
+	return e.signCSRWithToken(ctx, csr, signOpts, token)
+}
 
+func (e *PKIEngine) signCSRWithToken(ctx context.Context, csr *x509.CertificateRequest, signOpts provisioner.SignOptions, token string) ([]*x509.Certificate, error) {
 	ctx = provisioner.NewContextWithMethod(ctx, provisioner.SignMethod)
 	ctx = authority.NewContext(ctx, e.auth)
 
@@ -254,55 +286,6 @@ func (e *PKIEngine) buildSignOptions(ttl string) (provisioner.SignOptions, error
 	return opts, nil
 }
 
-func (e *PKIEngine) createSignToken(subject string, sans []string) (string, error) {
-	prov, err := e.loadDefaultProvisioner()
-	if err != nil {
-		return "", err
-	}
-
-	jwkProv, ok := prov.(*provisioner.JWK)
-	if !ok {
-		return "", fmt.Errorf("provisioner %q is not a JWK provisioner", prov.GetName())
-	}
-
-	kid, encryptedKey, ok := jwkProv.GetEncryptedKey()
-	if !ok || len(encryptedKey) == 0 {
-		return "", fmt.Errorf("provisioner %q does not have an encrypted signing key", prov.GetName())
-	}
-
-	signer, err := decryptProvisionerKey(kid, []byte(encryptedKey), e.password)
-	if err != nil {
-		return "", err
-	}
-
-	audiences := e.config.GetAudiences().Sign
-	if len(audiences) == 0 {
-		return "", errors.New("no sign audiences configured")
-	}
-
-	return buildProvisionerToken(subject, prov.GetName(), audiences[0], sans, signer)
-}
-
-func (e *PKIEngine) loadDefaultProvisioner() (provisioner.Interface, error) {
-	if e.auth == nil {
-		return nil, errors.New("authority is not initialized")
-	}
-
-	if prov, err := e.auth.LoadProvisionerByName(defaultProvisioner); err == nil {
-		return prov, nil
-	}
-
-	provisioners, _, err := e.auth.GetProvisioners("", 0)
-	if err != nil {
-		return nil, fmt.Errorf("load provisioners: %w", err)
-	}
-	if len(provisioners) == 0 {
-		return nil, errors.New("no provisioners configured")
-	}
-
-	return provisioners[0], nil
-}
-
 func decryptProvisionerKey(kid string, encryptedKey []byte, password []byte) (jose.Signer, error) {
 	plaintext, err := jose.Decrypt(
 		encryptedKey,
@@ -329,7 +312,11 @@ func decryptProvisionerKey(kid string, encryptedKey []byte, password []byte) (jo
 	return jose.NewSigner(jose.SigningKey{Algorithm: jose.ES256, Key: signerKey}, opts)
 }
 
-func buildProvisionerToken(subject, issuer, audience string, sans []string, signer jose.Signer) (string, error) {
+func buildProvisionerToken(subject, issuer, audience string, sans []string, signer jose.Signer, tokenTTL time.Duration) (string, error) {
+	if tokenTTL <= 0 {
+		tokenTTL = defaultTokenTTL
+	}
+
 	id, err := randutil.ASCII(64)
 	if err != nil {
 		return "", err
@@ -346,7 +333,7 @@ func buildProvisionerToken(subject, issuer, audience string, sans []string, sign
 			Issuer:    issuer,
 			IssuedAt:  jose.NewNumericDate(now),
 			NotBefore: jose.NewNumericDate(now),
-			Expiry:    jose.NewNumericDate(now.Add(5 * time.Minute)),
+			Expiry:    jose.NewNumericDate(now.Add(tokenTTL)),
 			Audience:  []string{audience},
 		},
 		SANS: sans,
