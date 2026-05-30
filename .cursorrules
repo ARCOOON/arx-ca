@@ -32,3 +32,4 @@
     `* This allows clients to authenticate via external Identity`
     `* Providers (like Okta or Keycloak) to request certificates.`
 - **Traceability:** If a single file contains multiple logical changes, separate them if possible. All commit messages and bodies MUST be in English.
+- **No AI Attribution:** You MUST NOT append any "Co-authored-by", signature, or AI attribution trailers to the commit messages. Do not mention Cursor or AI in the commit logs. The user is the sole author.
