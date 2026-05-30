@@ -16,16 +16,12 @@ import (
 	"github.com/your-org/arx-ca/internal/models"
 )
 
-const defaultServerURL = "http://localhost:8080"
-
 // Run prompts for admin credentials, logs in, and saves the JWT locally.
+// serverURL should come from Viper (via the CLI root command); an empty value is rejected at prompt time.
 func Run(serverURL string) error {
 	url := strings.TrimSpace(serverURL)
 	if url == "" {
-		url = strings.TrimSpace(os.Getenv("ARX_SERVER_URL"))
-	}
-	if url == "" {
-		url = defaultServerURL
+		return fmt.Errorf("server URL is required; set server_url in ~/.arx/cli.yaml or pass --url")
 	}
 
 	reader := bufio.NewReader(os.Stdin)
