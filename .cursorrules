@@ -15,3 +15,20 @@
 ## Future-Proofing
 - The API will eventually serve a WebUI. Keep endpoints RESTful and stateless.
 - Any future frontend code or HTML/CSS templates MUST default to a dark mode, flat, modern UI aesthetic.
+
+## Version Control & Git Guidelines
+- **Strict Prohibition:** NEVER execute a global `git add .` or `git commit -a`.
+- **Granular Staging:** Always analyze modifications using `git status` and `git diff`. Stage files individually (`git add <file>`) or in highly specific logical groups.
+- **Conventional Commits v1.0 & 50/72 Rule:** Every commit message MUST strictly follow the Conventional Commits specification.
+  - Allowed types: `feat`, `fix`, `chore`, `docs`, `refactor`, `style`, `test`, `build`, `ci`.
+  - For ANY change that requires context, you MUST write a multiline commit message using this exact structure:
+    1. A short header: `<type>(<optional scope>): <description>` (Max 50 characters).
+    2. One blank line.
+    3. A detailed body explaining the "what" and "why" (Wrapped at ~72 characters per line).
+  - Example multiline commit:
+    `feat(ca): integrate step-ca OIDC provisioner`
+    
+    `* Added the OpenID Connect provisioner to the PKIEngine.`
+    `* This allows clients to authenticate via external Identity`
+    `* Providers (like Okta or Keycloak) to request certificates.`
+- **Traceability:** If a single file contains multiple logical changes, separate them if possible. All commit messages and bodies MUST be in English.
