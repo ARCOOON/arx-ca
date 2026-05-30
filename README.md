@@ -1,273 +1,271 @@
 # arx-ca
 
-A Go-based Certificate Authority API server built on the [step-ca SDK](https://github.com/smallstep/certificates). It exposes a RESTful HTTP interface for X.509 and SSH PKI operations while keeping the signing engine lean, auditable, and ready for a future Web UI.
+A Go-based Certificate Authority platform built on the [step-ca SDK](https://github.com/smallstep/certificates). It exposes a RESTful HTTP API for X.509 and SSH PKI operations, enrollment protocols (ACME, SCEP, NDES), and a three-tier client model: server, super-admin CLI, and read-only local agent.
 
-## Design principle: Local-First, Cloud-Optional
-
-**arx-ca is designed to run entirely on your infrastructure without any cloud dependency.**
-
-| Layer             | Default (local)                                                                                     | Optional (plugins)                                                      |
-| ----------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| **Cryptography**  | SoftCAS — keys and certificates on disk under the PKI directory                                     | AWS KMS, GCP Cloud KMS, HashiCorp Vault (via step-ca CAS configuration) |
-| **Persistence**   | Embedded BadgerDB (`badgerv2`) for single-node bootstrap; **PostgreSQL** recommended for production | MySQL and other step-ca–supported backends                              |
-| **Identity**      | JWT admin login and in-process API key service accounts                                             | OIDC / Okta-style SSO (`CA_API_OIDC_*`)                                 |
-| **Observability** | Structured request logging                                                                          | OpenTelemetry traces and metrics (OTLP exporters)                       |
-
-All core PKI workflows — issue, renew, rekey, revoke, list, lint, ACME enrollment, and SSH signing — operate with **local cryptography and a local database**. Cloud integrations are **strictly optional**: enable them only when you deliberately configure external KMS, IdP, or telemetry backends.
-
-## Features
-
-### X.509 Certificate Authority
-
-- **Automated PKI bootstrap** — generates Root CA, Intermediate CA, and default JWK provisioner on first start (ECDSA P-256).
-- **Certificate issuance** — sign CSRs with configurable TTL (`POST /api/v1/certificates/issue`).
-- **Provisioner-token issuance** — sign CSRs with a one-time JWK or OIDC token (`POST /api/v1/certificates/issue-with-token`).
-- **Auto-enrollment** — generate a key pair and certificate in one request (`POST /api/v1/certificates/auto`).
-- **Renewal and rekey** — renew or rotate certificates while preserving subject/SANs (`POST /api/v1/certificates/renew`, `POST /api/v1/certificates/rekey`).
-- **Revocation** — passive revocation with RFC 5280 OCSP reason codes (`POST /api/v1/certificates/revoke`).
-- **Certificate inventory** — list issued certificates with revocation state (`GET /api/v1/certificates`).
-- **Compliance linting** — RFC 5280 and CA/Browser Forum checks via zlint (`POST /api/v1/certificates/lint`).
-- **Root distribution** — export the Root CA PEM (`GET /api/v1/ca/root`).
-
-### Revocation transparency (OCSP / CRL)
-
-- Revocation records **OCSP reason codes** aligned with [RFC 6960](https://datatracker.ietf.org/doc/html/rfc6960).
-- Revoked serials are persisted in the local certificate database for **OCSP responders and CRL generation** through the step-ca authority (configure OCSP/CRL endpoints in `ca.json` for your deployment).
-- Certificate list responses include a `revoked` flag for operational visibility.
-
-### ACME automation
-
-- **ACME v2** provisioner enabled at bootstrap (HTTP-01, DNS-01, and TLS-ALPN-01).
-- **External Account Binding (EAB)** — admins mint MAC keys via `POST /api/v1/acme/eab-keys` for gated account registration (`CA_API_ACME_REQUIRE_EAB=true`).
-- **Device Attestation** — optional `device-attest-01` challenge for TPM, Apple, and YubiKey-style hardware keys (`CA_API_ACME_DEVICE_ATTEST=true`).
-- ACME directory served under `/acme/` when enabled.
-- ACME status and directory URL via the API (`GET /api/v1/acme/status`).
-- Tunable via `CA_API_ACME_*` environment variables.
-
-### SCEP and NDES (AD CS migration)
-
-- **SCEP** provisioner from the step-ca SDK; protocol endpoint at `/scep/{provisioner}` (default `/scep/scep`).
-- **NDES** connector registry routes Microsoft AD CS paths (`/certsrv/mscep/mscep.dll`) to the SCEP backend as a drop-in replacement.
-- SCEP and NDES status via `GET /api/v1/scep/status` and `GET /api/v1/ndes/status`.
-- RSA SCEP decrypter keys are generated automatically when the provisioner is first enabled.
-
-### Provisioners and federation
-
-- **JWK provisioners** — mint short-lived signing tokens (`POST /api/v1/provisioners/token`).
-- **OIDC / SSO provisioners** — optional IdP integration (Okta, Azure AD, Google, etc.) through environment-driven `ca.json` updates.
-- Provisioner inventory exposed through the PKI engine for automation and auditing.
-
-### SSH Certificate Authority
-
-- **Ed25519 SSH CA keys** generated at bootstrap (user and host CAs).
-- **User certificates** — principals, TTL, OIDC or API-authenticated signing (`POST /api/v1/ssh/sign-user`).
-- **Host certificates** — hostname principals for infrastructure (`POST /api/v1/ssh/sign-host`).
-- **Inspection** — decode principals, validity, and metadata (`POST /api/v1/ssh/inspect`).
-- **Trust anchors** — publish SSH CA public keys for `known_hosts` / `TrustedUserCAKeys` (`GET /api/v1/ssh/roots`).
-
-### Security and RBAC
-
-- **Role-based access control** at the HTTP middleware layer:
-  - **Admin** — JWT Bearer tokens from `POST /api/v1/auth/login` (bootstrap admin account).
-  - **Service account** — API keys (`X-API-Key` or Bearer) for automation; admins may create keys via `POST /api/v1/auth/service-accounts`.
-- Protected routes require **admin JWT** or **service-account API key**; SSH user signing accepts either model plus provisioner tokens.
-- Stateless API suitable for reverse proxies and future Web UI integration.
-
-### Operations and observability
-
-- **Health endpoint** — process uptime, memory, API version, and CA backend status (`GET /api/v1/health`).
-- **OpenTelemetry** — distributed tracing and metrics through the step-ca dependency graph (`otelhttp`, OTLP SDK); export to your collector without coupling PKI logic to a vendor.
-- **Request logging** — structured HTTP access logs via middleware.
-- **Graceful shutdown** — SIGINT/SIGTERM handling with bounded drain timeout.
-- **Container images** — multi-stage Docker build and Compose stack for local or air-gapped deployment.
-
-### API conventions
-
-- JSON envelope: `{ "data": …, "error": null | { "message": "…" } }`.
-- Go 1.22+ `net/http` routing (method-aware patterns, no heavy web framework).
-- RESTful, versioned paths under `/api/v1/`.
-
-## Architecture
+## Three-tier architecture
 
 ```
-                    ┌─────────────────────────────────────────┐
-                    │           Clients / Automation          │
-                    │  (CLI, CI, agents, future Web UI)       │
-                    └────────────────────┬────────────────────┘
-                                         │ HTTPS
-                    ┌────────────────────▼────────────────────┐
-                    │  API Layer (internal/api)               │
-                    │  • Handlers (REST)                      │
-                    │  • RBAC middleware (JWT / API keys)     │
-                    │  • Logger / OTel-instrumented HTTP      │
-                    └────────────────────┬────────────────────┘
-                                         │
-                    ┌────────────────────▼────────────────────┐
-                    │  PKI Engine (internal/ca)               │
-                    │  • PKIEngine / InitCA                   │
-                    │  • X.509, ACME, SSH, provisioners       │
-                    │  • Revocation (OCSP codes → CRL/OCSP)   │
-                    └────────────────────┬────────────────────┘
-                                         │
-         ┌───────────────────────────────┼───────────────────────────────┐
-         │                               │                               │
-         ▼                               ▼                               ▼
-┌─────────────────┐           ┌─────────────────┐           ┌─────────────────┐
-│  SoftCAS        │           │  PostgreSQL /   │           │  OpenTelemetry  │
-│  (local keys)   │           │  Badger (local) │           │  (optional OTLP)│
-└─────────────────┘           └─────────────────┘           └─────────────────┘
-         │                               │
-         │ optional plugins              │
-         ▼                               ▼
-┌─────────────────┐           ┌─────────────────┐
-│ AWS / GCP KMS   │           │ Okta / OIDC IdP │
-│ HashiCorp Vault │           │ (provisioners)  │
-└─────────────────┘           └─────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         arx-ca-server (:8080)                           │
+│  REST API · OCSP · ACME · SCEP · NDES · JWT/API-key RBAC · step-ca PKI  │
+│  Config: server.yaml (beside the binary) + optional CA_API_* env vars     │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │ HTTPS / HTTP
+              ┌─────────────────┴─────────────────┐
+              │                                   │
+              ▼                                   ▼
+┌─────────────────────────────┐   ┌─────────────────────────────────────┐
+│       arx-ca-cli            │   │         arx-cert-service            │
+│  Super Admin CLI + TUI      │   │  Read-only local agent              │
+│  login · ui                 │   │  local · trust · server             │
+│  Config: ~/.arx/cli.yaml    │   │  State: ~/.arx-cert-service/        │
+│  Auth: ~/.arx/config.json   │   │  No private keys from the server    │
+└─────────────────────────────┘   └─────────────────────────────────────┘
 ```
 
-### Layer responsibilities
+| Tier | Binary | Role | Configuration |
+| ---- | ------ | ---- | ------------- |
+| **Server** | `arx-ca-server` | CA API, signing engine, enrollment protocols | `server.yaml` next to the executable; env vars override YAML |
+| **Super Admin CLI** | `arx-ca-cli` | Admin login and terminal UI for CA operations | `~/.arx/cli.yaml` (defaults); `~/.arx/config.json` (saved JWT) |
+| **Read-only agent** | `arx-cert-service` | Local cert inventory, trust-store install, public cert download | CLI flags (`--url`); state under `~/.arx-cert-service/` |
 
-| Layer          | Package                   | Responsibility                                                                    |
-| -------------- | ------------------------- | --------------------------------------------------------------------------------- |
-| **Handlers**   | `internal/api/handlers`   | HTTP translation, input validation, standardized JSON responses                   |
-| **Middleware** | `internal/api/middleware` | RBAC (`RequireAdmin`, `RequireServiceAccountOrAdmin`), logging, future OTel spans |
-| **Auth**       | `internal/auth`           | JWT issuance, API key store, bootstrap admin credentials                          |
-| **PKI engine** | `internal/ca`             | Business logic: sign, revoke, renew, ACME, SSH, lint; wraps `authority.Authority` |
-| **Models**     | `internal/models`         | Request/response DTOs shared by handlers and engine                               |
+## Design principle: local-first, cloud-optional
 
-The PKI engine delegates cryptographic operations to **step-ca** (`github.com/smallstep/certificates`). That keeps OCSP/CRL semantics, provisioner types, and CAS plugins aligned with upstream while arx-ca owns the HTTP contract and deployment ergonomics.
+**arx-ca runs entirely on your infrastructure without cloud dependency.**
 
-### RBAC model
+| Layer | Default (local) | Optional (plugins) |
+| ----- | --------------- | ------------------ |
+| Cryptography | SoftCAS — keys on disk under `.pki/` | AWS KMS, GCP Cloud KMS, HashiCorp Vault |
+| Persistence | Embedded BadgerDB (`badgerv2`) | PostgreSQL via `ca.json` / `CA_API_DB_*` |
+| Identity | JWT admin login and API key service accounts | OIDC provisioners (`CA_API_OIDC_*`) |
+| Observability | Structured request logging | OpenTelemetry OTLP export |
 
-| Role                  | Credential                    | Typical use                                                          |
-| --------------------- | ----------------------------- | -------------------------------------------------------------------- |
-| **Admin**             | JWT from `/api/v1/auth/login` | Create service accounts, break-glass operations                      |
-| **Service account**   | `X-API-Key` header            | CI/CD issuance, renewals, SSH host signing                           |
-| **Provisioner token** | JWK or OIDC token in body     | End-entity certificate or SSH user flows without long-lived API keys |
+The server automatically heals a corrupted BadgerDB value log on startup (truncate and retry). No separate database container is required for the default stack.
 
-Middleware enforces roles **before** handlers invoke the PKI engine, so signing paths never run without an authenticated principal.
+## Build
 
-### OCSP and CRL
-
-Revocation flows through the step-ca authority: serial numbers and OCSP reason codes are written to the configured database. For production, point `ca.json` at **PostgreSQL** and enable step-ca **OCSP** and **CRL** configuration so relying parties can validate certificate status independently of the REST API.
-
-### OpenTelemetry
-
-OpenTelemetry is enabled on the HTTP router (`internal/telemetry`). Traces and metrics export over OTLP/HTTP by default to `http://localhost:4318` (Jaeger, Grafana Alloy, or similar). Set `OTEL_SDK_DISABLED=true` to turn telemetry off.
-
-## API overview
-
-| Method | Path                                    | Auth                | Description                     |
-| ------ | --------------------------------------- | ------------------- | ------------------------------- |
-| `GET`  | `/api/v1/health`                        | —                   | Health and runtime metrics      |
-| `GET`  | `/api/v1/ca/root`                       | —                   | Root CA PEM                     |
-| `GET`  | `/api/v1/ca/crl`                        | —                   | CRL (DER; add `?pem` for PEM)   |
-| `POST` | `/ocsp`                                 | —                   | OCSP responder (DER request)    |
-| `GET`  | `/ocsp/{base64}`                        | —                   | OCSP responder (URL-safe request) |
-| `POST` | `/api/v1/auth/login`                    | —                   | Admin JWT                       |
-| `POST` | `/api/v1/auth/service-accounts`         | Admin               | Create API key                  |
-| `POST` | `/api/v1/certificates/issue`            | Service / Admin     | Sign CSR                        |
-| `POST` | `/api/v1/certificates/issue-with-token` | Service / Admin     | Sign CSR with provisioner token |
-| `POST` | `/api/v1/certificates/auto`             | Service / Admin     | Generate key + certificate      |
-| `POST` | `/api/v1/certificates/revoke`           | Service / Admin     | Revoke by serial                |
-| `POST` | `/api/v1/certificates/lint`             | Service / Admin     | Lint PEM certificate            |
-| `GET`  | `/api/v1/certificates`                  | Service / Admin     | List certificates               |
-| `POST` | `/api/v1/certificates/renew`            | Service / Admin     | Renew certificate               |
-| `POST` | `/api/v1/certificates/rekey`            | Service / Admin     | Rekey certificate               |
-| `GET`  | `/api/v1/acme/status`                   | Service / Admin     | ACME directory metadata         |
-| `POST` | `/api/v1/acme/eab-keys`                 | Admin               | Create ACME EAB MAC key         |
-| `GET`  | `/api/v1/scep/status`                   | Service / Admin     | SCEP endpoint metadata          |
-| `GET`  | `/api/v1/ndes/status`                   | Service / Admin     | NDES connector metadata         |
-| `POST` | `/api/v1/provisioners/token`            | Service / Admin     | Mint JWK signing token          |
-| `POST` | `/api/v1/ssh/sign-user`                 | Token / API / Admin | SSH user certificate            |
-| `POST` | `/api/v1/ssh/sign-host`                 | Service / Admin     | SSH host certificate            |
-| `POST` | `/api/v1/ssh/inspect`                   | Service / Admin     | Decode SSH certificate          |
-| `GET`  | `/api/v1/ssh/roots`                     | —                   | SSH CA public keys              |
-| `*`    | `/acme/...`                             | ACME protocol       | ACME directory (when enabled)   |
-| `*`    | `/scep/...`                             | SCEP protocol       | SCEP enrollment (when enabled)  |
-| `*`    | `/certsrv/...`                          | NDES / AD CS paths  | NDES → SCEP connector           |
-
-## Setup
-
-### Prerequisites
-
-- Go 1.22 or newer (module may require a newer toolchain; `GOTOOLCHAIN=auto` is used in Docker builds)
-- Optional: Docker and Docker Compose for containerized runs
-- Optional: PostgreSQL instance for production-grade persistence
-
-### Local development
+Requires **Go 1.22+** (see `go.mod` for the toolchain pin).
 
 ```bash
-# Build server, Super Admin CLI, and local cert service
+# Build all three binaries into bin/
 make build
 
-# Run tests
-make test
+# Individual targets
+make build-server    # bin/arx-ca-server
+make build-cli       # bin/arx-ca-cli
+make build-agent     # bin/arx-cert-service
 
-# Start the API (creates .pki/ on first run if missing)
-export CA_API_JWT_SECRET="$(openssl rand -base64 32)"
-./bin/arx-ca-server
-```
-
-Cross-compile all three binaries for Linux and Windows:
-
-```bash
+# Cross-compile (Linux / Windows)
 make build-server-linux build-server-windows \
      build-cli-linux build-cli-windows \
      build-agent-linux build-agent-windows
 ```
 
-Windows artifacts are written to `bin/*.exe`. Linux artifacts omit the extension.
+Windows artifacts are written as `bin/*.exe`. Linux artifacts have no extension.
 
-| Binary            | Role                                                                 |
-| ----------------- | -------------------------------------------------------------------- |
-| `arx-ca-server`   | CA API and enrollment protocols                                      |
-| `arx-ca-cli`      | Super Admin terminal UI and CA management (`login`, `ui`)            |
-| `arx-cert-service`| Local trust stores and read-only public certificate download         |
+Without `make` (e.g. on Windows without GNU Make):
 
-Default listen address: `:8080`. Default PKI path: `.pki/config/ca.json`.
+```powershell
+mkdir bin -Force
+go build -trimpath -ldflags="-s -w" -o bin/arx-ca-server.exe ./cmd/server
+go build -trimpath -ldflags="-s -w" -o bin/arx-ca-cli.exe ./cmd/cli
+go build -trimpath -ldflags="-s -w" -o bin/arx-cert-service.exe ./cmd/agent
+```
 
-### Docker
+Other Makefile targets:
+
+| Target | Description |
+| ------ | ----------- |
+| `make all` | Alias for `make build` |
+| `make clean` | Remove `bin/` and coverage artifacts |
+| `make test` | Run Go unit tests |
+| `make build-fips` | Build server with `GOEXPERIMENT=boringcrypto` |
+| `make docker-build` | Build `arx-ca-server:latest` image |
+| `make docker-up` | Start Compose stack |
+| `make docker-down` | Stop Compose stack |
+
+## Configuration (Viper)
+
+On first start, each binary auto-creates its YAML config if missing.
+
+### Server — `server.yaml` (beside the executable)
+
+Created next to `arx-ca-server` (e.g. `bin/server.yaml` when the binary lives in `bin/`). Example:
+
+```yaml
+host: ""
+port: 8080
+ca_config_path: .pki/config/ca.json
+log_level: info
+db_type: badgerv2
+db_data_source: ""
+otel_service_name: arx-ca
+otel_exporter_endpoint: http://localhost:4318
+otel_exporter_insecure: true
+otel_sdk_disabled: false
+```
+
+`InitServerConfig` loads this file and exports unset values into `CA_API_*` and `OTEL_*` environment variables. **Explicit environment variables always override YAML** for listen address and CA config path.
+
+Run the server from the repository root (or set `ca_config_path` to an absolute path) so `.pki/` resolves correctly.
+
+### CLI — `~/.arx/cli.yaml`
+
+```yaml
+server_url: http://localhost:8080
+log_level: info
+```
+
+After `arx-ca-cli login`, credentials are stored separately in `~/.arx/config.json`.
+
+### Agent — flags
+
+`arx-cert-service` does not use Viper. Pass `--url` to subcommands that talk to the server (e.g. `trust install-root --url http://localhost:8080`).
+
+On Windows, `local list` skips certificate stores that require elevated privileges (for example Local Machine `ROOT`) and continues with accessible user and browser stores.
+
+## Deployment
+
+### Local (bare metal)
 
 ```bash
-# Build image and start with Compose
+make build
+
+# Recommended for production and stable JWT sessions across restarts
 export CA_API_JWT_SECRET="$(openssl rand -base64 32)"
+
+# Disable OTLP export when no collector is running
+export OTEL_SDK_DISABLED=true
+
+./bin/arx-ca-server
+```
+
+On first run the server bootstraps PKI material under `.pki/` (Root CA, Intermediate CA, JWK provisioner, SSH CAs, BadgerDB). Default listen address: `:8080`.
+
+Verify health:
+
+```bash
+curl http://localhost:8080/api/v1/health
+# Expect HTTP 200 with ca_backend.status "healthy"
+
+curl http://localhost:8080/api/v1/ca/root
+# Expect HTTP 200 with a PEM certificate
+```
+
+Authenticate and exercise protected endpoints:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"ArxRootCA-Bootstrap-Admin-2026!"}' \
+  | jq -r '.data.token')
+
+curl -s -X POST http://localhost:8080/api/v1/certificates/auto \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"common_name":"example.local","dns_sans":["example.local"],"ttl":"24h"}'
+```
+
+Super Admin CLI:
+
+```bash
+./bin/arx-ca-cli login
+./bin/arx-ca-cli ui          # interactive TUI — do not run in unattended CI
+./bin/arx-ca-cli --help
+```
+
+Read-only agent:
+
+```bash
+./bin/arx-cert-service local list
+./bin/arx-cert-service server list --url http://localhost:8080
+./bin/arx-cert-service server download --url http://localhost:8080 --kind root -o root.pem
+./bin/arx-cert-service trust install-root --url http://localhost:8080
+```
+
+### Docker Compose
+
+```bash
+cp .env.example .env
+# Edit .env and set CA_API_JWT_SECRET
+
 make docker-build
 make docker-up
 ```
 
-PKI material is persisted under `./data/arx-ca` on the host (mounted to `/app/data` in the container).
+The container listens on port **8080**. PKI data persists in `./data/arx-ca` (mounted to `/app/data`). The image sets `CA_API_CA_CONFIG=/app/data/config/ca.json` so certificates and BadgerDB survive restarts.
 
-### Configuration reference
+## API overview
 
-| Variable             | Default               | Description                                                                                          |
-| -------------------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
-| `CA_API_LISTEN_ADDR` | `:8080`               | HTTP listen address                                                                                  |
-| `CA_API_CA_CONFIG`   | `.pki/config/ca.json` | Path to step-ca configuration                                                                        |
-| `CA_API_JWT_SECRET`  | *(ephemeral)*         | HMAC secret for admin JWTs; **set in production**                                                    |
-| `CA_API_JWT_ISSUER`  | *(empty)*             | JWT issuer claim                                                                                     |
-| `CA_API_JWT_EXPIRY`  | `24h`                 | Admin token lifetime                                                                                 |
-| `CA_API_CA_PASSWORD` | *(file or generated)* | Intermediate key encryption password                                                                 |
-| `CA_API_DB_TYPE`     | `badgerv2`            | Local DB driver for bootstrap (`badgerv2`, `bbolt`, …); use `postgresql` in `ca.json` for production |
-| `CA_API_OIDC_*`      | —                     | Optional OIDC provisioner (client ID, discovery URL, tenant, domains)                                |
-| `CA_API_ACME_*`      | —                     | ACME HTTP/TLS ports, DNS name, strict FQDN, disable flag                                             |
-| `CA_API_ACME_REQUIRE_EAB` | `false`          | Require EAB for new ACME accounts                                                                    |
-| `CA_API_ACME_DEVICE_ATTEST` | `false`        | Enable `device-attest-01` challenge                                                                  |
-| `CA_API_ACME_ATTESTATION_FORMATS` | `apple,step,tpm` | Device attestation formats enabled                                                       |
-| `CA_API_ACME_ATTESTATION_ROOTS` | —              | PEM bundle path for custom attestation roots                                                         |
-| `CA_API_SCEP_DISABLED` | `false`             | Skip SCEP provisioner bootstrap                                                                      |
-| `CA_API_SCEP_CHALLENGE` | *(generated)*      | SCEP challenge password (pin for production)                                                         |
-| `CA_API_NDES_DISABLED` | `false`            | Disable NDES AD CS path routing                                                                      |
-| `CA_API_NDES_ADMIN_SECRET` | —               | Secret for `mscep_admin` password endpoint                                                           |
-| `CA_API_CRL_DISABLED`  | `false`               | Skip automatic CRL block in `ca.json`                                                                |
-| `OTEL_SERVICE_NAME`    | `arx-ca`              | OpenTelemetry service name                                                                           |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP/HTTP collector endpoint (traces and metrics)                                          |
-| `OTEL_EXPORTER_OTLP_INSECURE` | `true` for `http://` endpoints | Disable TLS for OTLP export                                                           |
-| `OTEL_SDK_DISABLED`    | `false`               | Disable OpenTelemetry exporters                                                                      |
-| `ARX_CA_OTEL_ENDPOINT` | —                     | Fallback OTLP endpoint when `OTEL_EXPORTER_OTLP_ENDPOINT` is unset                                   |
+| Method | Path | Auth | Description |
+| ------ | ---- | ---- | ----------- |
+| `GET` | `/api/v1/health` | — | Health and runtime metrics |
+| `GET` | `/api/v1/ca/root` | — | Root CA PEM |
+| `GET` | `/api/v1/ca/crl` | — | CRL (DER; `?pem` for PEM) |
+| `GET` | `/api/v1/public/certificates` | — | Public certificate inventory |
+| `POST` | `/ocsp` | — | OCSP responder |
+| `POST` | `/api/v1/auth/login` | — | Admin JWT |
+| `POST` | `/api/v1/auth/service-accounts` | Admin | Create API key |
+| `POST` | `/api/v1/certificates/issue` | Service / Admin | Sign CSR |
+| `POST` | `/api/v1/certificates/auto` | Service / Admin | Generate key + sign |
+| `POST` | `/api/v1/certificates/revoke` | Service / Admin | Revoke by serial |
+| `GET` | `/api/v1/certificates` | Service / Admin | List certificates |
+| `POST` | `/api/v1/ssh/sign-user` | Token / API / Admin | SSH user certificate |
+| `GET` | `/api/v1/ssh/roots` | — | SSH CA public keys |
+| `*` | `/acme/...` | ACME | ACME directory (when enabled) |
+| `*` | `/scep/...` | SCEP | SCEP enrollment (when enabled) |
 
-For **PostgreSQL**, set the `db` block in `ca.json` per [step-ca database documentation](https://smallstep.com/docs/step-ca/configuration#databases) after initial bootstrap, then restart the server.
+JSON envelope: `{ "data": …, "error": null | { "message": "…" } }`.
 
-### Bootstrap admin
+## Environment variables
 
-On first login, use username `admin` with the bootstrap password defined in `internal/auth/admin.go` (change this hash before any production deployment).
+Copy `.env.example` to `.env` for Compose. For bare-metal, prefer `server.yaml`; use env vars for overrides or secrets injection.
+
+| Variable | Default | Description |
+| -------- | ------- | ----------- |
+| `CA_API_LISTEN_ADDR` | `:8080` (from YAML) | HTTP listen address |
+| `CA_API_CA_CONFIG` | `.pki/config/ca.json` | Path to step-ca `ca.json` |
+| `CA_API_JWT_SECRET` | *(ephemeral if unset)* | HMAC secret for admin JWTs — **set in production** |
+| `CA_API_JWT_ISSUER` | `arx-ca` | JWT issuer claim |
+| `CA_API_JWT_EXPIRY` | `24h` | Admin token lifetime |
+| `CA_API_DB_TYPE` | `badgerv2` | Database driver hint |
+| `CA_API_DB_DATA_SOURCE` | — | PostgreSQL DSN when using external DB |
+| `CA_API_OIDC_*` | — | Optional OIDC provisioner |
+| `CA_API_ACME_*` | — | ACME ports, DNS, EAB, device attestation |
+| `CA_API_SCEP_*` | — | SCEP challenge and disable flag |
+| `CA_API_NDES_*` | — | NDES connector settings |
+| `OTEL_SERVICE_NAME` | `arx-ca` | OpenTelemetry service name |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP/HTTP collector |
+| `OTEL_EXPORTER_OTLP_INSECURE` | `true` for `http://` | Disable TLS for OTLP |
+| `OTEL_SDK_DISABLED` | `false` | Disable telemetry exporters |
+
+For **PostgreSQL**, configure the `db` block in `ca.json` per [step-ca database documentation](https://smallstep.com/docs/step-ca/configuration#databases) after bootstrap, then restart the server.
+
+## RBAC
+
+| Role | Credential | Use |
+| ---- | ---------- | --- |
+| **Admin** | JWT from `/api/v1/auth/login` | Service accounts, templates, break-glass |
+| **Service account** | `X-API-Key` or Bearer API key | CI/CD issuance, renewals |
+| **Provisioner token** | JWK or OIDC token in request body | End-entity or SSH user flows |
+
+## Bootstrap admin
+
+On first login use username `admin` with password `ArxRootCA-Bootstrap-Admin-2026!`. **Change the bcrypt hash in `internal/auth/admin.go` before any production deployment.**
+
+## Project layout
+
+| Path | Purpose |
+| ---- | ------- |
+| `cmd/server` | `arx-ca-server` entrypoint |
+| `cmd/cli` | `arx-ca-cli` entrypoint |
+| `cmd/agent` | `arx-cert-service` entrypoint |
+| `internal/api` | HTTP handlers and middleware |
+| `internal/ca` | PKI engine (step-ca wrapper), Badger self-healing |
+| `internal/config` | Viper YAML init and optional cloud integrations |
+| `internal/cli` | CLI API client, login, TUI |
+| `internal/agent` | Local cert stores, trust install, public download |
+
+## License
+
+See repository license file.
