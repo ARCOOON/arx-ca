@@ -136,6 +136,19 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		authority.WithPassword(password),
 		authority.WithQuietInit(),
 	)
+	if err != nil && needsBadgerTruncate(err) && cfg.DB != nil {
+		switch cfg.DB.Type {
+		case "badger", "badgerv1", "badgerv2":
+			if healErr := healBadgerDB(cfg.DB.DataSource); healErr != nil {
+				return nil, fmt.Errorf("heal badger database: %w", healErr)
+			}
+			authInstance, err = authority.New(
+				cfg,
+				authority.WithPassword(password),
+				authority.WithQuietInit(),
+			)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("initialize step-ca authority: %w", err)
 	}
@@ -412,24 +425,35 @@ func withDBConfig(dbType, dataSource string) pki.ConfigOption {
 }
 
 func resolveDBConfig(basePath string) (dbType, dataSource string) {
+	if dsn := strings.TrimSpace(os.Getenv("CA_API_DB_DATA_SOURCE")); dsn != "" {
+		dbType = strings.TrimSpace(os.Getenv("CA_API_DB_TYPE"))
+		if dbType == "" {
+			dbType = "postgresql"
+		}
+		return normalizeDBType(dbType), dsn
+	}
+
 	dbType = strings.TrimSpace(os.Getenv("CA_API_DB_TYPE"))
 	if dbType == "" {
 		dbType = "badgerv2"
 	}
 
+	return normalizeDBType(dbType), filepath.Join(basePath, "db")
+}
+
+func normalizeDBType(dbType string) string {
 	switch strings.ToLower(dbType) {
 	case "badger", "badgerv1":
-		dbType = "badgerv1"
+		return "badgerv1"
 	case "badgerv2":
-		dbType = "badgerv2"
+		return "badgerv2"
 	case "bbolt", "json":
-		// bbolt is the file-backed alternative when a lightweight store is preferred.
-		dbType = "bbolt"
+		return "bbolt"
+	case "postgresql", "postgres":
+		return "postgresql"
 	default:
-		dbType = "badgerv2"
+		return "badgerv2"
 	}
-
-	return dbType, filepath.Join(basePath, "db")
 }
 
 func resolveCAPassword(basePath string) ([]byte, error) {
