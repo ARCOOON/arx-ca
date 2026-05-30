@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -81,6 +82,9 @@ func enumerateCertStore(st windowsStore) ([]InstalledCertificate, error) {
 		uintptr(unsafe.Pointer(namePtr)),
 	)
 	if store == 0 {
+		if isStoreAccessDenied(err) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("open store %s: %w", st.storeName, err)
 	}
 	defer procCertCloseStore.Call(store, 0)
@@ -90,7 +94,7 @@ func enumerateCertStore(st windowsStore) ([]InstalledCertificate, error) {
 	for {
 		certCtx, _, err := procCertEnumCertsStore.Call(store, prev)
 		if certCtx == 0 {
-			if err != syscall.Errno(0) && err != nil {
+			if !isBenignCertEnumError(err) {
 				return nil, fmt.Errorf("enumerate certificates: %w", err)
 			}
 			break
@@ -113,6 +117,30 @@ type certContext struct {
 	_            uint32
 	EncodedCert  *byte
 	Length       uint32
+}
+
+func isStoreAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errno, ok := err.(syscall.Errno); ok && errno == syscall.ERROR_ACCESS_DENIED {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "access is denied")
+}
+
+func isBenignCertEnumError(err error) bool {
+	if err == nil || err == syscall.Errno(0) {
+		return true
+	}
+	if errno, ok := err.(syscall.Errno); ok {
+		// CRYPT_E_NOT_FOUND — normal end of certificate enumeration.
+		if errno == 0x80092004 {
+			return true
+		}
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "cannot find object or property")
 }
 
 func parseCertContext(ctx uintptr) (*InstalledCertificate, error) {
