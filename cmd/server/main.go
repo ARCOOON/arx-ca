@@ -8,29 +8,65 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/your-org/arx-ca/internal/api/handlers"
 	"github.com/your-org/arx-ca/internal/api/middleware"
 	"github.com/your-org/arx-ca/internal/auth"
 	"github.com/your-org/arx-ca/internal/ca"
+	arxconfig "github.com/your-org/arx-ca/internal/config"
 	"github.com/your-org/arx-ca/internal/telemetry"
 )
 
-const (
-	defaultListenAddr   = ":8080"
-	defaultCAConfigPath = ".pki/config/ca.json"
-	shutdownTimeout     = 10 * time.Second
-)
+const shutdownTimeout = 10 * time.Second
 
 func main() {
-	listenAddr := envOrDefault("CA_API_LISTEN_ADDR", defaultListenAddr)
-	caConfigPath := envOrDefault("CA_API_CA_CONFIG", defaultCAConfigPath)
+	if err := newRootCmd().Execute(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func newRootCmd() *cobra.Command {
+	root := &cobra.Command{
+		Use:   "arx-ca-server",
+		Short: "arx-ca HTTP API and certificate authority server",
+		Long:  "arx-ca-server exposes the REST API, OCSP, ACME, SCEP, and NDES endpoints for the Arx CA platform.",
+		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+			if err := arxconfig.InitServerConfig(); err != nil {
+				return err
+			}
+			arxconfig.ApplyServerRuntimeFromViper()
+			return nil
+		},
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return runServer()
+		},
+	}
+	return root
+}
+
+func runServer() error {
+	listenAddr := strings.TrimSpace(os.Getenv("CA_API_LISTEN_ADDR"))
+	if listenAddr == "" {
+		listenAddr = arxconfig.ServerConfigFromViper().ListenAddress()
+	}
+
+	caConfigPath := strings.TrimSpace(os.Getenv("CA_API_CA_CONFIG"))
+	if caConfigPath == "" {
+		caConfigPath = strings.TrimSpace(viper.GetString("ca_config_path"))
+	}
+	if caConfigPath == "" {
+		caConfigPath = arxconfig.DefaultServerConfig().CAConfigPath
+	}
 
 	otelShutdown, err := telemetry.Init(context.Background())
 	if err != nil {
-		log.Fatalf("OpenTelemetry initialization failed: %v", err)
+		return err
 	}
 	defer func() {
 		if err := otelShutdown(context.Background()); err != nil {
@@ -40,7 +76,7 @@ func main() {
 
 	pkiEngine, err := ca.InitCA(caConfigPath)
 	if err != nil {
-		log.Fatalf("CA initialization failed: %v", err)
+		return err
 	}
 	defer func() {
 		if err := pkiEngine.Shutdown(); err != nil {
@@ -60,7 +96,7 @@ func main() {
 
 	jwtManager, err := auth.LoadJWTManagerFromEnv()
 	if err != nil {
-		log.Fatalf("jwt configuration error: %v", err)
+		return err
 	}
 	apiKeyStore := auth.NewAPIKeyStore()
 	authHandler := handlers.NewAuthHandler(jwtManager, apiKeyStore)
@@ -148,7 +184,7 @@ func main() {
 
 	select {
 	case err := <-errCh:
-		log.Fatalf("server error: %v", err)
+		return err
 	case sig := <-sigCh:
 		log.Printf("shutdown signal received: %s", sig)
 	}
@@ -157,14 +193,8 @@ func main() {
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("graceful shutdown failed: %v", err)
+		return err
 	}
 	log.Println("server stopped")
-}
-
-func envOrDefault(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
+	return nil
 }
