@@ -157,6 +157,37 @@ func TestNormalizeServerConfigGeneratesJWTSecret(t *testing.T) {
 	}
 }
 
+func TestSetServerConfigPathOverridesDefault(t *testing.T) {
+	t.Cleanup(func() {
+		serverConfigPathOverride = ""
+	})
+
+	custom := filepath.Join(t.TempDir(), "custom-server.yaml")
+	if err := SetServerConfigPath(custom); err != nil {
+		t.Fatalf("SetServerConfigPath: %v", err)
+	}
+
+	got, err := serverConfigFilePath()
+	if err != nil {
+		t.Fatalf("serverConfigFilePath: %v", err)
+	}
+	if got != custom {
+		t.Fatalf("serverConfigFilePath = %q, want %q", got, custom)
+	}
+}
+
+func TestResolveServerConfigPathUsesFlag(t *testing.T) {
+	dir := t.TempDir()
+	flagPath := filepath.Join(dir, "alt.yaml")
+	got, err := ResolveServerConfigPath(flagPath)
+	if err != nil {
+		t.Fatalf("ResolveServerConfigPath: %v", err)
+	}
+	if got != flagPath {
+		t.Fatalf("ResolveServerConfigPath = %q, want %q", got, flagPath)
+	}
+}
+
 func TestDatabaseDSN(t *testing.T) {
 	dsn := DatabaseConfig{
 		Host:     "db.example.com",

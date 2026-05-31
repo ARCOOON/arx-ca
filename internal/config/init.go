@@ -19,9 +19,45 @@ const (
 )
 
 var (
-	activeServerConfig ServerConfig
-	activeCLIConfig    CLIConfig
+	activeServerConfig       ServerConfig
+	activeCLIConfig          CLIConfig
+	serverConfigPathOverride string
 )
+
+// SetServerConfigPath forces server.yaml to load from an absolute path on the next InitServerConfig call.
+func SetServerConfigPath(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve server config path: %w", err)
+	}
+	serverConfigPathOverride = abs
+	return nil
+}
+
+// ResolveServerConfigPath returns the absolute server.yaml path from an explicit flag or the executable directory.
+func ResolveServerConfigPath(configFlag string) (string, error) {
+	if strings.TrimSpace(configFlag) != "" {
+		return filepath.Abs(configFlag)
+	}
+	return serverConfigFilePath()
+}
+
+// ExecutablePath returns the absolute path of the current binary, with symlinks resolved.
+func ExecutablePath() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve executable path: %w", err)
+	}
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		return "", fmt.Errorf("resolve executable symlinks: %w", err)
+	}
+	abs, err := filepath.Abs(exe)
+	if err != nil {
+		return "", fmt.Errorf("resolve executable absolute path: %w", err)
+	}
+	return abs, nil
+}
 
 // InitServerConfig loads or creates server.yaml beside the executable and binds it to Viper.
 func InitServerConfig() error {
@@ -136,15 +172,15 @@ func ApplyServerRuntimeFromViper() {
 }
 
 func serverConfigFilePath() (string, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return "", fmt.Errorf("resolve executable path: %w", err)
+	if serverConfigPathOverride != "" {
+		return serverConfigPathOverride, nil
 	}
-	exe, err = filepath.EvalSymlinks(exe)
+	exe, err := ExecutablePath()
 	if err != nil {
-		return "", fmt.Errorf("resolve executable symlinks: %w", err)
+		return "", err
 	}
-	return filepath.Join(filepath.Dir(exe), serverConfigFileName), nil
+	path := filepath.Join(filepath.Dir(exe), serverConfigFileName)
+	return filepath.Abs(path)
 }
 
 func cliConfigFilePath() (string, error) {
