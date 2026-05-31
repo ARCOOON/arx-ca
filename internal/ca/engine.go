@@ -121,6 +121,10 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		return nil, fmt.Errorf("configure CRL: %w", err)
 	}
 
+	if err := healPKIConfigPaths(resolvedConfig, basePath); err != nil {
+		return nil, fmt.Errorf("heal PKI config paths: %w", err)
+	}
+
 	cfg, err := authority.LoadConfiguration(resolvedConfig)
 	if err != nil {
 		return nil, fmt.Errorf("load CA configuration: %w", err)
