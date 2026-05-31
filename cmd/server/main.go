@@ -20,6 +20,7 @@ import (
 	"github.com/your-org/arx-ca/internal/auth"
 	"github.com/your-org/arx-ca/internal/ca"
 	arxconfig "github.com/your-org/arx-ca/internal/config"
+	"github.com/your-org/arx-ca/internal/database"
 	"github.com/your-org/arx-ca/internal/telemetry"
 )
 
@@ -51,6 +52,24 @@ func newRootCmd() *cobra.Command {
 }
 
 func runServer() error {
+	serverCfg := arxconfig.ServerConfigFromViper()
+
+	appDB, err := database.Open(serverCfg)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := appDB.Close(); err != nil {
+			log.Printf("application database close error: %v", err)
+		}
+	}()
+	if err := database.Migrate(appDB); err != nil {
+		return err
+	}
+	if err := database.SeedInitialAdmin(appDB, serverCfg.Bootstrap); err != nil {
+		return err
+	}
+
 	listenAddr := strings.TrimSpace(os.Getenv("CA_API_LISTEN_ADDR"))
 	if listenAddr == "" {
 		listenAddr = arxconfig.ServerConfigFromViper().ListenAddress()
