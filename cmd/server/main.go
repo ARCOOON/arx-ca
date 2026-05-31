@@ -8,12 +8,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/your-org/arx-ca/internal/api/handlers"
 	"github.com/your-org/arx-ca/internal/api/middleware"
@@ -23,8 +21,6 @@ import (
 	"github.com/your-org/arx-ca/internal/database"
 	"github.com/your-org/arx-ca/internal/telemetry"
 )
-
-const shutdownTimeout = 10 * time.Second
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
@@ -70,18 +66,8 @@ func runServer() error {
 		return err
 	}
 
-	listenAddr := strings.TrimSpace(os.Getenv("CA_API_LISTEN_ADDR"))
-	if listenAddr == "" {
-		listenAddr = arxconfig.ServerConfigFromViper().ListenAddress()
-	}
-
-	caConfigPath := strings.TrimSpace(os.Getenv("CA_API_CA_CONFIG"))
-	if caConfigPath == "" {
-		caConfigPath = strings.TrimSpace(viper.GetString("ca_config_path"))
-	}
-	if caConfigPath == "" {
-		caConfigPath = arxconfig.DefaultServerConfig().CAConfigPath
-	}
+	listenAddr := serverCfg.ListenAddress()
+	caConfigPath := serverCfg.CA.ConfigPath()
 
 	otelShutdown, err := telemetry.Init(context.Background())
 	if err != nil {
@@ -113,7 +99,7 @@ func runServer() error {
 	renewalHandler := handlers.NewRenewalHandler(pkiEngine, listenAddr)
 	acmeHandler := handlers.NewACMEHandler(pkiEngine, listenAddr)
 
-	jwtManager, err := auth.LoadJWTManagerFromEnv()
+	jwtManager, err := auth.LoadJWTManagerFromConfig(serverCfg.Security)
 	if err != nil {
 		return err
 	}
@@ -179,12 +165,17 @@ func runServer() error {
 
 	handler := telemetry.HTTPMiddleware(middleware.Logger(mux))
 
+	idleTimeout := serverCfg.Server.ReadTimeout + serverCfg.Server.WriteTimeout
+	if idleTimeout <= 0 {
+		idleTimeout = 60 * time.Second
+	}
+
 	server := &http.Server{
 		Addr:         listenAddr,
 		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  serverCfg.Server.ReadTimeout,
+		WriteTimeout: serverCfg.Server.WriteTimeout,
+		IdleTimeout:  idleTimeout,
 		BaseContext: func(_ net.Listener) context.Context {
 			return pkiEngine.BaseContext()
 		},
@@ -208,7 +199,7 @@ func runServer() error {
 		log.Printf("shutdown signal received: %s", sig)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), serverCfg.Server.WriteTimeout)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {

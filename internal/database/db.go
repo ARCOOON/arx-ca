@@ -24,6 +24,12 @@ func Open(cfg arxconfig.ServerConfig) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open application database: %w", err)
 	}
+	if cfg.Database.MaxOpenConns > 0 {
+		db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	}
+	if cfg.Database.MaxIdleConns > 0 {
+		db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	}
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping application database: %w", err)
@@ -32,17 +38,12 @@ func Open(cfg arxconfig.ServerConfig) (*sql.DB, error) {
 }
 
 func resolveDriverAndDSN(cfg arxconfig.ServerConfig) (driver, dsn string, err error) {
-	dsn = strings.TrimSpace(cfg.DBDataSource)
-	dbType := strings.ToLower(strings.TrimSpace(cfg.DBType))
-
-	if dsn != "" {
-		if dbType == "postgresql" || dbType == "postgres" || strings.HasPrefix(strings.ToLower(dsn), "postgres") {
-			return "pgx", dsn, nil
+	if cfg.Database.UsesPostgreSQL() {
+		dsn = cfg.Database.DSN()
+		if dsn == "" {
+			return "", "", fmt.Errorf("postgresql database host is set but connection parameters are incomplete")
 		}
-		if strings.HasPrefix(dsn, "file:") || strings.HasSuffix(strings.ToLower(dsn), ".db") {
-			return "sqlite", sqliteDSN(dsn), nil
-		}
-		return "", "", fmt.Errorf("unsupported db_data_source for application database")
+		return "pgx", dsn, nil
 	}
 
 	path, err := defaultSQLitePath(cfg)
@@ -60,10 +61,7 @@ func sqliteDSN(path string) string {
 }
 
 func defaultSQLitePath(cfg arxconfig.ServerConfig) (string, error) {
-	caPath := strings.TrimSpace(cfg.CAConfigPath)
-	if caPath == "" {
-		caPath = arxconfig.DefaultServerConfig().CAConfigPath
-	}
+	caPath := cfg.CA.ConfigPath()
 	base := filepath.Dir(filepath.Dir(caPath))
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return "", fmt.Errorf("create application database directory: %w", err)

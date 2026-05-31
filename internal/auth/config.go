@@ -1,49 +1,45 @@
 package auth
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
 	"time"
+
+	arxconfig "github.com/your-org/arx-ca/internal/config"
 )
 
 const (
-	envJWTSecret = "CA_API_JWT_SECRET"
 	envJWTIssuer = "CA_API_JWT_ISSUER"
-	envJWTExpiry = "CA_API_JWT_EXPIRY"
 )
 
-// LoadJWTManagerFromEnv builds a JWTManager using environment configuration.
-// If CA_API_JWT_SECRET is unset, a random 32-byte secret is generated (tokens do not survive restarts).
-func LoadJWTManagerFromEnv() (*JWTManager, error) {
-	secret := os.Getenv(envJWTSecret)
+// LoadJWTManagerFromConfig builds a JWTManager from server security configuration.
+func LoadJWTManagerFromConfig(sec arxconfig.SecurityConfig) (*JWTManager, error) {
+	secret := strings.TrimSpace(sec.JWTSecret)
 	if secret == "" {
-		generated, err := generateRandomSecret(32)
-		if err != nil {
-			return nil, fmt.Errorf("auth: generate jwt secret: %w", err)
-		}
-		secret = generated
-		fmt.Fprintf(os.Stderr, "auth: warning: %s not set; using ephemeral JWT signing secret\n", envJWTSecret)
+		return nil, fmt.Errorf("auth: JWT signing secret must be configured")
 	}
 
-	issuer := os.Getenv(envJWTIssuer)
-	expiry := defaultJWTExpiry
-	if raw := os.Getenv(envJWTExpiry); raw != "" {
-		parsed, err := time.ParseDuration(raw)
-		if err != nil {
-			return nil, fmt.Errorf("auth: invalid %s: %w", envJWTExpiry, err)
-		}
-		expiry = parsed
-	}
-
+	issuer := strings.TrimSpace(os.Getenv(envJWTIssuer))
+	expiry := sec.TokenExpiration()
 	return NewJWTManager(secret, issuer, expiry)
 }
 
-func generateRandomSecret(n int) (string, error) {
-	buf := make([]byte, n)
-	if _, err := rand.Read(buf); err != nil {
-		return "", err
+// LoadJWTManagerFromEnv builds a JWTManager using environment configuration.
+// Deprecated: prefer LoadJWTManagerFromConfig after InitServerConfig.
+func LoadJWTManagerFromEnv() (*JWTManager, error) {
+	secret := strings.TrimSpace(os.Getenv("CA_API_JWT_SECRET"))
+	if secret == "" {
+		return nil, fmt.Errorf("auth: %s is not set", "CA_API_JWT_SECRET")
 	}
-	return base64.RawURLEncoding.EncodeToString(buf), nil
+	issuer := strings.TrimSpace(os.Getenv(envJWTIssuer))
+	expiry := defaultJWTExpiry
+	if raw := os.Getenv("CA_API_JWT_EXPIRY"); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("auth: invalid CA_API_JWT_EXPIRY: %w", err)
+		}
+		expiry = parsed
+	}
+	return NewJWTManager(secret, issuer, expiry)
 }
