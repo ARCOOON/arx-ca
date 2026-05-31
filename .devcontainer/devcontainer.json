@@ -1,6 +1,8 @@
 {
   "name": "ARX CA",
-  "dockerComposeFile": "docker-compose.yml",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "service": "workspace",
   "workspaceFolder": "/workspaces/arx-ca",
   "remoteEnv": {
@@ -8,12 +10,21 @@
     "ARX_DATABASE_PASSWORD": "devpassword"
   },
   "features": {
-    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+    "ghcr.io/devcontainers/features/docker-in-docker:3": {
+      "version": "latest"
+    }
   },
   "customizations": {
     "vscode": {
       "extensions": [
         "golang.Go",
+        "ms-playwright.playwright",
+        "yzhang.markdown-all-in-one",
+        "ms-azuretools.vscode-containers",
+        "carlwr.better-makefile",
+        "codezombiech.gitignore",
+        "github.vscode-github-actions",
+        "formulahendry.code-runner"
         "ms-azuretools.vscode-docker"
       ]
     }
