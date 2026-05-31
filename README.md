@@ -8,7 +8,7 @@ A Go-based Certificate Authority platform built on the [step-ca SDK](https://git
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         arx-ca-server (:8080)                           │
 │  REST API · OCSP · ACME · SCEP · NDES · JWT/API-key RBAC · step-ca PKI  │
-│  Config: server.yaml (beside the binary) + optional CA_API_* env vars     │
+│  Config: server.yaml (beside the binary) + ARX_* / CA_API_* env overrides │
 └───────────────────────────────┬─────────────────────────────────────────┘
                                 │ HTTPS / HTTP
               ┌─────────────────┴─────────────────┐
@@ -84,13 +84,15 @@ Other Makefile targets:
 | `make docker-up` | Start Compose stack |
 | `make docker-down` | Stop Compose stack |
 
-## Configuration (Viper)
+## Configuration Guide
 
-On first start, each binary auto-creates its YAML config if missing.
+Configuration is managed with [Viper](https://github.com/spf13/viper). On first start, `arx-ca-server` and `arx-ca-cli` auto-create their YAML files if missing. `arx-cert-service` uses CLI flags only (see [CLI Reference](#command-line-interface-cli-reference)).
 
-### Server — `server.yaml` (beside the executable)
+### Server — `server.yaml`
 
-Created next to `arx-ca-server` (e.g. `bin/server.yaml` when the binary lives in `bin/`). Example:
+**Location:** Beside the `arx-ca-server` executable (for example `bin/server.yaml` when the binary lives in `bin/`). Override with `--config /path/to/server.yaml`.
+
+**Complete example** (all nested sections with documented defaults):
 
 ```yaml
 server:
@@ -99,24 +101,35 @@ server:
   log_level: info
   read_timeout: 15s
   write_timeout: 15s
+
 database:
-  host: ""
+  host: ""                    # Empty = embedded SQLite user store (.pki/arx-ca-users.db)
   port: 5432
+  user: ""
+  password: ""
+  password_file: ""           # Preferred over inline password (see Secure secrets)
+  dbname: ""
   sslmode: disable
   max_open_conns: 25
   max_idle_conns: 5
+
 ca:
-  stepca_url: ""
+  stepca_url: ""              # Optional remote step-ca URL
   root_path: .pki/certs/root_ca.crt
   intermediate_path: .pki/certs/intermediate_ca.crt
   provisioner_name: ca-admin
+  password: ""
+  password_file: ""
   provisioner_password_file: ""
+
 security:
-  jwt_secret: ""
+  jwt_secret: ""              # Auto-generated on first run if empty; set in production
   token_expiration_hours: 24
+
 bootstrap:
   admin_email: admin@arx.local
-  admin_password: changeme
+  admin_password_hash: "$2a$10$dSttx8r7tN32Mbo/C3zOteNowfq2vyhloZndZ2OGBgFEcMl1QYj0a"
+
 telemetry:
   service_name: arx-ca
   exporter_endpoint: http://localhost:4318
@@ -124,24 +137,232 @@ telemetry:
   sdk_disabled: false
 ```
 
-`InitServerConfig` loads this file with the `ARX` environment prefix (for example `ARX_SERVER_PORT=9090`). Nested keys use underscores in env names (`ARX_DATABASE_HOST`). Unset values are exported into `CA_API_*` and `OTEL_*` for step-ca compatibility. **Explicit environment variables always override YAML.**
+#### Server options (`server`)
 
-Run the server from the repository root (or set `ca.root_path` / paths under `.pki/` to absolute locations) so `.pki/` resolves correctly.
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `host` | `0.0.0.0` | Bind address (`0.0.0.0` listens on all interfaces as `:port`) |
+| `port` | `8080` | HTTP listen port |
+| `log_level` | `info` | Application log level |
+| `read_timeout` | `15s` | `http.Server` read timeout |
+| `write_timeout` | `15s` | `http.Server` write timeout |
+
+#### Database options (`database`)
+
+When `host` is non-empty, PostgreSQL is used for the application user store and a DSN is exported to `CA_API_DB_DATA_SOURCE`. When `host` is empty, SQLite under `.pki/arx-ca-users.db` is used.
+
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `host` | *(empty)* | PostgreSQL hostname; empty disables PostgreSQL |
+| `port` | `5432` | PostgreSQL port |
+| `user` | *(empty)* | Database user |
+| `password` | *(empty)* | Inline password (avoid in production) |
+| `password_file` | *(empty)* | Path to file containing the DB password |
+| `dbname` | *(empty)* | Database name |
+| `sslmode` | `disable` | PostgreSQL `sslmode` query parameter |
+| `max_open_conns` | `25` | Connection pool size |
+| `max_idle_conns` | `5` | Idle connections in pool |
+
+#### CA options (`ca`)
+
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `stepca_url` | *(empty)* | Optional external step-ca base URL |
+| `root_path` | `.pki/certs/root_ca.crt` | Root CA certificate path; used to derive `ca.json` at `.pki/config/ca.json` |
+| `intermediate_path` | `.pki/certs/intermediate_ca.crt` | Intermediate CA certificate path |
+| `provisioner_name` | `ca-admin` | JWK provisioner name |
+| `password` | *(empty)* | Inline CA/provisioner password |
+| `password_file` | *(empty)* | File containing CA password |
+| `provisioner_password_file` | *(empty)* | File containing provisioner password (used if `password` / `password_file` are empty) |
+
+#### Security options (`security`)
+
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `jwt_secret` | *(generated)* | HMAC secret for admin JWTs; also read from `ARX_SECURITY_JWT_SECRET` or `CA_API_JWT_SECRET` if unset |
+| `token_expiration_hours` | `24` | Admin JWT lifetime in hours |
+
+#### Bootstrap options (`bootstrap`)
+
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `admin_email` | `admin@arx.local` | Email stored for the first super-admin user |
+| `admin_password_hash` | *(bcrypt in defaults)* | Bcrypt hash seeded into the `users` table when it is empty — **never put plain-text passwords here** |
+
+#### Telemetry options (`telemetry`)
+
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `service_name` | `arx-ca` | OpenTelemetry service name |
+| `exporter_endpoint` | `http://localhost:4318` | OTLP/HTTP collector endpoint |
+| `exporter_insecure` | `true` | Use insecure OTLP when endpoint is `http://` |
+| `sdk_disabled` | `false` | Disable telemetry exporters when `true` |
+
+### Environment variable overrides (`ARX_*`)
+
+Viper loads `server.yaml` with env prefix `ARX` and binds keys with `AutomaticEnv()`. Dots in YAML keys become underscores in environment variable names.
+
+| YAML key | Environment variable |
+| -------- | -------------------- |
+| `server.host` | `ARX_SERVER_HOST` |
+| `server.port` | `ARX_SERVER_PORT` |
+| `database.host` | `ARX_DATABASE_HOST` |
+| `database.password_file` | `ARX_DATABASE_PASSWORD_FILE` |
+| `ca.provisioner_password_file` | `ARX_CA_PROVISIONER_PASSWORD_FILE` |
+| `security.jwt_secret` | `ARX_SECURITY_JWT_SECRET` |
+| `bootstrap.admin_password_hash` | `ARX_BOOTSTRAP_ADMIN_PASSWORD_HASH` |
+
+**Precedence:** Values already set in the process environment (including `CA_API_*` and `OTEL_*`) are not overwritten when `ApplyServerRuntimeFromViper()` exports YAML into legacy variables. For bootstrap, `CA_API_BOOTSTRAP_ADMIN_*` and `ARX_BOOTSTRAP_*` are also honored during normalization.
+
+After load, unset `CA_API_*` / `OTEL_*` variables are populated from YAML (for example `CA_API_LISTEN_ADDR`, `CA_API_JWT_SECRET`, `CA_API_DB_DATA_SOURCE`). Run the server from the repository root, or use absolute paths under `ca.root_path`, so `.pki/` resolves correctly.
+
+### Secure secret management
+
+Sensitive values should not live in plain text in `server.yaml` when avoidable.
+
+**`password_file` (database and CA):** When `password_file` (or `provisioner_password_file`) is set, `ResolveSecret` reads the trimmed contents of that file and uses them instead of the inline `password` field. If the file cannot be read, the inline value is used as a fallback.
+
+```bash
+# Example: provisioner password from a root-only file
+echo -n 'my-provisioner-secret' | sudo tee /etc/arx-ca/provisioner.pass
+sudo chmod 600 /etc/arx-ca/provisioner.pass
+```
+
+```yaml
+ca:
+  provisioner_password_file: /etc/arx-ca/provisioner.pass
+```
+
+**`admin_password_hash` (bootstrap):** Only bcrypt hashes belong in `bootstrap.admin_password_hash`. Generate a hash with `arx-ca-cli util hash` (see [arx-ca-cli](#arx-ca-cli)) and paste it into `server.yaml` or set `ARX_BOOTSTRAP_ADMIN_PASSWORD_HASH`. On first start, when the `users` table is empty, the server seeds one super-admin row with this hash.
+
+**JWT secret:** Leave `security.jwt_secret` empty only for development; a random secret is generated once. In production, set `security.jwt_secret` or `CA_API_JWT_SECRET` explicitly.
 
 ### CLI — `~/.arx/cli.yaml`
+
+Created on first `arx-ca-cli` run with mode `0600` in a `0700` directory.
 
 ```yaml
 server_url: http://localhost:8080
 log_level: info
 ```
 
-After `arx-ca-cli login`, credentials are stored separately in `~/.arx/config.json`.
+| Key | Default | Description |
+| --- | ------- | ----------- |
+| `server_url` | `http://localhost:8080` | Default base URL for `login` and `ui` |
+| `log_level` | `info` | CLI log level |
 
-### Agent — flags
+### CLI session — `~/.arx/config.json`
 
-`arx-cert-service` does not use Viper. Pass `--url` to subcommands that talk to the server (e.g. `trust install-root --url http://localhost:8080`).
+Written by `arx-ca-cli login` (mode `0600`). Not managed by Viper.
 
-On Windows, `local list` skips certificate stores that require elevated privileges (for example Local Machine `ROOT`) and continues with accessible user and browser stores.
+| Field | Description |
+| ----- | ----------- |
+| `server_url` | API base URL used for the session |
+| `token` | JWT from `POST /api/v1/auth/login` |
+| `token_type` | Usually `Bearer` |
+| `expires_at` | Token expiry (RFC3339) |
+| `username` | Logged-in admin username |
+
+## Command Line Interface (CLI) Reference
+
+Three binaries ship with the project. All support `--help` on the root command and subcommands.
+
+### `arx-ca-server`
+
+HTTP API, OCSP, enrollment protocols, and PKI engine.
+
+| Command / flag | Description |
+| -------------- | ----------- |
+| *(default)* | Start the HTTP server (loads `server.yaml` via Viper) |
+| `--config <path>` | Path to `server.yaml` (default: `server.yaml` beside the executable) |
+| `service install` | Install and enable the systemd unit (Linux, root) |
+| `service uninstall` | Stop, disable, and remove the systemd unit (Linux, root) |
+
+**Run the server:**
+
+```bash
+./bin/arx-ca-server
+./bin/arx-ca-server --config /etc/arx-ca/server.yaml
+```
+
+**systemd integration (Linux only):** `service install` resolves paths dynamically from the running binary:
+
+1. **Executable path** — `os.Executable()` with symlinks resolved (the binary you invoke).
+2. **Config path** — `--config` if passed to `service install`, otherwise `server.yaml` beside the executable.
+3. **Working directory** — Directory containing the executable.
+
+It writes `/etc/systemd/system/arx-ca-server.service` with `ExecStart=<exe> --config <config>`, creates the `arx-ca` system user if needed, runs `systemctl daemon-reload`, and `systemctl enable --now arx-ca-server`. Ensure the `arx-ca` user can read the binary, `server.yaml`, PKI paths, and any `*_file` secret paths.
+
+```bash
+sudo ./bin/arx-ca-server service install
+sudo ./bin/arx-ca-server --config /etc/arx-ca/server.yaml service install
+sudo ./bin/arx-ca-server service uninstall
+```
+
+On Windows and macOS, `service install` / `uninstall` return an error indicating Linux-only support.
+
+### `arx-ca-cli`
+
+Super Admin CLI and terminal UI. Loads `~/.arx/cli.yaml` on every command.
+
+| Command | Description |
+| ------- | ----------- |
+| `login` | Prompt for username/password, call `/api/v1/auth/login`, save JWT to `~/.arx/config.json` |
+| `login --url <base>` | Override `server_url` from `cli.yaml` |
+| `ui` | Interactive TUI (requires prior `login`) |
+| `ui --url <base>` | Override server URL for the TUI session |
+| `util hash <password>` | Print a bcrypt hash suitable for `bootstrap.admin_password_hash` |
+
+**Bootstrapping flow:**
+
+1. Start `arx-ca-server` and confirm health (`GET /api/v1/health`).
+2. Optionally customize bootstrap in `server.yaml` (hash only — no plain-text password).
+3. Run login against the default bootstrap account:
+
+```bash
+./bin/arx-ca-cli login
+# Server URL [http://localhost:8080]:
+# Username: admin
+# Password: (bootstrap password — see Bootstrap admin below)
+```
+
+4. Launch the TUI: `./bin/arx-ca-cli ui`
+
+**Generate a bcrypt hash for `server.yaml`:**
+
+```bash
+./bin/arx-ca-cli util hash 'MySecureAdminPassword!'
+# Output: $2a$10$...
+```
+
+Copy the hash into `bootstrap.admin_password_hash` before the first start, or set `ARX_BOOTSTRAP_ADMIN_PASSWORD_HASH`, so the seeded database user matches your chosen password policy.
+
+### `arx-cert-service`
+
+Read-only local agent: inspects certificate stores, installs trust anchors, downloads public certificates. **Never handles private keys from the server.**
+
+| Command | Description |
+| ------- | ----------- |
+| `local list` | List certs in system, user, and browser stores |
+| `local list --store system` | Filter by store: `system`, `user`, `browser` |
+| `local view <id>` | Show details by thumbprint or serial |
+| `trust install-root --url <base>` | Fetch root CA and install into local trust stores |
+| `trust install-intermediate --url <base>` | Install intermediate CA |
+| `trust uninstall-root` | Remove installed root CA |
+| `trust uninstall-intermediate` | Remove installed intermediate CA |
+| `server list --url <base>` | List public certificates from the API |
+| `server download --url <base>` | Download a public PEM |
+| `server download --kind root -o root.pem` | Kind: `leaf`, `intermediate`, or `root` |
+| `server download --serial <hex> -o leaf.pem` | Serial required for `kind=leaf` |
+
+State for trust operations is stored under `~/.arx-cert-service/`. On Windows, `local list` skips stores that require elevation (for example Local Machine `ROOT`) and continues with accessible stores.
+
+```bash
+./bin/arx-cert-service local list
+./bin/arx-cert-service server list --url http://localhost:8080
+./bin/arx-cert-service server download --url http://localhost:8080 --kind root -o root.pem
+./bin/arx-cert-service trust install-root --url http://localhost:8080
+```
 
 ## Deployment
 
@@ -185,22 +406,7 @@ curl -s -X POST http://localhost:8080/api/v1/certificates/auto \
   -d '{"common_name":"example.local","dns_sans":["example.local"],"ttl":"24h"}'
 ```
 
-Super Admin CLI:
-
-```bash
-./bin/arx-ca-cli login
-./bin/arx-ca-cli ui          # interactive TUI — do not run in unattended CI
-./bin/arx-ca-cli --help
-```
-
-Read-only agent:
-
-```bash
-./bin/arx-cert-service local list
-./bin/arx-cert-service server list --url http://localhost:8080
-./bin/arx-cert-service server download --url http://localhost:8080 --kind root -o root.pem
-./bin/arx-cert-service trust install-root --url http://localhost:8080
-```
+Super Admin CLI and agent: see [CLI Reference](#command-line-interface-cli-reference).
 
 ### Docker Compose
 
@@ -238,11 +444,14 @@ JSON envelope: `{ "data": …, "error": null | { "message": "…" } }`.
 
 ## Environment variables
 
-Copy `.env.example` to `.env` for Compose. For bare-metal, prefer `server.yaml`; use env vars for overrides or secrets injection.
+Copy `.env.example` to `.env` for Compose. For bare-metal, prefer `server.yaml`; use `ARX_*` or `CA_API_*` for overrides or secrets injection (see [Configuration Guide](#configuration-guide)).
 
 | Variable | Default | Description |
 | -------- | ------- | ----------- |
-| `CA_API_LISTEN_ADDR` | `:8080` (from YAML) | HTTP listen address |
+| `ARX_SERVER_PORT` | *(from YAML)* | Override `server.port` via Viper |
+| `ARX_DATABASE_HOST` | *(from YAML)* | Override `database.host` via Viper |
+| `ARX_BOOTSTRAP_ADMIN_PASSWORD_HASH` | *(from YAML)* | Override bootstrap bcrypt hash |
+| `CA_API_LISTEN_ADDR` | `:8080` (from YAML) | HTTP listen address (exported from YAML if unset) |
 | `CA_API_CA_CONFIG` | `.pki/config/ca.json` | Path to step-ca `ca.json` |
 | `CA_API_JWT_SECRET` | *(ephemeral if unset)* | HMAC secret for admin JWTs — **set in production** |
 | `CA_API_JWT_ISSUER` | `arx-ca` | JWT issuer claim |
@@ -270,7 +479,14 @@ For **PostgreSQL**, configure the `db` block in `ca.json` per [step-ca database 
 
 ## Bootstrap admin
 
-On first login use username `admin` with password `ArxRootCA-Bootstrap-Admin-2026!`. **Change the bcrypt hash in `internal/auth/admin.go` before any production deployment.**
+| Item | Value |
+| ---- | ----- |
+| Username | `admin` |
+| Default password | `ArxRootCA-Bootstrap-Admin-2026!` |
+
+API login validates this bootstrap password via the embedded verifier in `internal/auth/admin.go`. Separately, `bootstrap.admin_password_hash` in `server.yaml` seeds the application `users` table on first start when it is empty.
+
+**Production:** Generate a new hash with `arx-ca-cli util hash`, set `bootstrap.admin_password_hash` (or `ARX_BOOTSTRAP_ADMIN_PASSWORD_HASH`) before first boot, align the login verifier with your deployment process, and rotate credentials after initial access.
 
 ## Project layout
 
