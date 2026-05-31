@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -14,6 +15,7 @@ const (
 	serverConfigFileName = "server.yaml"
 	cliConfigDirName     = ".arx"
 	cliConfigFileName    = "cli.yaml"
+	serverEnvPrefix      = "ARX"
 )
 
 var (
@@ -34,14 +36,18 @@ func InitServerConfig() error {
 	}
 
 	viper.Reset()
-	viper.SetConfigFile(configPath)
-	viper.SetConfigType("yaml")
-	applyServerViperDefaults(viper.GetViper(), defaults)
+	v := viper.GetViper()
+	v.SetConfigFile(configPath)
+	v.SetConfigType("yaml")
+	v.SetEnvPrefix(serverEnvPrefix)
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+	applyServerViperDefaults(v, defaults)
 
-	if err := viper.ReadInConfig(); err != nil {
+	if err := v.ReadInConfig(); err != nil {
 		return fmt.Errorf("read server config %s: %w", configPath, err)
 	}
-	if err := viper.Unmarshal(&activeServerConfig); err != nil {
+	if err := unmarshalServerConfig(v, &activeServerConfig); err != nil {
 		return fmt.Errorf("unmarshal server config: %w", err)
 	}
 	activeServerConfig = normalizeServerConfig(activeServerConfig)
@@ -78,7 +84,7 @@ func InitCLIConfig() error {
 // ServerConfigFromViper returns the active server configuration after InitServerConfig.
 func ServerConfigFromViper() ServerConfig {
 	cfg := activeServerConfig
-	if err := viper.Unmarshal(&cfg); err == nil {
+	if err := unmarshalServerConfig(viper.GetViper(), &cfg); err == nil {
 		cfg = normalizeServerConfig(cfg)
 	}
 	return cfg
@@ -97,17 +103,34 @@ func CLIConfigFromViper() CLIConfig {
 func ApplyServerRuntimeFromViper() {
 	cfg := ServerConfigFromViper()
 	setEnvIfEmpty("CA_API_LISTEN_ADDR", cfg.ListenAddress())
-	setEnvIfEmpty("CA_API_CA_CONFIG", cfg.CAConfigPath)
-	setEnvIfEmpty("CA_API_DB_TYPE", cfg.DBType)
-	setEnvIfEmpty("CA_API_DB_DATA_SOURCE", cfg.DBDataSource)
+	setEnvIfEmpty("CA_API_CA_CONFIG", cfg.CA.ConfigPath())
+	if cfg.Database.UsesPostgreSQL() {
+		setEnvIfEmpty("CA_API_DB_TYPE", "postgresql")
+		setEnvIfEmpty("CA_API_DB_DATA_SOURCE", cfg.Database.DSN())
+	}
 	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_EMAIL", cfg.Bootstrap.AdminEmail)
 	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_PASSWORD", cfg.Bootstrap.AdminPassword)
-	setEnvIfEmpty("OTEL_SERVICE_NAME", cfg.OTELServiceName)
-	setEnvIfEmpty("OTEL_EXPORTER_OTLP_ENDPOINT", cfg.OTELExporterEndpoint)
-	if cfg.OTELExporterInsecure {
+	if secret := strings.TrimSpace(cfg.Security.JWTSecret); secret != "" {
+		setEnvIfEmpty("CA_API_JWT_SECRET", secret)
+	}
+	setEnvIfEmpty("CA_API_JWT_EXPIRY", cfg.Security.TokenExpiration().String())
+	if stepURL := strings.TrimSpace(cfg.CA.StepCAURL); stepURL != "" {
+		setEnvIfEmpty("ARX_CA_STEPCA_URL", stepURL)
+	}
+	if prov := strings.TrimSpace(cfg.CA.ProvisionerName); prov != "" {
+		setEnvIfEmpty("ARX_CA_PROVISIONER_NAME", prov)
+	}
+	if pwdFile := strings.TrimSpace(cfg.CA.ProvisionerPasswordFile); pwdFile != "" {
+		if raw, err := os.ReadFile(pwdFile); err == nil {
+			setEnvIfEmpty("CA_API_CA_PASSWORD", strings.TrimSpace(string(raw)))
+		}
+	}
+	setEnvIfEmpty("OTEL_SERVICE_NAME", cfg.Telemetry.ServiceName)
+	setEnvIfEmpty("OTEL_EXPORTER_OTLP_ENDPOINT", cfg.Telemetry.ExporterEndpoint)
+	if cfg.Telemetry.ExporterInsecure {
 		setEnvIfEmpty("OTEL_EXPORTER_OTLP_INSECURE", "true")
 	}
-	if cfg.OTELSDKDisabled {
+	if cfg.Telemetry.SDKDisabled {
 		setEnvIfEmpty("OTEL_SDK_DISABLED", "true")
 	}
 }
@@ -148,7 +171,7 @@ func ensureYAMLConfigFile(path string, defaults any, fileMode os.FileMode) error
 		return fmt.Errorf("create config directory %s: %w", dir, err)
 	}
 
-	raw, err := yaml.Marshal(defaults)
+	raw, err := marshalYAMLConfig(defaults)
 	if err != nil {
 		return fmt.Errorf("marshal default config: %w", err)
 	}
@@ -158,19 +181,45 @@ func ensureYAMLConfigFile(path string, defaults any, fileMode os.FileMode) error
 	return nil
 }
 
+func marshalYAMLConfig(v any) ([]byte, error) {
+	var buf strings.Builder
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	if err := enc.Close(); err != nil {
+		return nil, err
+	}
+	return []byte(buf.String()), nil
+}
+
+func unmarshalServerConfig(v *viper.Viper, cfg *ServerConfig) error {
+	return v.Unmarshal(cfg, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+	)))
+}
+
 func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
-	v.SetDefault("host", d.Host)
-	v.SetDefault("port", d.Port)
-	v.SetDefault("ca_config_path", d.CAConfigPath)
-	v.SetDefault("log_level", d.LogLevel)
-	v.SetDefault("db_type", d.DBType)
-	v.SetDefault("db_data_source", d.DBDataSource)
+	v.SetDefault("server.host", d.Server.Host)
+	v.SetDefault("server.port", d.Server.Port)
+	v.SetDefault("server.log_level", d.Server.LogLevel)
+	v.SetDefault("server.read_timeout", d.Server.ReadTimeout)
+	v.SetDefault("server.write_timeout", d.Server.WriteTimeout)
+	v.SetDefault("database.port", d.Database.Port)
+	v.SetDefault("database.sslmode", d.Database.SSLMode)
+	v.SetDefault("database.max_open_conns", d.Database.MaxOpenConns)
+	v.SetDefault("database.max_idle_conns", d.Database.MaxIdleConns)
+	v.SetDefault("ca.root_path", d.CA.RootPath)
+	v.SetDefault("ca.intermediate_path", d.CA.IntermediatePath)
+	v.SetDefault("ca.provisioner_name", d.CA.ProvisionerName)
+	v.SetDefault("security.token_expiration_hours", d.Security.TokenExpirationHours)
 	v.SetDefault("bootstrap.admin_email", d.Bootstrap.AdminEmail)
 	v.SetDefault("bootstrap.admin_password", d.Bootstrap.AdminPassword)
-	v.SetDefault("otel_service_name", d.OTELServiceName)
-	v.SetDefault("otel_exporter_endpoint", d.OTELExporterEndpoint)
-	v.SetDefault("otel_exporter_insecure", d.OTELExporterInsecure)
-	v.SetDefault("otel_sdk_disabled", d.OTELSDKDisabled)
+	v.SetDefault("telemetry.service_name", d.Telemetry.ServiceName)
+	v.SetDefault("telemetry.exporter_endpoint", d.Telemetry.ExporterEndpoint)
+	v.SetDefault("telemetry.exporter_insecure", d.Telemetry.ExporterInsecure)
+	v.SetDefault("telemetry.sdk_disabled", d.Telemetry.SDKDisabled)
 }
 
 func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
@@ -180,24 +229,69 @@ func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
 
 func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 	def := DefaultServerConfig()
-	if cfg.Port <= 0 {
-		cfg.Port = def.Port
+
+	if cfg.Server.Port <= 0 {
+		cfg.Server.Port = def.Server.Port
 	}
-	if cfg.CAConfigPath == "" {
-		cfg.CAConfigPath = def.CAConfigPath
+	if strings.TrimSpace(cfg.Server.Host) == "" {
+		cfg.Server.Host = def.Server.Host
 	}
-	if cfg.LogLevel == "" {
-		cfg.LogLevel = def.LogLevel
+	if cfg.Server.LogLevel == "" {
+		cfg.Server.LogLevel = def.Server.LogLevel
 	}
-	if cfg.DBType == "" {
-		cfg.DBType = def.DBType
+	if cfg.Server.ReadTimeout <= 0 {
+		cfg.Server.ReadTimeout = def.Server.ReadTimeout
 	}
-	if cfg.OTELServiceName == "" {
-		cfg.OTELServiceName = def.OTELServiceName
+	if cfg.Server.WriteTimeout <= 0 {
+		cfg.Server.WriteTimeout = def.Server.WriteTimeout
 	}
-	if cfg.OTELExporterEndpoint == "" {
-		cfg.OTELExporterEndpoint = def.OTELExporterEndpoint
+
+	if cfg.Database.Port <= 0 {
+		cfg.Database.Port = def.Database.Port
 	}
+	if cfg.Database.SSLMode == "" {
+		cfg.Database.SSLMode = def.Database.SSLMode
+	}
+	if cfg.Database.MaxOpenConns <= 0 {
+		cfg.Database.MaxOpenConns = def.Database.MaxOpenConns
+	}
+	if cfg.Database.MaxIdleConns <= 0 {
+		cfg.Database.MaxIdleConns = def.Database.MaxIdleConns
+	}
+
+	if cfg.CA.ProvisionerName == "" {
+		cfg.CA.ProvisionerName = def.CA.ProvisionerName
+	}
+	if cfg.CA.RootPath == "" {
+		cfg.CA.RootPath = def.CA.RootPath
+	}
+	if cfg.CA.IntermediatePath == "" {
+		cfg.CA.IntermediatePath = def.CA.IntermediatePath
+	}
+
+	if cfg.Security.TokenExpirationHours <= 0 {
+		cfg.Security.TokenExpirationHours = def.Security.TokenExpirationHours
+	}
+	if strings.TrimSpace(cfg.Security.JWTSecret) == "" {
+		if v := strings.TrimSpace(os.Getenv("CA_API_JWT_SECRET")); v != "" {
+			cfg.Security.JWTSecret = v
+		} else if v := strings.TrimSpace(os.Getenv("ARX_SECURITY_JWT_SECRET")); v != "" {
+			cfg.Security.JWTSecret = v
+		} else {
+			secret, err := GenerateJWTSecret(32)
+			if err == nil {
+				cfg.Security.JWTSecret = secret
+			}
+		}
+	}
+
+	if cfg.Telemetry.ServiceName == "" {
+		cfg.Telemetry.ServiceName = def.Telemetry.ServiceName
+	}
+	if cfg.Telemetry.ExporterEndpoint == "" {
+		cfg.Telemetry.ExporterEndpoint = def.Telemetry.ExporterEndpoint
+	}
+
 	cfg.Bootstrap = normalizeBootstrap(cfg.Bootstrap)
 	return cfg
 }
@@ -214,6 +308,12 @@ func normalizeBootstrap(b Bootstrap) Bootstrap {
 		b.AdminEmail = v
 	}
 	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_PASSWORD")); v != "" {
+		b.AdminPassword = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ARX_BOOTSTRAP_ADMIN_EMAIL")); v != "" {
+		b.AdminEmail = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ARX_BOOTSTRAP_ADMIN_PASSWORD")); v != "" {
 		b.AdminPassword = v
 	}
 	return b

@@ -1,6 +1,50 @@
 package config
 
-import "fmt"
+import (
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
+	"net/url"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+// ServerSettings holds HTTP server bind and timeout options.
+type ServerSettings struct {
+	Host         string        `mapstructure:"host" yaml:"host"`
+	Port         int           `mapstructure:"port" yaml:"port"`
+	LogLevel     string        `mapstructure:"log_level" yaml:"log_level"`
+	ReadTimeout  time.Duration `mapstructure:"read_timeout" yaml:"read_timeout"`
+	WriteTimeout time.Duration `mapstructure:"write_timeout" yaml:"write_timeout"`
+}
+
+// DatabaseConfig holds application user-store database connection settings.
+type DatabaseConfig struct {
+	Host         string `mapstructure:"host" yaml:"host"`
+	Port         int    `mapstructure:"port" yaml:"port"`
+	User         string `mapstructure:"user" yaml:"user"`
+	Password     string `mapstructure:"password" yaml:"password"`
+	DBName       string `mapstructure:"dbname" yaml:"dbname"`
+	SSLMode      string `mapstructure:"sslmode" yaml:"sslmode"`
+	MaxOpenConns int    `mapstructure:"max_open_conns" yaml:"max_open_conns"`
+	MaxIdleConns int    `mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
+}
+
+// CAConfig holds step-ca integration paths and provisioner settings.
+type CAConfig struct {
+	StepCAURL                 string `mapstructure:"stepca_url" yaml:"stepca_url"`
+	RootPath                  string `mapstructure:"root_path" yaml:"root_path"`
+	IntermediatePath          string `mapstructure:"intermediate_path" yaml:"intermediate_path"`
+	ProvisionerName           string `mapstructure:"provisioner_name" yaml:"provisioner_name"`
+	ProvisionerPasswordFile   string `mapstructure:"provisioner_password_file" yaml:"provisioner_password_file"`
+}
+
+// SecurityConfig holds authentication and token policy for the API.
+type SecurityConfig struct {
+	JWTSecret             string `mapstructure:"jwt_secret" yaml:"jwt_secret"`
+	TokenExpirationHours  int    `mapstructure:"token_expiration_hours" yaml:"token_expiration_hours"`
+}
 
 // Bootstrap holds first-run admin credentials seeded when the users table is empty.
 type Bootstrap struct {
@@ -8,48 +52,135 @@ type Bootstrap struct {
 	AdminPassword string `mapstructure:"admin_password" yaml:"admin_password"`
 }
 
-// ServerConfig holds runtime settings for arx-ca-server loaded from server.yaml.
+// TelemetryConfig holds OpenTelemetry exporter settings.
+type TelemetryConfig struct {
+	ServiceName      string `mapstructure:"service_name" yaml:"service_name"`
+	ExporterEndpoint string `mapstructure:"exporter_endpoint" yaml:"exporter_endpoint"`
+	ExporterInsecure bool   `mapstructure:"exporter_insecure" yaml:"exporter_insecure"`
+	SDKDisabled      bool   `mapstructure:"sdk_disabled" yaml:"sdk_disabled"`
+}
+
+// ServerConfig is the root configuration loaded from server.yaml.
 type ServerConfig struct {
-	Host                 string    `mapstructure:"host" yaml:"host"`
-	Port                 int       `mapstructure:"port" yaml:"port"`
-	CAConfigPath         string    `mapstructure:"ca_config_path" yaml:"ca_config_path"`
-	LogLevel             string    `mapstructure:"log_level" yaml:"log_level"`
-	DBType               string    `mapstructure:"db_type" yaml:"db_type"`
-	DBDataSource         string    `mapstructure:"db_data_source" yaml:"db_data_source"`
-	Bootstrap            Bootstrap `mapstructure:"bootstrap" yaml:"bootstrap"`
-	OTELServiceName      string    `mapstructure:"otel_service_name" yaml:"otel_service_name"`
-	OTELExporterEndpoint string    `mapstructure:"otel_exporter_endpoint" yaml:"otel_exporter_endpoint"`
-	OTELExporterInsecure bool      `mapstructure:"otel_exporter_insecure" yaml:"otel_exporter_insecure"`
-	OTELSDKDisabled      bool      `mapstructure:"otel_sdk_disabled" yaml:"otel_sdk_disabled"`
+	Server    ServerSettings  `mapstructure:"server" yaml:"server"`
+	Database  DatabaseConfig  `mapstructure:"database" yaml:"database"`
+	CA        CAConfig        `mapstructure:"ca" yaml:"ca"`
+	Security  SecurityConfig  `mapstructure:"security" yaml:"security"`
+	Bootstrap Bootstrap       `mapstructure:"bootstrap" yaml:"bootstrap"`
+	Telemetry TelemetryConfig `mapstructure:"telemetry" yaml:"telemetry"`
 }
 
 // DefaultServerConfig returns the built-in defaults used when server.yaml is created.
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
-		Host:                 "",
-		Port:                 8080,
-		CAConfigPath:         ".pki/config/ca.json",
-		LogLevel:             "info",
-		DBType:       "badgerv2",
-		DBDataSource: "",
+		Server: ServerSettings{
+			Host:         "0.0.0.0",
+			Port:         8080,
+			LogLevel:     "info",
+			ReadTimeout:  15 * time.Second,
+			WriteTimeout: 15 * time.Second,
+		},
+		Database: DatabaseConfig{
+			Port:         5432,
+			SSLMode:      "disable",
+			MaxOpenConns: 25,
+			MaxIdleConns: 5,
+		},
+		CA: CAConfig{
+			RootPath:         ".pki/certs/root_ca.crt",
+			IntermediatePath: ".pki/certs/intermediate_ca.crt",
+			ProvisionerName:  "ca-admin",
+		},
+		Security: SecurityConfig{
+			TokenExpirationHours: 24,
+		},
 		Bootstrap: Bootstrap{
 			AdminEmail:    "admin@arx.local",
 			AdminPassword: "changeme",
 		},
-		OTELServiceName: "arx-ca",
-		OTELExporterEndpoint: "http://localhost:4318",
-		OTELExporterInsecure: true,
-		OTELSDKDisabled:      false,
+		Telemetry: TelemetryConfig{
+			ServiceName:      "arx-ca",
+			ExporterEndpoint: "http://localhost:4318",
+			ExporterInsecure: true,
+			SDKDisabled:      false,
+		},
 	}
 }
 
-// ListenAddress returns the HTTP listen address in host:port form (e.g. ":8080").
+// ListenAddress returns the HTTP listen address in host:port form.
 func (c ServerConfig) ListenAddress() string {
-	if c.Port <= 0 {
-		c.Port = DefaultServerConfig().Port
+	return c.Server.ListenAddress()
+}
+
+// ListenAddress returns the HTTP listen address for server settings.
+func (s ServerSettings) ListenAddress() string {
+	port := s.Port
+	if port <= 0 {
+		port = DefaultServerConfig().Server.Port
 	}
-	if c.Host == "" {
-		return fmt.Sprintf(":%d", c.Port)
+	host := strings.TrimSpace(s.Host)
+	if host == "" || host == "0.0.0.0" {
+		return fmt.Sprintf(":%d", port)
 	}
-	return fmt.Sprintf("%s:%d", c.Host, c.Port)
+	return fmt.Sprintf("%s:%d", host, port)
+}
+
+// ConfigPath returns the absolute or relative path to step-ca ca.json.
+func (c CAConfig) ConfigPath() string {
+	if root := strings.TrimSpace(c.RootPath); root != "" {
+		base := filepath.Dir(filepath.Dir(root))
+		return filepath.Join(base, "config", "ca.json")
+	}
+	return ".pki/config/ca.json"
+}
+
+// UsesPostgreSQL reports whether the application database should use PostgreSQL.
+func (d DatabaseConfig) UsesPostgreSQL() bool {
+	return strings.TrimSpace(d.Host) != ""
+}
+
+// DSN builds a PostgreSQL connection string when host is configured.
+func (d DatabaseConfig) DSN() string {
+	if !d.UsesPostgreSQL() {
+		return ""
+	}
+	port := d.Port
+	if port <= 0 {
+		port = DefaultServerConfig().Database.Port
+	}
+	sslMode := strings.TrimSpace(d.SSLMode)
+	if sslMode == "" {
+		sslMode = DefaultServerConfig().Database.SSLMode
+	}
+	u := &url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(d.User, d.Password),
+		Host:   fmt.Sprintf("%s:%d", strings.TrimSpace(d.Host), port),
+		Path:   "/" + strings.TrimSpace(d.DBName),
+	}
+	q := u.Query()
+	q.Set("sslmode", sslMode)
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
+// TokenExpiration returns admin JWT lifetime derived from configuration.
+func (s SecurityConfig) TokenExpiration() time.Duration {
+	hours := s.TokenExpirationHours
+	if hours <= 0 {
+		hours = DefaultServerConfig().Security.TokenExpirationHours
+	}
+	return time.Duration(hours) * time.Hour
+}
+
+// GenerateJWTSecret creates a URL-safe base64 secret for HS256 signing.
+func GenerateJWTSecret(n int) (string, error) {
+	if n <= 0 {
+		n = 32
+	}
+	buf := make([]byte, n)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
 }

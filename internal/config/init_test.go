@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -16,8 +17,16 @@ func TestServerConfigListenAddress(t *testing.T) {
 		cfg  ServerConfig
 		want string
 	}{
-		{"host omitted", ServerConfig{Port: 8080}, ":8080"},
-		{"explicit host", ServerConfig{Host: "127.0.0.1", Port: 9443}, "127.0.0.1:9443"},
+		{
+			name: "default host",
+			cfg: ServerConfig{Server: ServerSettings{Host: "0.0.0.0", Port: 8080}},
+			want: ":8080",
+		},
+		{
+			name: "explicit host",
+			cfg:  ServerConfig{Server: ServerSettings{Host: "127.0.0.1", Port: 9443}},
+			want: "127.0.0.1:9443",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -46,12 +55,17 @@ func TestEnsureYAMLConfigFileCreatesFile(t *testing.T) {
 	if err := yaml.Unmarshal(raw, &got); err != nil {
 		t.Fatalf("unmarshal created config: %v", err)
 	}
-	if got.Port != defaults.Port || got.CAConfigPath != defaults.CAConfigPath {
-		t.Fatalf("unexpected defaults in file: %+v", got)
+	if got.Server.Port != defaults.Server.Port {
+		t.Fatalf("server.port = %d, want %d", got.Server.Port, defaults.Server.Port)
+	}
+	if got.CA.ConfigPath() != defaults.CA.ConfigPath() {
+		t.Fatalf("ca config path = %q, want %q", got.CA.ConfigPath(), defaults.CA.ConfigPath())
+	}
+	if !strings.Contains(string(raw), "server:") || !strings.Contains(string(raw), "database:") {
+		t.Fatalf("expected nested yaml sections, got:\n%s", string(raw))
 	}
 
-	// Second call must not overwrite an existing file.
-	if err := os.WriteFile(path, []byte("host: custom\nport: 1\n"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("server:\n  host: custom\n  port: 1\n"), 0o644); err != nil {
 		t.Fatalf("overwrite config for idempotency test: %v", err)
 	}
 	if err := ensureYAMLConfigFile(path, defaults, 0o644); err != nil {
@@ -93,23 +107,60 @@ func TestInitCLIConfigUsesHomeDirectory(t *testing.T) {
 func TestApplyServerRuntimeFromViperSetsEnv(t *testing.T) {
 	t.Setenv("CA_API_LISTEN_ADDR", "")
 	t.Setenv("CA_API_CA_CONFIG", "")
+	t.Setenv("CA_API_JWT_SECRET", "")
 
 	activeServerConfig = ServerConfig{
-		Host:         "",
-		Port:         9090,
-		CAConfigPath: "/tmp/ca.json",
-		DBType:       "badgerv2",
+		Server: ServerSettings{Host: "0.0.0.0", Port: 9090},
+		CA:     CAConfig{RootPath: "/tmp/pki/certs/root_ca.crt"},
+		Security: SecurityConfig{
+			JWTSecret:            "test-secret",
+			TokenExpirationHours: 12,
+		},
 	}
 	viper.Reset()
-	viper.Set("port", 9090)
-	viper.Set("ca_config_path", "/tmp/ca.json")
+	viper.Set("server.port", 9090)
+	viper.Set("ca.root_path", "/tmp/pki/certs/root_ca.crt")
+	viper.Set("security.jwt_secret", "test-secret")
 
 	ApplyServerRuntimeFromViper()
 
 	if got := os.Getenv("CA_API_LISTEN_ADDR"); got != ":9090" {
 		t.Fatalf("CA_API_LISTEN_ADDR = %q, want :9090", got)
 	}
-	if got := os.Getenv("CA_API_CA_CONFIG"); got != "/tmp/ca.json" {
-		t.Fatalf("CA_API_CA_CONFIG = %q, want /tmp/ca.json", got)
+	wantCA := filepath.Join("/tmp", "pki", "config", "ca.json")
+	if got := os.Getenv("CA_API_CA_CONFIG"); got != wantCA {
+		t.Fatalf("CA_API_CA_CONFIG = %q, want %q", got, wantCA)
+	}
+	if got := os.Getenv("CA_API_JWT_SECRET"); got != "test-secret" {
+		t.Fatalf("CA_API_JWT_SECRET = %q, want test-secret", got)
+	}
+}
+
+func TestNormalizeServerConfigGeneratesJWTSecret(t *testing.T) {
+	t.Setenv("CA_API_JWT_SECRET", "")
+	t.Setenv("ARX_SECURITY_JWT_SECRET", "")
+
+	cfg := normalizeServerConfig(ServerConfig{
+		Security: SecurityConfig{TokenExpirationHours: 8},
+	})
+	if strings.TrimSpace(cfg.Security.JWTSecret) == "" {
+		t.Fatal("expected generated JWT secret")
+	}
+	if cfg.Security.TokenExpiration() != 8*time.Hour {
+		t.Fatalf("token expiration = %v, want 8h", cfg.Security.TokenExpiration())
+	}
+}
+
+func TestDatabaseDSN(t *testing.T) {
+	dsn := DatabaseConfig{
+		Host:     "db.example.com",
+		Port:     5432,
+		User:     "arx",
+		Password: "secret",
+		DBName:   "arx_ca",
+		SSLMode:  "require",
+	}.DSN()
+	if !strings.Contains(dsn, "db.example.com:5432") || !strings.Contains(dsn, "sslmode=require") {
+		t.Fatalf("unexpected DSN: %s", dsn)
 	}
 }
