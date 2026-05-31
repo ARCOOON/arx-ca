@@ -1,0 +1,21 @@
+{
+  "name": "ARX CA",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspaces/arx-ca",
+  "remoteEnv": {
+    "ARX_DATABASE_HOST": "db",
+    "ARX_DATABASE_PASSWORD": "devpassword"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.Go",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}
