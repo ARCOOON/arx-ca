@@ -93,21 +93,40 @@ On first start, each binary auto-creates its YAML config if missing.
 Created next to `arx-ca-server` (e.g. `bin/server.yaml` when the binary lives in `bin/`). Example:
 
 ```yaml
-host: ""
-port: 8080
-ca_config_path: .pki/config/ca.json
-log_level: info
-db_type: badgerv2
-db_data_source: ""
-otel_service_name: arx-ca
-otel_exporter_endpoint: http://localhost:4318
-otel_exporter_insecure: true
-otel_sdk_disabled: false
+server:
+  host: 0.0.0.0
+  port: 8080
+  log_level: info
+  read_timeout: 15s
+  write_timeout: 15s
+database:
+  host: ""
+  port: 5432
+  sslmode: disable
+  max_open_conns: 25
+  max_idle_conns: 5
+ca:
+  stepca_url: ""
+  root_path: .pki/certs/root_ca.crt
+  intermediate_path: .pki/certs/intermediate_ca.crt
+  provisioner_name: ca-admin
+  provisioner_password_file: ""
+security:
+  jwt_secret: ""
+  token_expiration_hours: 24
+bootstrap:
+  admin_email: admin@arx.local
+  admin_password: changeme
+telemetry:
+  service_name: arx-ca
+  exporter_endpoint: http://localhost:4318
+  exporter_insecure: true
+  sdk_disabled: false
 ```
 
-`InitServerConfig` loads this file and exports unset values into `CA_API_*` and `OTEL_*` environment variables. **Explicit environment variables always override YAML** for listen address and CA config path.
+`InitServerConfig` loads this file with the `ARX` environment prefix (for example `ARX_SERVER_PORT=9090`). Nested keys use underscores in env names (`ARX_DATABASE_HOST`). Unset values are exported into `CA_API_*` and `OTEL_*` for step-ca compatibility. **Explicit environment variables always override YAML.**
 
-Run the server from the repository root (or set `ca_config_path` to an absolute path) so `.pki/` resolves correctly.
+Run the server from the repository root (or set `ca.root_path` / paths under `.pki/` to absolute locations) so `.pki/` resolves correctly.
 
 ### CLI — `~/.arx/cli.yaml`
 
