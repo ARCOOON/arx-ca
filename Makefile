@@ -14,6 +14,8 @@ AGENT_PKG := ./cmd/agent
 DOCKER_IMAGE := arx-ca-server:latest
 COMPOSE := docker compose
 LDFLAGS := -trimpath -ldflags="-s -w"
+GOFLAGS := -buildvcs=false
+export GOFLAGS
 
 GO_LINUX := GOOS=linux GOARCH=amd64 CGO_ENABLED=0
 GO_WINDOWS := GOOS=windows GOARCH=amd64 CGO_ENABLED=0
