@@ -22,8 +22,8 @@ func TestSeedInitialAdminCreatesUserOnce(t *testing.T) {
 	}
 
 	cfg := config.Bootstrap{
-		AdminEmail:    "admin@arx.local",
-		AdminPassword: "changeme",
+		AdminEmail:        "admin@arx.local",
+		AdminPasswordHash: "$2a$10$dSttx8r7tN32Mbo/C3zOteNowfq2vyhloZndZ2OGBgFEcMl1QYj0a",
 	}
 	if err := SeedInitialAdmin(db, cfg); err != nil {
 		t.Fatalf("SeedInitialAdmin first call: %v", err)
@@ -41,8 +41,8 @@ func TestSeedInitialAdminCreatesUserOnce(t *testing.T) {
 	}
 
 	if err := SeedInitialAdmin(db, config.Bootstrap{
-		AdminEmail:    "other@arx.local",
-		AdminPassword: "other-pass",
+		AdminEmail:        "other@arx.local",
+		AdminPasswordHash: "$2a$10$otherhashotherhashotherhashotherhashotherhashotherhash",
 	}); err != nil {
 		t.Fatalf("SeedInitialAdmin second call: %v", err)
 	}

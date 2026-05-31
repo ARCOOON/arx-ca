@@ -109,7 +109,7 @@ func ApplyServerRuntimeFromViper() {
 		setEnvIfEmpty("CA_API_DB_DATA_SOURCE", cfg.Database.DSN())
 	}
 	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_EMAIL", cfg.Bootstrap.AdminEmail)
-	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_PASSWORD", cfg.Bootstrap.AdminPassword)
+	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_PASSWORD_HASH", cfg.Bootstrap.AdminPasswordHash)
 	if secret := strings.TrimSpace(cfg.Security.JWTSecret); secret != "" {
 		setEnvIfEmpty("CA_API_JWT_SECRET", secret)
 	}
@@ -120,11 +120,11 @@ func ApplyServerRuntimeFromViper() {
 	if prov := strings.TrimSpace(cfg.CA.ProvisionerName); prov != "" {
 		setEnvIfEmpty("ARX_CA_PROVISIONER_NAME", prov)
 	}
-	if pwdFile := strings.TrimSpace(cfg.CA.ProvisionerPasswordFile); pwdFile != "" {
-		if raw, err := os.ReadFile(pwdFile); err == nil {
-			setEnvIfEmpty("CA_API_CA_PASSWORD", strings.TrimSpace(string(raw)))
-		}
+	caPassword := ResolveSecret(cfg.CA.Password, cfg.CA.PasswordFile)
+	if caPassword == "" {
+		caPassword = ResolveSecret("", cfg.CA.ProvisionerPasswordFile)
 	}
+	setEnvIfEmpty("CA_API_CA_PASSWORD", caPassword)
 	setEnvIfEmpty("OTEL_SERVICE_NAME", cfg.Telemetry.ServiceName)
 	setEnvIfEmpty("OTEL_EXPORTER_OTLP_ENDPOINT", cfg.Telemetry.ExporterEndpoint)
 	if cfg.Telemetry.ExporterInsecure {
@@ -215,7 +215,7 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("ca.provisioner_name", d.CA.ProvisionerName)
 	v.SetDefault("security.token_expiration_hours", d.Security.TokenExpirationHours)
 	v.SetDefault("bootstrap.admin_email", d.Bootstrap.AdminEmail)
-	v.SetDefault("bootstrap.admin_password", d.Bootstrap.AdminPassword)
+	v.SetDefault("bootstrap.admin_password_hash", d.Bootstrap.AdminPasswordHash)
 	v.SetDefault("telemetry.service_name", d.Telemetry.ServiceName)
 	v.SetDefault("telemetry.exporter_endpoint", d.Telemetry.ExporterEndpoint)
 	v.SetDefault("telemetry.exporter_insecure", d.Telemetry.ExporterInsecure)
@@ -301,20 +301,20 @@ func normalizeBootstrap(b Bootstrap) Bootstrap {
 	if b.AdminEmail == "" {
 		b.AdminEmail = def.AdminEmail
 	}
-	if b.AdminPassword == "" {
-		b.AdminPassword = def.AdminPassword
+	if b.AdminPasswordHash == "" {
+		b.AdminPasswordHash = def.AdminPasswordHash
 	}
 	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_EMAIL")); v != "" {
 		b.AdminEmail = v
 	}
-	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_PASSWORD")); v != "" {
-		b.AdminPassword = v
+	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_PASSWORD_HASH")); v != "" {
+		b.AdminPasswordHash = v
 	}
 	if v := strings.TrimSpace(os.Getenv("ARX_BOOTSTRAP_ADMIN_EMAIL")); v != "" {
 		b.AdminEmail = v
 	}
-	if v := strings.TrimSpace(os.Getenv("ARX_BOOTSTRAP_ADMIN_PASSWORD")); v != "" {
-		b.AdminPassword = v
+	if v := strings.TrimSpace(os.Getenv("ARX_BOOTSTRAP_ADMIN_PASSWORD_HASH")); v != "" {
+		b.AdminPasswordHash = v
 	}
 	return b
 }

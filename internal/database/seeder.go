@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/your-org/arx-ca/internal/auth"
 	"github.com/your-org/arx-ca/internal/config"
@@ -28,14 +27,9 @@ func SeedInitialAdmin(db *sql.DB, cfg config.Bootstrap) error {
 	if email == "" {
 		email = def.AdminEmail
 	}
-	password := cfg.AdminPassword
-	if password == "" {
-		password = def.AdminPassword
-	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return fmt.Errorf("hash bootstrap admin password: %w", err)
+	hash := strings.TrimSpace(cfg.AdminPasswordHash)
+	if hash == "" {
+		hash = def.AdminPasswordHash
 	}
 
 	createdAt := time.Now().UTC().Format(time.RFC3339)
@@ -43,18 +37,21 @@ func SeedInitialAdmin(db *sql.DB, cfg config.Bootstrap) error {
 	role := string(auth.RoleSuperAdmin)
 
 	if isPostgreSQL(db) {
-		_, err = db.Exec(
+		_, err := db.Exec(
 			`INSERT INTO users (id, email, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5)`,
-			id, email, string(hash), role, createdAt,
+			id, email, hash, role, createdAt,
 		)
+		if err != nil {
+			return fmt.Errorf("insert bootstrap admin user: %w", err)
+		}
 	} else {
-		_, err = db.Exec(
+		_, err := db.Exec(
 			`INSERT INTO users (id, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)`,
-			id, email, string(hash), role, createdAt,
+			id, email, hash, role, createdAt,
 		)
-	}
-	if err != nil {
-		return fmt.Errorf("insert bootstrap admin user: %w", err)
+		if err != nil {
+			return fmt.Errorf("insert bootstrap admin user: %w", err)
+		}
 	}
 	return nil
 }

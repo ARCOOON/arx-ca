@@ -25,6 +25,7 @@ type DatabaseConfig struct {
 	Port         int    `mapstructure:"port" yaml:"port"`
 	User         string `mapstructure:"user" yaml:"user"`
 	Password     string `mapstructure:"password" yaml:"password"`
+	PasswordFile string `mapstructure:"password_file" yaml:"password_file"`
 	DBName       string `mapstructure:"dbname" yaml:"dbname"`
 	SSLMode      string `mapstructure:"sslmode" yaml:"sslmode"`
 	MaxOpenConns int    `mapstructure:"max_open_conns" yaml:"max_open_conns"`
@@ -33,11 +34,13 @@ type DatabaseConfig struct {
 
 // CAConfig holds step-ca integration paths and provisioner settings.
 type CAConfig struct {
-	StepCAURL                 string `mapstructure:"stepca_url" yaml:"stepca_url"`
-	RootPath                  string `mapstructure:"root_path" yaml:"root_path"`
-	IntermediatePath          string `mapstructure:"intermediate_path" yaml:"intermediate_path"`
-	ProvisionerName           string `mapstructure:"provisioner_name" yaml:"provisioner_name"`
-	ProvisionerPasswordFile   string `mapstructure:"provisioner_password_file" yaml:"provisioner_password_file"`
+	StepCAURL               string `mapstructure:"stepca_url" yaml:"stepca_url"`
+	RootPath                string `mapstructure:"root_path" yaml:"root_path"`
+	IntermediatePath        string `mapstructure:"intermediate_path" yaml:"intermediate_path"`
+	ProvisionerName         string `mapstructure:"provisioner_name" yaml:"provisioner_name"`
+	Password                string `mapstructure:"password" yaml:"password"`
+	PasswordFile            string `mapstructure:"password_file" yaml:"password_file"`
+	ProvisionerPasswordFile string `mapstructure:"provisioner_password_file" yaml:"provisioner_password_file"`
 }
 
 // SecurityConfig holds authentication and token policy for the API.
@@ -48,8 +51,8 @@ type SecurityConfig struct {
 
 // Bootstrap holds first-run admin credentials seeded when the users table is empty.
 type Bootstrap struct {
-	AdminEmail    string `mapstructure:"admin_email" yaml:"admin_email"`
-	AdminPassword string `mapstructure:"admin_password" yaml:"admin_password"`
+	AdminEmail        string `mapstructure:"admin_email" yaml:"admin_email"`
+	AdminPasswordHash string `mapstructure:"admin_password_hash" yaml:"admin_password_hash"`
 }
 
 // TelemetryConfig holds OpenTelemetry exporter settings.
@@ -95,8 +98,8 @@ func DefaultServerConfig() ServerConfig {
 			TokenExpirationHours: 24,
 		},
 		Bootstrap: Bootstrap{
-			AdminEmail:    "admin@arx.local",
-			AdminPassword: "changeme",
+			AdminEmail:        "admin@arx.local",
+			AdminPasswordHash: "$2a$10$dSttx8r7tN32Mbo/C3zOteNowfq2vyhloZndZ2OGBgFEcMl1QYj0a",
 		},
 		Telemetry: TelemetryConfig{
 			ServiceName:      "arx-ca",
@@ -152,9 +155,10 @@ func (d DatabaseConfig) DSN() string {
 	if sslMode == "" {
 		sslMode = DefaultServerConfig().Database.SSLMode
 	}
+	password := ResolveSecret(d.Password, d.PasswordFile)
 	u := &url.URL{
 		Scheme: "postgres",
-		User:   url.UserPassword(d.User, d.Password),
+		User:   url.UserPassword(d.User, password),
 		Host:   fmt.Sprintf("%s:%d", strings.TrimSpace(d.Host), port),
 		Path:   "/" + strings.TrimSpace(d.DBName),
 	}

@@ -12,6 +12,7 @@ import (
 	clicfg "github.com/your-org/arx-ca/internal/cli/config"
 	"github.com/your-org/arx-ca/internal/cli/login"
 	"github.com/your-org/arx-ca/internal/cli/tui"
+	cliutil "github.com/your-org/arx-ca/internal/cli/util"
 	arxconfig "github.com/your-org/arx-ca/internal/config"
 )
 
@@ -33,7 +34,17 @@ func newRootCmd() *cobra.Command {
 	}
 	root.AddCommand(newLoginCmd())
 	root.AddCommand(newUICmd())
+	root.AddCommand(newUtilCmd())
 	return root
+}
+
+func newUtilCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "util",
+		Short: "Utility commands for arx-ca administration",
+	}
+	cmd.AddCommand(cliutil.NewHashCmd())
+	return cmd
 }
 
 func resolveServerURL(flagOverride string) string {

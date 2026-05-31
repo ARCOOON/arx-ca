@@ -64,6 +64,12 @@ func TestEnsureYAMLConfigFileCreatesFile(t *testing.T) {
 	if !strings.Contains(string(raw), "server:") || !strings.Contains(string(raw), "database:") {
 		t.Fatalf("expected nested yaml sections, got:\n%s", string(raw))
 	}
+	if !strings.Contains(string(raw), "password_file:") {
+		t.Fatalf("expected password_file fields in generated config, got:\n%s", string(raw))
+	}
+	if !strings.Contains(string(raw), "admin_password_hash:") {
+		t.Fatalf("expected admin_password_hash in generated config, got:\n%s", string(raw))
+	}
 
 	if err := os.WriteFile(path, []byte("server:\n  host: custom\n  port: 1\n"), 0o644); err != nil {
 		t.Fatalf("overwrite config for idempotency test: %v", err)
