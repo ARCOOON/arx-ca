@@ -1,11 +1,14 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	arxconfig "github.com/your-org/arx-ca/internal/config"
 
@@ -13,9 +16,15 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const (
+	maxConnectAttempts = 5
+	connectRetryDelay  = 3 * time.Second
+)
+
 // Open connects to the application user store (SQLite by default, PostgreSQL when configured).
+// The initial ping is retried up to maxConnectAttempts times with connectRetryDelay between attempts.
 func Open(cfg arxconfig.ServerConfig) (*sql.DB, error) {
-	driver, dsn, err := resolveDriverAndDSN(cfg)
+	driver, dsn, endpoint, err := resolveDriverAndDSN(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -30,27 +39,75 @@ func Open(cfg arxconfig.ServerConfig) (*sql.DB, error) {
 	if cfg.Database.MaxIdleConns > 0 {
 		db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
 	}
-	if err := db.Ping(); err != nil {
+	if err := pingWithRetry(context.Background(), db, endpoint); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("ping application database: %w", err)
+		return nil, err
 	}
 	return db, nil
 }
 
-func resolveDriverAndDSN(cfg arxconfig.ServerConfig) (driver, dsn string, err error) {
+func pingWithRetry(ctx context.Context, db *sql.DB, endpoint string) error {
+	var lastErr error
+	for attempt := 1; attempt <= maxConnectAttempts; attempt++ {
+		lastErr = db.PingContext(ctx)
+		if lastErr == nil {
+			return nil
+		}
+		if attempt >= maxConnectAttempts {
+			break
+		}
+		log.Printf(
+			"WARNING: Database not ready, retrying in %s... (Attempt %d/%d): %v",
+			connectRetryDelay,
+			attempt,
+			maxConnectAttempts,
+			lastErr,
+		)
+		if err := waitForRetry(ctx, connectRetryDelay); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf(
+		"application database is unreachable at %s after %d connection attempts: %w",
+		endpoint,
+		maxConnectAttempts,
+		lastErr,
+	)
+}
+
+func waitForRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("database connection retry interrupted: %w", ctx.Err())
+	case <-timer.C:
+		return nil
+	}
+}
+
+func resolveDriverAndDSN(cfg arxconfig.ServerConfig) (driver, dsn, endpoint string, err error) {
 	if cfg.Database.UsesPostgreSQL() {
 		dsn = cfg.Database.DSN()
 		if dsn == "" {
-			return "", "", fmt.Errorf("postgresql database host is set but connection parameters are incomplete")
+			return "", "", "", fmt.Errorf("postgresql database host is set but connection parameters are incomplete")
 		}
-		return "pgx", dsn, nil
+		return "pgx", dsn, databaseEndpoint(cfg.Database), nil
 	}
 
 	path, err := defaultSQLitePath(cfg)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return "sqlite", sqliteDSN(path), nil
+	return "sqlite", sqliteDSN(path), path, nil
+}
+
+func databaseEndpoint(db arxconfig.DatabaseConfig) string {
+	port := db.Port
+	if port <= 0 {
+		port = arxconfig.DefaultServerConfig().Database.Port
+	}
+	return fmt.Sprintf("%s:%d", strings.TrimSpace(db.Host), port)
 }
 
 func sqliteDSN(path string) string {
