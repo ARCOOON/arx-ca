@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
@@ -99,6 +100,8 @@ func ApplyServerRuntimeFromViper() {
 	setEnvIfEmpty("CA_API_CA_CONFIG", cfg.CAConfigPath)
 	setEnvIfEmpty("CA_API_DB_TYPE", cfg.DBType)
 	setEnvIfEmpty("CA_API_DB_DATA_SOURCE", cfg.DBDataSource)
+	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_EMAIL", cfg.Bootstrap.AdminEmail)
+	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_PASSWORD", cfg.Bootstrap.AdminPassword)
 	setEnvIfEmpty("OTEL_SERVICE_NAME", cfg.OTELServiceName)
 	setEnvIfEmpty("OTEL_EXPORTER_OTLP_ENDPOINT", cfg.OTELExporterEndpoint)
 	if cfg.OTELExporterInsecure {
@@ -162,6 +165,8 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("log_level", d.LogLevel)
 	v.SetDefault("db_type", d.DBType)
 	v.SetDefault("db_data_source", d.DBDataSource)
+	v.SetDefault("bootstrap.admin_email", d.Bootstrap.AdminEmail)
+	v.SetDefault("bootstrap.admin_password", d.Bootstrap.AdminPassword)
 	v.SetDefault("otel_service_name", d.OTELServiceName)
 	v.SetDefault("otel_exporter_endpoint", d.OTELExporterEndpoint)
 	v.SetDefault("otel_exporter_insecure", d.OTELExporterInsecure)
@@ -193,7 +198,25 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 	if cfg.OTELExporterEndpoint == "" {
 		cfg.OTELExporterEndpoint = def.OTELExporterEndpoint
 	}
+	cfg.Bootstrap = normalizeBootstrap(cfg.Bootstrap)
 	return cfg
+}
+
+func normalizeBootstrap(b Bootstrap) Bootstrap {
+	def := DefaultServerConfig().Bootstrap
+	if b.AdminEmail == "" {
+		b.AdminEmail = def.AdminEmail
+	}
+	if b.AdminPassword == "" {
+		b.AdminPassword = def.AdminPassword
+	}
+	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_EMAIL")); v != "" {
+		b.AdminEmail = v
+	}
+	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_PASSWORD")); v != "" {
+		b.AdminPassword = v
+	}
+	return b
 }
 
 func normalizeCLIConfig(cfg CLIConfig) CLIConfig {
