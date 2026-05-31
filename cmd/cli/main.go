@@ -58,15 +58,25 @@ func resolveServerURL(flagOverride string) string {
 }
 
 func newLoginCmd() *cobra.Command {
-	var serverURL string
+	var (
+		serverURL string
+		username  string
+		password  string
+	)
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with admin credentials and store a JWT locally",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return login.Run(resolveServerURL(serverURL))
+			return login.Run(login.Options{
+				ServerURL: resolveServerURL(serverURL),
+				Username:  username,
+				Password:  password,
+			})
 		},
 	}
 	cmd.Flags().StringVarP(&serverURL, "url", "u", "", "Override the server URL from ~/.arx/cli.yaml")
+	cmd.Flags().StringVarP(&username, "username", "", "", "Admin username (skips prompt)")
+	cmd.Flags().StringVarP(&password, "password", "", "", "Admin password (skips prompt; use only in automation)")
 	return cmd
 }
 

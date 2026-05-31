@@ -16,41 +16,63 @@ import (
 	"github.com/your-org/arx-ca/internal/models"
 )
 
-// Run prompts for admin credentials, logs in, and saves the JWT locally.
-// serverURL should come from Viper (via the CLI root command); an empty value is rejected at prompt time.
-func Run(serverURL string) error {
-	url := strings.TrimSpace(serverURL)
+// Options configures the login flow. Non-empty Username and Password skip prompts.
+// When ServerURL is set via flag, the server URL prompt is skipped unless stdin is a TTY.
+type Options struct {
+	ServerURL string
+	Username  string
+	Password  string
+}
+
+// Run prompts for admin credentials (unless provided in opts), logs in, and saves the JWT locally.
+func Run(opts Options) error {
+	url := strings.TrimSpace(opts.ServerURL)
 	if url == "" {
 		return fmt.Errorf("server URL is required; set server_url in ~/.arx/cli.yaml or pass --url")
 	}
 
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Printf("Server URL [%s]: ", url)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("read server url: %w", err)
-	}
-	if trimmed := strings.TrimSpace(line); trimmed != "" {
-		url = trimmed
+	username := strings.TrimSpace(opts.Username)
+	password := opts.Password
+
+	if username == "" || password == "" {
+		if !term.IsTerminal(int(syscall.Stdin)) && username != "" && password == "" {
+			return fmt.Errorf("password is required when stdin is not a terminal (use --password)")
+		}
 	}
 
-	fmt.Print("Username: ")
-	username, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("read username: %w", err)
-	}
-	username = strings.TrimSpace(username)
-	if username == "" {
-		return fmt.Errorf("username is required")
+	if username == "" || (password == "" && term.IsTerminal(int(syscall.Stdin))) {
+		if !skipServerURLPrompt(opts) {
+			fmt.Printf("Server URL [%s]: ", url)
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("read server url: %w", err)
+			}
+			if trimmed := strings.TrimSpace(line); trimmed != "" {
+				url = trimmed
+			}
+		}
+
+		if username == "" {
+			fmt.Print("Username: ")
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("read username: %w", err)
+			}
+			username = strings.TrimSpace(line)
+			if username == "" {
+				return fmt.Errorf("username is required")
+			}
+		}
 	}
 
-	fmt.Print("Password: ")
-	passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println()
-	if err != nil {
-		return fmt.Errorf("read password: %w", err)
+	if password == "" {
+		var err error
+		password, err = readPassword(reader)
+		if err != nil {
+			return err
+		}
 	}
-	password := string(passwordBytes)
 	if password == "" {
 		return fmt.Errorf("password is required")
 	}
@@ -91,4 +113,28 @@ func Run(serverURL string) error {
 		fmt.Printf("Roles: %s\n", strings.Join(resp.Roles, ", "))
 	}
 	return nil
+}
+
+func skipServerURLPrompt(opts Options) bool {
+	return strings.TrimSpace(opts.ServerURL) != "" &&
+		strings.TrimSpace(opts.Username) != "" &&
+		opts.Password != ""
+}
+
+func readPassword(reader *bufio.Reader) (string, error) {
+	fmt.Print("Password: ")
+	if term.IsTerminal(int(syscall.Stdin)) {
+		passwordBytes, err := term.ReadPassword(int(syscall.Stdin))
+		fmt.Println()
+		if err != nil {
+			return "", fmt.Errorf("read password: %w", err)
+		}
+		return string(passwordBytes), nil
+	}
+
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	return strings.TrimSpace(line), nil
 }
