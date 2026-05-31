@@ -19,8 +19,11 @@ import (
 	"github.com/your-org/arx-ca/internal/ca"
 	arxconfig "github.com/your-org/arx-ca/internal/config"
 	"github.com/your-org/arx-ca/internal/database"
+	"github.com/your-org/arx-ca/internal/server/service"
 	"github.com/your-org/arx-ca/internal/telemetry"
 )
+
+var serverConfigFlag string
 
 func main() {
 	if err := newRootCmd().Execute(); err != nil {
@@ -33,7 +36,15 @@ func newRootCmd() *cobra.Command {
 		Use:   "arx-ca-server",
 		Short: "arx-ca HTTP API and certificate authority server",
 		Long:  "arx-ca-server exposes the REST API, OCSP, ACME, SCEP, and NDES endpoints for the Arx CA platform.",
-		PersistentPreRunE: func(_ *cobra.Command, _ []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if skipsServerConfigInit(cmd) {
+				return nil
+			}
+			if serverConfigFlag != "" {
+				if err := arxconfig.SetServerConfigPath(serverConfigFlag); err != nil {
+					return err
+				}
+			}
 			if err := arxconfig.InitServerConfig(); err != nil {
 				return err
 			}
@@ -44,7 +55,44 @@ func newRootCmd() *cobra.Command {
 			return runServer()
 		},
 	}
+	root.PersistentFlags().StringVar(&serverConfigFlag, "config", "", "Path to server.yaml (default: server.yaml beside the executable)")
+	root.AddCommand(newServiceCmd())
 	return root
+}
+
+func newServiceCmd() *cobra.Command {
+	svc := &cobra.Command{
+		Use:   "service",
+		Short: "Install or remove the systemd unit for arx-ca-server",
+	}
+
+	install := &cobra.Command{
+		Use:   "install",
+		Short: "Install and enable the arx-ca-server systemd unit",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return service.Install(serverConfigFlag)
+		},
+	}
+
+	uninstall := &cobra.Command{
+		Use:   "uninstall",
+		Short: "Stop, disable, and remove the arx-ca-server systemd unit",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return service.Uninstall()
+		},
+	}
+
+	svc.AddCommand(install, uninstall)
+	return svc
+}
+
+func skipsServerConfigInit(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "service" {
+			return true
+		}
+	}
+	return false
 }
 
 func runServer() error {
