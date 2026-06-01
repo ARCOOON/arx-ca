@@ -1,0 +1,9 @@
+# Setzt das Standardverhalten für alle Textdateien
+* text=auto
+
+# Zwingt Bash-Scripte IMMER zu LF, egal auf welchem OS
+*.sh text eol=lf
+
+# Optional: Zwingt Go-Dateien und Configs IMMER zu LF
+# *.go text eol=lf
+*.yaml text eol=lf
