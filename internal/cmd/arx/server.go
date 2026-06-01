@@ -3,6 +3,7 @@ package arxcmd
 import (
 	"errors"
 	"log"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -91,26 +92,55 @@ func newServerConfigCmd() *cobra.Command {
 }
 
 func newServerServiceCmd() *cobra.Command {
+	var runAsUser, installDir string
+
 	svc := &cobra.Command{
 		Use:   "service",
 		Short: "Install or remove the systemd unit for the Arx CA server",
+		Long: `Self-install the arx binary under /opt/arx (by default), bootstrap server.yaml,
+register a hardened arx-server systemd unit, and start the CA API. Requires root on Linux.`,
+	}
+
+	addServiceFlags := func(cmd *cobra.Command) {
+		cmd.Flags().StringVar(&runAsUser, "run-as-user", "arx-ca", "POSIX account that runs the arx-server service")
+		cmd.Flags().StringVar(&installDir, "install-dir", "/opt/arx", "Directory where the binary and server.yaml are installed")
 	}
 
 	install := &cobra.Command{
 		Use:   "install",
-		Short: "Install and enable the arx-ca-server systemd unit",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return service.Install(serverConfigFlag)
+		Short: "Install the arx binary, configuration, and arx-server systemd unit",
+		Run: func(_ *cobra.Command, _ []string) {
+			if os.Geteuid() != 0 {
+				log.Fatal("service install must be executed as root")
+			}
+			opts := service.InstallOptions{
+				RunAsUser:  runAsUser,
+				InstallDir: installDir,
+			}
+			if err := service.Install(opts); err != nil {
+				log.Fatal(err)
+			}
 		},
 	}
+	addServiceFlags(install)
 
 	uninstall := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Stop, disable, and remove the arx-ca-server systemd unit",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return service.Uninstall()
+		Short: "Stop the arx-server unit and remove the install directory",
+		Run: func(_ *cobra.Command, _ []string) {
+			if os.Geteuid() != 0 {
+				log.Fatal("service uninstall must be executed as root")
+			}
+			opts := service.InstallOptions{
+				RunAsUser:  runAsUser,
+				InstallDir: installDir,
+			}
+			if err := service.Uninstall(opts); err != nil {
+				log.Fatal(err)
+			}
 		},
 	}
+	addServiceFlags(uninstall)
 
 	svc.AddCommand(install, uninstall)
 	return svc
