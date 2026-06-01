@@ -4,7 +4,7 @@ import "time"
 
 // LoginRequest is the JSON body for POST /api/v1/auth/login.
 type LoginRequest struct {
-	Username string `json:"username"`
+	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
