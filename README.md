@@ -126,15 +126,30 @@ Environment overrides use the `ARX_` prefix (Viper). Legacy `CA_API_*` and `OTEL
 
 Set `database.driver` to `postgres` (or `postgresql`) and provide host, credentials, and `dbname` in `server.yaml`. When `database.host` is non-empty and `driver` is omitted, PostgreSQL is selected automatically for backward compatibility.
 
-## systemd (Linux)
+## Production install (Linux, systemd)
+
+The `arx` binary is **self-installing**: it copies itself to `/opt/arx`, bootstraps `server.yaml`, registers a hardened `arx-server` systemd unit (with self-healing `ExecStartPre` permission fixes), and starts the service. No separate bash installer is required.
 
 ```bash
+# Build, then install as root (from any path; the running binary is copied to /opt/arx/arx)
+make build
 sudo ./bin/arx server service install
-sudo ./bin/arx server --config /etc/arx-ca/server.yaml service install
+
+# Optional flags
+sudo ./bin/arx server service install --run-as-user arx-ca --install-dir /opt/arx
+
+# Remove unit, /opt/arx, and the service user
 sudo ./bin/arx server service uninstall
 ```
 
-The unit runs `arx server start --config <path>` as user `arx-ca`. Non-Linux platforms return an error from `service install`.
+| Flag | Default | Purpose |
+| ---- | ------- | ------- |
+| `--run-as-user` | `arx-ca` | System account that owns `/opt/arx` and runs the service |
+| `--install-dir` | `/opt/arx` | Install root (`arx` binary and `server.yaml`) |
+
+After install, edit `/opt/arx/server.yaml` (JWT secret, bootstrap password hash). Check status with `systemctl status arx-server` and logs with `journalctl -u arx-server -f`.
+
+Non-Linux platforms return an error from `server service install`.
 
 ## Docker Compose
 
@@ -196,6 +211,7 @@ API login checks the bootstrap verifier in code. `bootstrap.admin_password_hash`
 | `internal/config` | Viper YAML for server and CLI |
 | `internal/cli` | Admin API client, login, TUI |
 | `internal/agent` | Local stores, trust install, public cert download |
+| `internal/server/service` | Self-installing systemd deployment (`server service install`) |
 
 ## License
 
