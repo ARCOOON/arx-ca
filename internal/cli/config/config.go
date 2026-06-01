@@ -18,7 +18,8 @@ type Config struct {
 	Token     string    `json:"token"`
 	TokenType string    `json:"token_type,omitempty"`
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
-	Username  string    `json:"username,omitempty"`
+	Email     string    `json:"email,omitempty"`
+	Username  string    `json:"username,omitempty"` // deprecated: use Email
 }
 
 // Path returns the default config file path (~/.arx/config.json).
@@ -48,6 +49,9 @@ func Load() (*Config, error) {
 	var cfg Config
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	if cfg.Email == "" && cfg.Username != "" {
+		cfg.Email = cfg.Username
 	}
 	return &cfg, nil
 }
