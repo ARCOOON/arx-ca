@@ -50,7 +50,7 @@ func Install(configFlag string) error {
 		return err
 	}
 
-	fmt.Println("arx-ca-server systemd service installed and started.")
+	fmt.Println("arx CA server systemd service installed and started.")
 	fmt.Println("Ensure the arx-ca user can read the executable, configuration file, and any paths referenced in server.yaml (CA keys, database secrets, etc.).")
 	return nil
 }
@@ -74,7 +74,7 @@ func Uninstall() error {
 		return err
 	}
 
-	fmt.Println("arx-ca-server systemd service uninstalled.")
+	fmt.Println("arx CA server systemd service uninstalled.")
 	return nil
 }
 
