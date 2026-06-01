@@ -1,9 +1,11 @@
 package middleware
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/your-org/arx-ca/internal/logging"
 )
 
 type responseRecorder struct {
@@ -16,7 +18,7 @@ func (r *responseRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-// Logger returns middleware that logs each HTTP request method, path, and duration.
+// Logger returns middleware that logs each HTTP request when the log level is debug.
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -24,14 +26,17 @@ func Logger(next http.Handler) http.Handler {
 
 		next.ServeHTTP(recorder, r)
 
+		if !logging.IsDebug() {
+			return
+		}
+
 		duration := time.Since(start)
-		log.Printf(
-			"http request method=%s path=%s status=%d duration=%s remote=%s",
-			r.Method,
-			r.URL.Path,
-			recorder.statusCode,
-			duration.Round(time.Microsecond),
-			r.RemoteAddr,
+		logging.Logger().Debug("http request",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", recorder.statusCode),
+			slog.Duration("duration", duration),
+			slog.String("remote", r.RemoteAddr),
 		)
 	})
 }
