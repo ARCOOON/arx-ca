@@ -106,7 +106,7 @@ func DefaultServerConfig() ServerConfig {
 		},
 		Bootstrap: Bootstrap{
 			AdminEmail:        "admin@arx.local",
-			AdminPasswordHash: "$2a$10$dSttx8r7tN32Mbo/C3zOteNowfq2vyhloZndZ2OGBgFEcMl1QYj0a",
+			AdminPasswordHash: "$2a$10$YGbMIqvYmKp3aQucKx0hh.x35Skzd9djQ/leMyXZy3JKKBVotzwxa",
 		},
 		Telemetry: TelemetryConfig{
 			ServiceName:      "arx-ca",
