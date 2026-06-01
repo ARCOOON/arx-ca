@@ -9,28 +9,33 @@ import (
 )
 
 const (
-	unitFilePath = "/etc/systemd/system/arx-ca-server.service"
-	unitName     = "arx-ca-server"
-	systemUser   = "arx-ca"
+	unitFilePath = "/etc/systemd/system/arx-server.service"
+	unitName     = "arx-server"
 )
 
 var unitTemplate = template.Must(template.New("unit").Parse(`[Unit]
 Description=ARX Certificate Authority Server
-After=network.target postgresql.service
+Documentation=https://github.com/your-org/arx-ca
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=arx-ca
-Group=arx-ca
+User={{.RunAsUser}}
+Group={{.RunAsUser}}
+WorkingDirectory={{.InstallDir}}
+ExecStartPre=+/usr/bin/chown -R {{.RunAsUser}}:{{.RunAsUser}} {{.InstallDir}}
+ExecStartPre=+/usr/bin/chmod 600 {{.ConfigPath}}
+ExecStartPre=+/usr/bin/chmod 700 {{.ExecPath}}
 ExecStart={{.ExecPath}} server start --config {{.ConfigPath}}
-WorkingDirectory={{.WorkingDir}}
-Restart=always
+Restart=on-failure
 RestartSec=5
-# Security (Relaxed for dynamic paths)
-NoNewPrivileges=yes
-PrivateTmp=yes
-AmbientCapabilities=CAP_NET_BIND_SERVICE
-LimitNOFILE=65536
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
 
 [Install]
 WantedBy=multi-user.target
@@ -38,9 +43,10 @@ WantedBy=multi-user.target
 
 // UnitParams holds values substituted into the systemd unit template.
 type UnitParams struct {
+	RunAsUser  string
+	InstallDir string
 	ExecPath   string
 	ConfigPath string
-	WorkingDir string
 }
 
 func renderUnitFile(params UnitParams) ([]byte, error) {

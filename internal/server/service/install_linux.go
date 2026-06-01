@@ -5,39 +5,56 @@ package service
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
-
-	arxconfig "github.com/your-org/arx-ca/internal/config"
 )
 
-// Install registers and starts the arx-ca-server systemd unit. It must run as root.
-func Install(configFlag string) error {
-	if os.Geteuid() != 0 {
-		return errors.New("service install must be executed as root")
+// Install copies the current binary to installDir, bootstraps configuration, registers
+// the arx-server systemd unit, and starts the service. It must run as root.
+func Install(opts InstallOptions) error {
+	if err := requireRoot("install"); err != nil {
+		return err
 	}
-
-	execPath, err := arxconfig.ExecutablePath()
-	if err != nil {
+	if err := requireSystemctl(); err != nil {
 		return err
 	}
 
-	configPath, err := arxconfig.ResolveServerConfigPath(configFlag)
-	if err != nil {
+	user := opts.runAsUser()
+	installDir := opts.installDir()
+	destBinary := filepath.Join(installDir, binaryName)
+	configPath := filepath.Join(installDir, configFileName)
+
+	if err := ensureSystemUser(user); err != nil {
 		return err
 	}
 
-	workingDir := filepath.Dir(execPath)
+	if err := os.MkdirAll(installDir, 0o700); err != nil {
+		return fmt.Errorf("create install directory %s: %w", installDir, err)
+	}
 
-	if err := ensureSystemUser(); err != nil {
+	srcBinary, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve current executable: %w", err)
+	}
+	if err := copyBinary(srcBinary, destBinary); err != nil {
+		return err
+	}
+
+	if err := bootstrapConfig(installDir, destBinary); err != nil {
+		return err
+	}
+
+	if err := setInstallPermissions(user, installDir, destBinary, configPath); err != nil {
 		return err
 	}
 
 	params := UnitParams{
-		ExecPath:   execPath,
+		RunAsUser:  user,
+		InstallDir: installDir,
+		ExecPath:   destBinary,
 		ConfigPath: configPath,
-		WorkingDir: workingDir,
 	}
 	if err := writeUnitFile(params); err != nil {
 		return err
@@ -46,25 +63,36 @@ func Install(configFlag string) error {
 	if err := runSystemctl("daemon-reload"); err != nil {
 		return err
 	}
-	if err := runSystemctl("enable", "--now", unitName); err != nil {
+	if err := runSystemctl("enable", unitName); err != nil {
+		return err
+	}
+	if err := runSystemctl("restart", unitName); err != nil {
 		return err
 	}
 
-	fmt.Println("arx CA server systemd service installed and started.")
-	fmt.Println("Ensure the arx-ca user can read the executable, configuration file, and any paths referenced in server.yaml (CA keys, database secrets, etc.).")
+	fmt.Println("arx CA server installed and started.")
+	fmt.Printf("Service:  %s\n", unitName)
+	fmt.Printf("Binary:   %s\n", destBinary)
+	fmt.Printf("Config:   %s\n", configPath)
+	fmt.Println("Edit server.yaml (JWT secret, bootstrap password hash) before production use.")
 	return nil
 }
 
-// Uninstall stops and removes the arx-ca-server systemd unit. It must run as root.
-func Uninstall() error {
-	if os.Geteuid() != 0 {
-		return errors.New("service uninstall must be executed as root")
-	}
-
-	_ = runSystemctl("stop", unitName)
-	if err := runSystemctl("disable", unitName); err != nil {
+// Uninstall stops the arx-server unit, removes the unit file and install directory, and
+// deletes the service user. It must run as root.
+func Uninstall(opts InstallOptions) error {
+	if err := requireRoot("uninstall"); err != nil {
 		return err
 	}
+	if err := requireSystemctl(); err != nil {
+		return err
+	}
+
+	user := opts.runAsUser()
+	installDir := opts.installDir()
+
+	_ = runSystemctl("stop", unitName)
+	_ = runSystemctl("disable", unitName)
 
 	if err := os.Remove(unitFilePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove %s: %w", unitFilePath, err)
@@ -74,20 +102,124 @@ func Uninstall() error {
 		return err
 	}
 
-	fmt.Println("arx CA server systemd service uninstalled.")
+	if err := os.RemoveAll(installDir); err != nil {
+		return fmt.Errorf("remove install directory %s: %w", installDir, err)
+	}
+
+	if err := removeSystemUser(user); err != nil {
+		return err
+	}
+
+	fmt.Println("arx CA server uninstalled.")
 	return nil
 }
 
-func ensureSystemUser() error {
-	if exec.Command("id", "-u", systemUser).Run() == nil {
+func requireRoot(action string) error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("service %s must be executed as root", action)
+	}
+	return nil
+}
+
+func requireSystemctl() error {
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return errors.New("systemd (systemctl) is required but was not found")
+	}
+	return nil
+}
+
+func ensureSystemUser(user string) error {
+	if exec.Command("id", user).Run() == nil {
 		return nil
 	}
-	cmd := exec.Command("useradd", "--system", "-M", "-s", "/usr/sbin/nologin", systemUser)
-	if err := cmd.Run(); err != nil {
-		if exec.Command("id", "-u", systemUser).Run() == nil {
+	cmd := exec.Command(
+		"useradd",
+		"--system",
+		"--no-create-home",
+		"--shell", "/usr/sbin/nologin",
+		user,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		if exec.Command("id", user).Run() == nil {
 			return nil
 		}
-		return fmt.Errorf("create system user %s: %w", systemUser, err)
+		return fmt.Errorf("create system user %s: %w: %s", user, err, trimOutput(out))
+	}
+	return nil
+}
+
+func removeSystemUser(user string) error {
+	if exec.Command("id", user).Run() != nil {
+		return nil
+	}
+	cmd := exec.Command("userdel", user)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("remove system user %s: %w: %s", user, err, trimOutput(out))
+	}
+	return nil
+}
+
+func copyBinary(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open source binary %s: %w", src, err)
+	}
+	defer in.Close()
+
+	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove existing binary %s: %w", dst, err)
+	}
+
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o700)
+	if err != nil {
+		return fmt.Errorf("create destination binary %s: %w", dst, err)
+	}
+	defer func() {
+		_ = out.Close()
+	}()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return fmt.Errorf("copy binary to %s: %w", dst, err)
+	}
+	if err := out.Chmod(0o700); err != nil {
+		return fmt.Errorf("chmod destination binary %s: %w", dst, err)
+	}
+	return nil
+}
+
+func bootstrapConfig(installDir, destBinary string) error {
+	configPath := filepath.Join(installDir, configFileName)
+	if _, err := os.Stat(configPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat config file %s: %w", configPath, err)
+	}
+
+	cmd := exec.Command(destBinary, "server", "config", "init")
+	cmd.Dir = installDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("bootstrap server config: %w: %s", err, trimOutput(out))
+	}
+	return nil
+}
+
+func setInstallPermissions(user, installDir, destBinary, configPath string) error {
+	chown := exec.Command("chown", "-R", user+":"+user, installDir)
+	if out, err := chown.CombinedOutput(); err != nil {
+		return fmt.Errorf("chown %s: %w: %s", installDir, err, trimOutput(out))
+	}
+
+	if err := os.Chmod(installDir, 0o700); err != nil {
+		return fmt.Errorf("chmod install directory: %w", err)
+	}
+	if err := os.Chmod(destBinary, 0o700); err != nil {
+		return fmt.Errorf("chmod installed binary: %w", err)
+	}
+	if _, err := os.Stat(configPath); err == nil {
+		if err := os.Chmod(configPath, 0o600); err != nil {
+			return fmt.Errorf("chmod server config: %w", err)
+		}
 	}
 	return nil
 }
