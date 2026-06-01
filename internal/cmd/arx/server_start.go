@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -18,11 +18,15 @@ import (
 	"github.com/your-org/arx-ca/internal/ca"
 	arxconfig "github.com/your-org/arx-ca/internal/config"
 	"github.com/your-org/arx-ca/internal/database"
+	"github.com/your-org/arx-ca/internal/logging"
+	"github.com/your-org/arx-ca/internal/repository"
 	"github.com/your-org/arx-ca/internal/telemetry"
 )
 
 func runServer() error {
 	serverCfg := arxconfig.ServerConfigFromViper()
+	logging.Configure(serverCfg.Server.LogLevel)
+	log := logging.Logger()
 
 	appDB, err := database.Open(serverCfg)
 	if err != nil {
@@ -30,13 +34,13 @@ func runServer() error {
 	}
 	defer func() {
 		if err := appDB.Close(); err != nil {
-			log.Printf("application database close error: %v", err)
+			log.Error("application database close error", slog.Any("error", err))
 		}
 	}()
 	if err := database.Migrate(appDB); err != nil {
 		return err
 	}
-	if err := database.SeedInitialAdmin(appDB, serverCfg.Bootstrap); err != nil {
+	if err := database.EnsureBootstrapAdmin(appDB, serverCfg.Bootstrap); err != nil {
 		return err
 	}
 
@@ -49,7 +53,7 @@ func runServer() error {
 	}
 	defer func() {
 		if err := otelShutdown(context.Background()); err != nil {
-			log.Printf("OpenTelemetry shutdown error: %v", err)
+			log.Error("OpenTelemetry shutdown error", slog.Any("error", err))
 		}
 	}()
 
@@ -63,7 +67,7 @@ func runServer() error {
 	}
 	defer func() {
 		if err := pkiEngine.Shutdown(); err != nil {
-			log.Printf("CA shutdown error: %v", err)
+			log.Error("CA shutdown error", slog.Any("error", err))
 		}
 	}()
 
@@ -82,7 +86,8 @@ func runServer() error {
 		return err
 	}
 	apiKeyStore := auth.NewAPIKeyStore()
-	authHandler := handlers.NewAuthHandler(jwtManager, apiKeyStore)
+	userStore := repository.NewUserStore(appDB)
+	authHandler := handlers.NewAuthHandler(jwtManager, apiKeyStore, userStore)
 	sshHandler := handlers.NewSSHHandler(pkiEngine, jwtManager, apiKeyStore)
 	templateHandler := handlers.NewTemplateHandler(pkiEngine)
 
@@ -130,11 +135,11 @@ func runServer() error {
 
 	if pkiEngine.ACMEEnabled() {
 		mux.Handle("/acme/", http.StripPrefix("/acme", pkiEngine.ACMEHandler()))
-		log.Printf("ACME enabled; directory available at /acme/directory")
+		log.Info("ACME enabled; directory available at /acme/directory")
 	}
 	if pkiEngine.SCEPEnabled() {
 		mux.Handle("/scep/", http.StripPrefix("/scep", pkiEngine.SCEPHandler()))
-		log.Printf("SCEP enabled; endpoint available at /scep/%s", pkiEngine.SCEPProvisionerName())
+		log.Info("SCEP enabled; endpoint available at /scep", slog.String("provisioner", pkiEngine.SCEPProvisionerName()))
 	}
 	if pkiEngine.NDESEnabled() {
 		mux.Handle("/certsrv/", http.StripPrefix("/certsrv", pkiEngine.NDESHandler()))
@@ -161,7 +166,7 @@ func runServer() error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Printf("arx server listening on %s", listenAddr)
+		log.Info("arx server listening", slog.String("address", listenAddr), slog.String("log_level", serverCfg.Server.LogLevel))
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
@@ -174,7 +179,7 @@ func runServer() error {
 	case err := <-errCh:
 		return err
 	case sig := <-sigCh:
-		log.Printf("shutdown signal received: %s", sig)
+		log.Info("shutdown signal received", slog.String("signal", sig.String()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), serverCfg.Server.WriteTimeout)
@@ -183,6 +188,6 @@ func runServer() error {
 	if err := server.Shutdown(ctx); err != nil {
 		return err
 	}
-	log.Println("server stopped")
+	log.Info("server stopped")
 	return nil
 }
