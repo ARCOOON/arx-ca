@@ -21,6 +21,8 @@ type ServerSettings struct {
 
 // DatabaseConfig holds application user-store database connection settings.
 type DatabaseConfig struct {
+	Driver       string `mapstructure:"driver" yaml:"driver"`
+	Path         string `mapstructure:"path" yaml:"path"`
 	Host         string `mapstructure:"host" yaml:"host"`
 	Port         int    `mapstructure:"port" yaml:"port"`
 	User         string `mapstructure:"user" yaml:"user"`
@@ -45,8 +47,8 @@ type CAConfig struct {
 
 // SecurityConfig holds authentication and token policy for the API.
 type SecurityConfig struct {
-	JWTSecret             string `mapstructure:"jwt_secret" yaml:"jwt_secret"`
-	TokenExpirationHours  int    `mapstructure:"token_expiration_hours" yaml:"token_expiration_hours"`
+	JWTSecret            string `mapstructure:"jwt_secret" yaml:"jwt_secret"`
+	TokenExpirationHours int    `mapstructure:"token_expiration_hours" yaml:"token_expiration_hours"`
 }
 
 // Bootstrap holds first-run admin credentials seeded when the users table is empty.
@@ -84,7 +86,12 @@ func DefaultServerConfig() ServerConfig {
 			WriteTimeout: 15 * time.Second,
 		},
 		Database: DatabaseConfig{
+			Driver:       "sqlite",
+			Path:         "arx.db",
+			Host:         "127.0.0.1",
 			Port:         5432,
+			User:         "arx",
+			DBName:       "arx_ca",
 			SSLMode:      "disable",
 			MaxOpenConns: 25,
 			MaxIdleConns: 5,
@@ -137,12 +144,52 @@ func (c CAConfig) ConfigPath() string {
 	return ".pki/config/ca.json"
 }
 
-// UsesPostgreSQL reports whether the application database should use PostgreSQL.
-func (d DatabaseConfig) UsesPostgreSQL() bool {
-	return strings.TrimSpace(d.Host) != ""
+// EffectiveDriver returns the normalized database driver name (sqlite or postgres).
+// When driver is unset, a non-empty host selects postgres for backward compatibility.
+func (d DatabaseConfig) EffectiveDriver() string {
+	driver := strings.ToLower(strings.TrimSpace(d.Driver))
+	switch driver {
+	case "postgres", "postgresql":
+		return "postgres"
+	case "sqlite", "sqlite3":
+		return "sqlite"
+	case "":
+		if strings.TrimSpace(d.Host) != "" {
+			return "postgres"
+		}
+		return strings.ToLower(strings.TrimSpace(DefaultServerConfig().Database.Driver))
+	default:
+		return driver
+	}
 }
 
-// DSN builds a PostgreSQL connection string when host is configured.
+// UsesPostgreSQL reports whether the application database should use PostgreSQL.
+func (d DatabaseConfig) UsesPostgreSQL() bool {
+	return d.EffectiveDriver() == "postgres"
+}
+
+// UsesSQLite reports whether the application database should use SQLite.
+func (d DatabaseConfig) UsesSQLite() bool {
+	return d.EffectiveDriver() == "sqlite"
+}
+
+// ResolvedSQLitePath returns the absolute path to the SQLite database file.
+func (d DatabaseConfig) ResolvedSQLitePath() (string, error) {
+	path := strings.TrimSpace(d.Path)
+	if path == "" {
+		path = DefaultServerConfig().Database.Path
+	}
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	baseDir, err := serverConfigDirectory()
+	if err != nil {
+		return "", fmt.Errorf("resolve sqlite database directory: %w", err)
+	}
+	return filepath.Join(baseDir, path), nil
+}
+
+// DSN builds a PostgreSQL connection string when the driver is postgres.
 func (d DatabaseConfig) DSN() string {
 	if !d.UsesPostgreSQL() {
 		return ""
