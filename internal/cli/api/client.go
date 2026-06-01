@@ -75,9 +75,18 @@ func (c *Client) ListCertificates(ctx context.Context) (*models.ListCertificates
 	return &list, nil
 }
 
+// AutoCertificate calls POST /api/v1/certificates/auto.
+func (c *Client) AutoCertificate(ctx context.Context, req models.AutoCertificateRequest) (*models.AutoCertificateResponse, error) {
+	var resp models.AutoCertificateResponse
+	if err := c.postJSON(ctx, "/api/v1/certificates/auto", req, &resp, true); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
 // RevokeCertificate calls POST /api/v1/certificates/revoke.
-func (c *Client) RevokeCertificate(ctx context.Context, serial string) (*models.RevokeCertificateResponse, error) {
-	req := models.RevokeCertificateRequest{Serial: serial}
+func (c *Client) RevokeCertificate(ctx context.Context, serial, reason string) (*models.RevokeCertificateResponse, error) {
+	req := models.RevokeCertificateRequest{Serial: serial, Reason: reason}
 	var resp models.RevokeCertificateResponse
 	if err := c.postJSON(ctx, "/api/v1/certificates/revoke", req, &resp, true); err != nil {
 		return nil, err
@@ -145,7 +154,7 @@ func (c *Client) postJSON(ctx context.Context, path string, body any, out any, w
 func (c *Client) doJSON(req *http.Request, out any, withAuth bool) error {
 	if withAuth {
 		if c.BearerAuth == "" {
-			return fmt.Errorf("not logged in; run arx-ca-cli login first")
+			return fmt.Errorf("not logged in; run arx login first")
 		}
 		req.Header.Set("Authorization", c.BearerAuth)
 	}
