@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/your-org/arx-ca/internal/api"
 	"github.com/your-org/arx-ca/internal/auth"
+	"github.com/your-org/arx-ca/internal/logging"
 	"github.com/your-org/arx-ca/internal/models"
+	"github.com/your-org/arx-ca/internal/repository"
 )
 
 const maxAuthBodyBytes = 1 << 20 // 1 MiB
@@ -19,13 +21,15 @@ const maxAuthBodyBytes = 1 << 20 // 1 MiB
 type AuthHandler struct {
 	jwtManager *auth.JWTManager
 	keyStore   *auth.APIKeyStore
+	userStore  *repository.UserStore
 }
 
 // NewAuthHandler constructs an AuthHandler.
-func NewAuthHandler(jwtManager *auth.JWTManager, keyStore *auth.APIKeyStore) *AuthHandler {
+func NewAuthHandler(jwtManager *auth.JWTManager, keyStore *auth.APIKeyStore, userStore *repository.UserStore) *AuthHandler {
 	return &AuthHandler{
 		jwtManager: jwtManager,
 		keyStore:   keyStore,
+		userStore:  userStore,
 	}
 }
 
@@ -39,24 +43,35 @@ func (h *AuthHandler) Login() http.Handler {
 
 		var req models.LoginRequest
 		if err := decodeJSONBody(w, r, &req); err != nil {
+			logging.Logger().Debug("auth: login failed", slog.String("reason", "invalid json payload"), slog.Any("error", err))
 			api.WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		if err := auth.ValidateAdminCredentials(req.Username, req.Password); err != nil {
+		user, reason, err := auth.AuthenticateUser(r.Context(), h.userStore, req.Email, req.Password)
+		if err != nil {
 			if errors.Is(err, auth.ErrInvalidCredentials) {
-				api.WriteError(w, http.StatusUnauthorized, "invalid username or password")
+				if reason != "" {
+					logging.Logger().Debug("auth: login failed",
+						slog.String("reason", string(reason)),
+						slog.String("email", strings.TrimSpace(req.Email)),
+					)
+				}
+				api.WriteError(w, http.StatusUnauthorized, "invalid email or password")
 				return
 			}
-			log.Printf("auth: login credential validation error: %v", err)
+			logging.Logger().Error("auth: login credential validation error", slog.Any("error", err))
 			api.WriteError(w, http.StatusInternalServerError, "login failed")
 			return
 		}
 
-		roles := auth.RolesForAdmin(req.Username)
-		token, expiresAt, err := h.jwtManager.GenerateToken(req.Username, roles)
+		roles := auth.RolesForUser(user)
+		if len(roles) == 0 {
+			roles = auth.RolesForAdmin(user.Email)
+		}
+		token, expiresAt, err := h.jwtManager.GenerateToken(user.Email, roles)
 		if err != nil {
-			log.Printf("auth: generate jwt: %v", err)
+			logging.Logger().Error("auth: generate jwt", slog.Any("error", err))
 			api.WriteError(w, http.StatusInternalServerError, "login failed")
 			return
 		}
@@ -65,6 +80,8 @@ func (h *AuthHandler) Login() http.Handler {
 		for i, role := range roles {
 			roleNames[i] = string(role)
 		}
+
+		logging.Logger().Debug("auth: login succeeded", slog.String("email", user.Email))
 
 		api.WriteSuccess(w, http.StatusOK, models.LoginResponse{
 			Token:     token,
@@ -105,7 +122,7 @@ func (h *AuthHandler) CreateServiceAccount() http.Handler {
 			case errors.Is(err, auth.ErrDuplicateServiceAccount):
 				api.WriteError(w, http.StatusConflict, "service account name already exists")
 			default:
-				log.Printf("auth: create service account: %v", err)
+				logging.Logger().Error("auth: create service account", slog.Any("error", err))
 				api.WriteError(w, http.StatusInternalServerError, "failed to create service account")
 			}
 			return
