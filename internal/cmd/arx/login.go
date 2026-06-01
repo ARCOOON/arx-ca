@@ -9,7 +9,7 @@ import (
 func newLoginCmd() *cobra.Command {
 	var (
 		serverURL string
-		username  string
+		email     string
 		password  string
 	)
 
@@ -19,13 +19,13 @@ func newLoginCmd() *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return login.Run(login.Options{
 				ServerURL: serverURL,
-				Username:  username,
+				Email:     email,
 				Password:  password,
 			})
 		},
 	}
 	cmd.Flags().StringVarP(&serverURL, "url", "u", "", "Server URL (saved to config on successful login)")
-	cmd.Flags().StringVar(&username, "username", "", "Admin username (skips prompt)")
+	cmd.Flags().StringVar(&email, "email", "", "Admin email (skips prompt)")
 	cmd.Flags().StringVar(&password, "password", "", "Admin password (skips prompt; use only in automation)")
 
 	return withCLIConfig(cmd)
