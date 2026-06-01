@@ -4,13 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	arxconfig "github.com/your-org/arx-ca/internal/config"
+	"github.com/your-org/arx-ca/internal/logging"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"
@@ -68,12 +69,11 @@ func pingWithRetry(ctx context.Context, db *sql.DB, endpoint string) error {
 		if attempt >= maxConnectAttempts {
 			break
 		}
-		log.Printf(
-			"WARNING: Database not ready, retrying in %s... (Attempt %d/%d): %v",
-			connectRetryDelay,
-			attempt,
-			maxConnectAttempts,
-			lastErr,
+		logging.Logger().Warn("database not ready, retrying",
+			slog.Duration("delay", connectRetryDelay),
+			slog.Int("attempt", attempt),
+			slog.Int("max_attempts", maxConnectAttempts),
+			slog.Any("error", lastErr),
 		)
 		if err := waitForRetry(ctx, connectRetryDelay); err != nil {
 			return err

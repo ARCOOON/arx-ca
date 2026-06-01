@@ -10,18 +10,11 @@ import (
 
 	"github.com/your-org/arx-ca/internal/auth"
 	"github.com/your-org/arx-ca/internal/config"
+	"github.com/your-org/arx-ca/internal/logging"
 )
 
-// SeedInitialAdmin inserts the configured bootstrap admin when the users table is empty.
-func SeedInitialAdmin(db *sql.DB, cfg config.Bootstrap) error {
-	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
-		return fmt.Errorf("count users: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-
+// EnsureBootstrapAdmin inserts the configured bootstrap admin when no user exists with admin_email.
+func EnsureBootstrapAdmin(db *sql.DB, cfg config.Bootstrap) error {
 	def := config.DefaultServerConfig().Bootstrap
 	email := strings.TrimSpace(cfg.AdminEmail)
 	if email == "" {
@@ -32,10 +25,22 @@ func SeedInitialAdmin(db *sql.DB, cfg config.Bootstrap) error {
 		hash = def.AdminPasswordHash
 	}
 
+	var count int
+	query := `SELECT COUNT(*) FROM users WHERE email = ` + userEmailPlaceholder(db)
+	logging.Logger().Debug("db query", "sql", query, "email", email)
+	if err := db.QueryRow(query, email).Scan(&count); err != nil {
+		return fmt.Errorf("lookup bootstrap admin user: %w", err)
+	}
+	if count > 0 {
+		logging.Logger().Debug("bootstrap admin already present", "email", email)
+		return nil
+	}
+
 	createdAt := time.Now().UTC().Format(time.RFC3339)
 	id := uuid.NewString()
 	role := string(auth.RoleSuperAdmin)
 
+	logging.Logger().Info("creating bootstrap admin user", "email", email)
 	if isPostgreSQL(db) {
 		_, err := db.Exec(
 			`INSERT INTO users (id, email, password_hash, role, created_at) VALUES ($1, $2, $3, $4, $5)`,
@@ -54,6 +59,18 @@ func SeedInitialAdmin(db *sql.DB, cfg config.Bootstrap) error {
 		}
 	}
 	return nil
+}
+
+func userEmailPlaceholder(db *sql.DB) string {
+	if isPostgreSQL(db) {
+		return "$1"
+	}
+	return "?"
+}
+
+// SeedInitialAdmin is deprecated; use EnsureBootstrapAdmin.
+func SeedInitialAdmin(db *sql.DB, cfg config.Bootstrap) error {
+	return EnsureBootstrapAdmin(db, cfg)
 }
 
 func isPostgreSQL(db *sql.DB) bool {
