@@ -1,17 +1,9 @@
-.PHONY: all build build-server build-cli build-agent clean test \
-	build-server-linux build-server-windows \
-	build-cli-linux build-cli-windows \
-	build-agent-linux build-agent-windows \
-	build-fips docker-build docker-up docker-down
+.PHONY: all build build-linux build-windows build-fips clean test docker-build docker-up docker-down
 
-SERVER_BINARY := arx-ca-server
-CLI_BINARY := arx-ca-cli
-AGENT_BINARY := arx-cert-service
+BINARY := arx
 BIN_DIR := bin
-SERVER_PKG := ./cmd/server
-CLI_PKG := ./cmd/cli
-AGENT_PKG := ./cmd/agent
-DOCKER_IMAGE := arx-ca-server:latest
+PKG := ./cmd/arx
+DOCKER_IMAGE := arx-ca:latest
 COMPOSE := docker compose
 LDFLAGS := -trimpath -ldflags="-s -w"
 GOFLAGS := -buildvcs=false
@@ -22,47 +14,21 @@ GO_WINDOWS := GOOS=windows GOARCH=amd64 CGO_ENABLED=0
 
 all: build
 
-build: build-server build-cli build-agent
-
-build-server:
+build:
 	@mkdir -p $(BIN_DIR)
-	go build $(LDFLAGS) -o $(BIN_DIR)/$(SERVER_BINARY) $(SERVER_PKG)
+	go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(PKG)
 
-build-cli:
+build-linux:
 	@mkdir -p $(BIN_DIR)
-	go build $(LDFLAGS) -o $(BIN_DIR)/$(CLI_BINARY) $(CLI_PKG)
+	$(GO_LINUX) go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(PKG)
 
-build-agent:
+build-windows:
 	@mkdir -p $(BIN_DIR)
-	go build $(LDFLAGS) -o $(BIN_DIR)/$(AGENT_BINARY) $(AGENT_PKG)
-
-build-server-linux:
-	@mkdir -p $(BIN_DIR)
-	$(GO_LINUX) go build $(LDFLAGS) -o $(BIN_DIR)/$(SERVER_BINARY) $(SERVER_PKG)
-
-build-server-windows:
-	@mkdir -p $(BIN_DIR)
-	$(GO_WINDOWS) go build $(LDFLAGS) -o $(BIN_DIR)/$(SERVER_BINARY).exe $(SERVER_PKG)
-
-build-cli-linux:
-	@mkdir -p $(BIN_DIR)
-	$(GO_LINUX) go build $(LDFLAGS) -o $(BIN_DIR)/$(CLI_BINARY) $(CLI_PKG)
-
-build-cli-windows:
-	@mkdir -p $(BIN_DIR)
-	$(GO_WINDOWS) go build $(LDFLAGS) -o $(BIN_DIR)/$(CLI_BINARY).exe $(CLI_PKG)
-
-build-agent-linux:
-	@mkdir -p $(BIN_DIR)
-	$(GO_LINUX) go build $(LDFLAGS) -o $(BIN_DIR)/$(AGENT_BINARY) $(AGENT_PKG)
-
-build-agent-windows:
-	@mkdir -p $(BIN_DIR)
-	$(GO_WINDOWS) go build $(LDFLAGS) -o $(BIN_DIR)/$(AGENT_BINARY).exe $(AGENT_PKG)
+	$(GO_WINDOWS) go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY).exe $(PKG)
 
 build-fips:
 	@mkdir -p $(BIN_DIR)
-	GOEXPERIMENT=boringcrypto go build $(LDFLAGS) -o $(BIN_DIR)/$(SERVER_BINARY) $(SERVER_PKG)
+	GOEXPERIMENT=boringcrypto go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(PKG)
 
 clean:
 	rm -rf $(BIN_DIR)
