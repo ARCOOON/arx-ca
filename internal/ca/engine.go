@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"database/sql"
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
@@ -54,6 +55,7 @@ type PKIEngine struct {
 	acmeLinker   acme.Linker
 	acmeDNS      string
 	acmeHandler  http.Handler
+	appDB        *sql.DB
 	scepHandler  http.Handler
 	ndesHandler  http.Handler
 	ndesRegistry *NDESRegistry
@@ -179,9 +181,6 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		k8sReviewer: k8sReviewer,
 	}
 
-	if err := engine.initACME(); err != nil {
-		return nil, fmt.Errorf("initialize ACME: %w", err)
-	}
 	if err := engine.initSCEP(); err != nil {
 		return nil, fmt.Errorf("initialize SCEP: %w", err)
 	}
