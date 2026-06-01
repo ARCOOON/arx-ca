@@ -12,6 +12,9 @@
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:3": {
       "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
     }
   },
   "customizations": {
@@ -24,7 +27,7 @@
         "carlwr.better-makefile",
         "codezombiech.gitignore",
         "github.vscode-github-actions",
-        "formulahendry.code-runner"
+        "formulahendry.code-runner",
         "ms-azuretools.vscode-docker"
       ]
     }
