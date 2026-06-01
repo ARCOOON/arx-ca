@@ -13,6 +13,8 @@ import (
 
 	"github.com/your-org/arx-ca/internal/cli/api"
 	"github.com/your-org/arx-ca/internal/cli/config"
+	"github.com/your-org/arx-ca/internal/cli/runtime"
+	arxconfig "github.com/your-org/arx-ca/internal/config"
 	"github.com/your-org/arx-ca/internal/models"
 )
 
@@ -26,9 +28,11 @@ type Options struct {
 
 // Run prompts for admin credentials (unless provided in opts), logs in, and saves the JWT locally.
 func Run(opts Options) error {
-	url := strings.TrimSpace(opts.ServerURL)
-	if url == "" {
-		return fmt.Errorf("server URL is required; set server_url in ~/.arx/cli.yaml or pass --url")
+	url, err := runtime.ResolveServerURL(runtime.URLResolveOptions{
+		FlagOverride: opts.ServerURL,
+	})
+	if err != nil {
+		return err
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -101,6 +105,9 @@ func Run(opts Options) error {
 		Username:  username,
 	}
 	if err := config.Save(cfg); err != nil {
+		return err
+	}
+	if err := arxconfig.SetCLIServerURL(url); err != nil {
 		return err
 	}
 
