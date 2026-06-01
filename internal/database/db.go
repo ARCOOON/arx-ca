@@ -33,11 +33,23 @@ func Open(cfg arxconfig.ServerConfig) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open application database: %w", err)
 	}
-	if cfg.Database.MaxOpenConns > 0 {
-		db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	maxOpen := cfg.Database.MaxOpenConns
+	maxIdle := cfg.Database.MaxIdleConns
+	if cfg.Database.UsesSQLite() {
+		// WAL mode allows concurrent readers; use a small pool so ACME and API
+		// handlers do not serialize on a single connection.
+		if maxOpen <= 0 || maxOpen > 4 {
+			maxOpen = 4
+		}
+		if maxIdle <= 0 {
+			maxIdle = 2
+		}
 	}
-	if cfg.Database.MaxIdleConns > 0 {
-		db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	if maxOpen > 0 {
+		db.SetMaxOpenConns(maxOpen)
+	}
+	if maxIdle > 0 {
+		db.SetMaxIdleConns(maxIdle)
 	}
 	if err := pingWithRetry(context.Background(), db, endpoint); err != nil {
 		_ = db.Close()
@@ -87,19 +99,34 @@ func waitForRetry(ctx context.Context, delay time.Duration) error {
 }
 
 func resolveDriverAndDSN(cfg arxconfig.ServerConfig) (driver, dsn, endpoint string, err error) {
-	if cfg.Database.UsesPostgreSQL() {
+	switch cfg.Database.EffectiveDriver() {
+	case "postgres":
 		dsn = cfg.Database.DSN()
 		if dsn == "" {
-			return "", "", "", fmt.Errorf("postgresql database host is set but connection parameters are incomplete")
+			return "", "", "", fmt.Errorf("postgresql driver selected but connection parameters are incomplete")
 		}
 		return "pgx", dsn, databaseEndpoint(cfg.Database), nil
+	case "sqlite":
+		path, err := prepareSQLiteDatabase(cfg.Database)
+		if err != nil {
+			return "", "", "", err
+		}
+		return "sqlite", sqliteDSN(path), path, nil
+	default:
+		return "", "", "", fmt.Errorf("unsupported database driver %q", cfg.Database.Driver)
 	}
+}
 
-	path, err := defaultSQLitePath(cfg)
+func prepareSQLiteDatabase(db arxconfig.DatabaseConfig) (string, error) {
+	path, err := db.ResolvedSQLitePath()
 	if err != nil {
-		return "", "", "", err
+		return "", err
 	}
-	return "sqlite", sqliteDSN(path), path, nil
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create sqlite database directory %s: %w", dir, err)
+	}
+	return path, nil
 }
 
 func databaseEndpoint(db arxconfig.DatabaseConfig) string {
@@ -112,16 +139,18 @@ func databaseEndpoint(db arxconfig.DatabaseConfig) string {
 
 func sqliteDSN(path string) string {
 	if strings.HasPrefix(path, "file:") {
-		return path
+		if strings.Contains(path, "_pragma=") {
+			return path
+		}
+		sep := "?"
+		if strings.Contains(path, "?") {
+			sep = "&"
+		}
+		return path + sep + sqlitePragmasQuery()
 	}
-	return "file:" + filepath.ToSlash(path) + "?_pragma=foreign_keys(1)"
+	return "file:" + filepath.ToSlash(path) + "?" + sqlitePragmasQuery()
 }
 
-func defaultSQLitePath(cfg arxconfig.ServerConfig) (string, error) {
-	caPath := cfg.CA.ConfigPath()
-	base := filepath.Dir(filepath.Dir(caPath))
-	if err := os.MkdirAll(base, 0o755); err != nil {
-		return "", fmt.Errorf("create application database directory: %w", err)
-	}
-	return filepath.Join(base, "arx-ca-users.db"), nil
+func sqlitePragmasQuery() string {
+	return "_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 }
