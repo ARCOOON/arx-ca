@@ -11,6 +11,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ServerConfigNotFoundError is returned when server.yaml is missing at startup.
+type ServerConfigNotFoundError struct {
+	Path string
+}
+
+func (e ServerConfigNotFoundError) Error() string {
+	return fmt.Sprintf("No configuration file found at %s. Run 'arx server config init' to generate one.", e.Path)
+}
+
 const (
 	serverConfigFileName = "server.yaml"
 	cliConfigDirName     = ".arx"
@@ -59,17 +68,53 @@ func ExecutablePath() (string, error) {
 	return abs, nil
 }
 
-// InitServerConfig loads or creates server.yaml beside the executable and binds it to Viper.
+// WriteDefaultServerConfig marshals DefaultServerConfig to YAML at path with mode 0600.
+func WriteDefaultServerConfig(path string, force bool) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve server config path: %w", err)
+	}
+	path = abs
+
+	if _, err := os.Stat(path); err == nil {
+		if !force {
+			return fmt.Errorf("Configuration already exists at %s. Use --force to overwrite.", path)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat config file %s: %w", path, err)
+	}
+
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("create config directory %s: %w", dir, err)
+	}
+
+	defaults := DefaultServerConfig()
+	raw, err := marshalYAMLConfig(defaults)
+	if err != nil {
+		return fmt.Errorf("marshal default config: %w", err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return fmt.Errorf("write config file %s: %w", path, err)
+	}
+	return nil
+}
+
+// InitServerConfig loads server.yaml beside the executable (or from SetServerConfigPath) and binds it to Viper.
 func InitServerConfig() error {
 	configPath, err := serverConfigFilePath()
 	if err != nil {
 		return err
 	}
 
-	defaults := DefaultServerConfig()
-	if err := ensureYAMLConfigFile(configPath, defaults, 0o644); err != nil {
-		return err
+	if _, err := os.Stat(configPath); err != nil {
+		if os.IsNotExist(err) {
+			return ServerConfigNotFoundError{Path: configPath}
+		}
+		return fmt.Errorf("stat server config %s: %w", configPath, err)
 	}
+
+	defaults := DefaultServerConfig()
 
 	viper.Reset()
 	v := viper.GetViper()
@@ -183,6 +228,14 @@ func serverConfigFilePath() (string, error) {
 	return filepath.Abs(path)
 }
 
+func serverConfigDirectory() (string, error) {
+	path, err := serverConfigFilePath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Dir(path), nil
+}
+
 func cliConfigFilePath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -242,7 +295,12 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("server.log_level", d.Server.LogLevel)
 	v.SetDefault("server.read_timeout", d.Server.ReadTimeout)
 	v.SetDefault("server.write_timeout", d.Server.WriteTimeout)
+	v.SetDefault("database.driver", d.Database.Driver)
+	v.SetDefault("database.path", d.Database.Path)
+	v.SetDefault("database.host", d.Database.Host)
 	v.SetDefault("database.port", d.Database.Port)
+	v.SetDefault("database.user", d.Database.User)
+	v.SetDefault("database.dbname", d.Database.DBName)
 	v.SetDefault("database.sslmode", d.Database.SSLMode)
 	v.SetDefault("database.max_open_conns", d.Database.MaxOpenConns)
 	v.SetDefault("database.max_idle_conns", d.Database.MaxIdleConns)
@@ -259,7 +317,6 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 }
 
 func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
-	v.SetDefault("server_url", d.ServerURL)
 	v.SetDefault("log_level", d.LogLevel)
 }
 
@@ -282,8 +339,23 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 		cfg.Server.WriteTimeout = def.Server.WriteTimeout
 	}
 
+	if strings.TrimSpace(cfg.Database.Driver) == "" {
+		cfg.Database.Driver = def.Database.Driver
+	}
+	if strings.TrimSpace(cfg.Database.Path) == "" {
+		cfg.Database.Path = def.Database.Path
+	}
+	if strings.TrimSpace(cfg.Database.Host) == "" {
+		cfg.Database.Host = def.Database.Host
+	}
 	if cfg.Database.Port <= 0 {
 		cfg.Database.Port = def.Database.Port
+	}
+	if strings.TrimSpace(cfg.Database.User) == "" {
+		cfg.Database.User = def.Database.User
+	}
+	if strings.TrimSpace(cfg.Database.DBName) == "" {
+		cfg.Database.DBName = def.Database.DBName
 	}
 	if cfg.Database.SSLMode == "" {
 		cfg.Database.SSLMode = def.Database.SSLMode
@@ -357,9 +429,6 @@ func normalizeBootstrap(b Bootstrap) Bootstrap {
 
 func normalizeCLIConfig(cfg CLIConfig) CLIConfig {
 	def := DefaultCLIConfig()
-	if cfg.ServerURL == "" {
-		cfg.ServerURL = def.ServerURL
-	}
 	if cfg.LogLevel == "" {
 		cfg.LogLevel = def.LogLevel
 	}
