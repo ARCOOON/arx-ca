@@ -196,7 +196,7 @@ func (m model) revokeSelected() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		_, err := m.client.RevokeCertificate(ctx, serial)
+		_, err := m.client.RevokeCertificate(ctx, serial, "")
 		return revokeDoneMsg{serial: serial, err: err}
 	}
 }
@@ -321,7 +321,7 @@ func (m *model) moveCursor(delta int) {
 func (m model) View() string {
 	var b strings.Builder
 
-	b.WriteString(styleTitle.Render("arx-ca-cli · Super Admin"))
+	b.WriteString(styleTitle.Render("arx · Super Admin"))
 	b.WriteString("\n")
 	b.WriteString(m.renderTabs())
 	b.WriteString("\n\n")
