@@ -18,11 +18,11 @@ import (
 	"github.com/your-org/arx-ca/internal/models"
 )
 
-// Options configures the login flow. Non-empty Username and Password skip prompts.
+// Options configures the login flow. Non-empty Email and Password skip prompts.
 // When ServerURL is set via flag, the server URL prompt is skipped unless stdin is a TTY.
 type Options struct {
 	ServerURL string
-	Username  string
+	Email     string
 	Password  string
 }
 
@@ -36,16 +36,16 @@ func Run(opts Options) error {
 	}
 
 	reader := bufio.NewReader(os.Stdin)
-	username := strings.TrimSpace(opts.Username)
+	email := strings.TrimSpace(opts.Email)
 	password := opts.Password
 
-	if username == "" || password == "" {
-		if !term.IsTerminal(int(syscall.Stdin)) && username != "" && password == "" {
+	if email == "" || password == "" {
+		if !term.IsTerminal(int(syscall.Stdin)) && email != "" && password == "" {
 			return fmt.Errorf("password is required when stdin is not a terminal (use --password)")
 		}
 	}
 
-	if username == "" || (password == "" && term.IsTerminal(int(syscall.Stdin))) {
+	if email == "" || (password == "" && term.IsTerminal(int(syscall.Stdin))) {
 		if !skipServerURLPrompt(opts) {
 			fmt.Printf("Server URL [%s]: ", url)
 			line, err := reader.ReadString('\n')
@@ -57,15 +57,15 @@ func Run(opts Options) error {
 			}
 		}
 
-		if username == "" {
-			fmt.Print("Username: ")
+		if email == "" {
+			fmt.Print("Email: ")
 			line, err := reader.ReadString('\n')
 			if err != nil {
-				return fmt.Errorf("read username: %w", err)
+				return fmt.Errorf("read email: %w", err)
 			}
-			username = strings.TrimSpace(line)
-			if username == "" {
-				return fmt.Errorf("username is required")
+			email = strings.TrimSpace(line)
+			if email == "" {
+				return fmt.Errorf("email is required")
 			}
 		}
 	}
@@ -85,7 +85,7 @@ func Run(opts Options) error {
 	defer cancel()
 
 	resp, err := api.Login(ctx, url, models.LoginRequest{
-		Username: username,
+		Email:    email,
 		Password: password,
 	})
 	if err != nil {
@@ -102,7 +102,7 @@ func Run(opts Options) error {
 		Token:     resp.Token,
 		TokenType: tokenType,
 		ExpiresAt: resp.ExpiresAt,
-		Username:  username,
+		Email:     email,
 	}
 	if err := config.Save(cfg); err != nil {
 		return err
@@ -112,7 +112,7 @@ func Run(opts Options) error {
 	}
 
 	path, _ := config.Path()
-	fmt.Printf("Logged in as %s. Token saved to %s\n", username, path)
+	fmt.Printf("Logged in as %s. Token saved to %s\n", email, path)
 	if !resp.ExpiresAt.IsZero() {
 		fmt.Printf("Expires: %s\n", resp.ExpiresAt.Format(time.RFC3339))
 	}
@@ -124,7 +124,7 @@ func Run(opts Options) error {
 
 func skipServerURLPrompt(opts Options) bool {
 	return strings.TrimSpace(opts.ServerURL) != "" &&
-		strings.TrimSpace(opts.Username) != "" &&
+		strings.TrimSpace(opts.Email) != "" &&
 		opts.Password != ""
 }
 
