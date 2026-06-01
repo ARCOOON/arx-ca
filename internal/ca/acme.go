@@ -2,6 +2,7 @@ package ca
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,17 +12,16 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/pkg/errors"
 	"github.com/smallstep/certificates/acme"
-	acmeAPI "github.com/smallstep/certificates/acme/api"
-	acmeNoSQL "github.com/smallstep/certificates/acme/db/nosql"
 	"github.com/smallstep/certificates/authority"
 	authconfig "github.com/smallstep/certificates/authority/config"
 	"github.com/smallstep/certificates/authority/provisioner"
 	"github.com/smallstep/certificates/db"
 	"github.com/smallstep/certificates/scep"
-	"github.com/smallstep/nosql"
+
+	"github.com/your-org/arx-ca/internal/acmeprotocol"
+	"github.com/your-org/arx-ca/internal/database"
 )
 
 const (
@@ -34,8 +34,7 @@ func (e *PKIEngine) ACMEEnabled() bool {
 	return e != nil && e.acmeHandler != nil
 }
 
-// ACMEHandler returns the step-ca ACME HTTP handler. The handler must be mounted
-// under the /acme path prefix (for example /acme/acme/directory).
+// ACMEHandler returns the ACME HTTP handler. Mount it under /acme (directory at /acme/directory).
 func (e *PKIEngine) ACMEHandler() http.Handler {
 	if e == nil || e.acmeHandler == nil {
 		return http.NotFoundHandler()
@@ -79,48 +78,48 @@ func (e *PKIEngine) ACMEDirectoryURL(listenHost string) string {
 	if err != nil {
 		return ""
 	}
-	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + acmeRoutePrefix + "/" + acmeProvisionerName + "/directory"
+	u.Path = strings.TrimSuffix(u.Path, "/") + "/" + acmeRoutePrefix + "/directory"
 	return u.String()
 }
 
-func (e *PKIEngine) initACME() error {
+// SetApplicationDatabase wires the application SQLite/PostgreSQL store used for ACME state.
+func (e *PKIEngine) SetApplicationDatabase(db *sql.DB) {
+	if e == nil {
+		return
+	}
+	e.appDB = db
+}
+
+// InitACMEServer configures the RFC 8555 ACME endpoint backed by the application database.
+func (e *PKIEngine) InitACMEServer() error {
 	if e == nil || e.auth == nil || e.config == nil {
+		return nil
+	}
+	if strings.EqualFold(os.Getenv("CA_API_ACME_DISABLED"), "true") {
 		return nil
 	}
 
 	configureACMEChallengePorts()
 
-	if e.config.DB == nil {
-		if e.auth.HasACMEProvisioner() {
-			log.Println("WARNING: ACME provisioner is configured but no database is available; ACME is disabled")
-		}
-		return nil
-	}
 	if !e.auth.HasACMEProvisioner() {
 		return nil
 	}
-
-	nosqlDB, ok := e.auth.GetDatabase().(nosql.DB)
-	if !ok {
-		return errors.New("ACME requires a nosql-compatible database backend")
+	if e.appDB == nil {
+		log.Println("WARNING: ACME provisioner is configured but application database is unavailable; ACME is disabled")
+		return nil
 	}
 
-	acmeDB, err := acmeNoSQL.New(nosqlDB)
-	if err != nil {
-		return fmt.Errorf("configure ACME database: %w", err)
-	}
-
+	acmeDB := database.NewACMEStore(e.appDB)
 	dns := resolveACMEDNS(e.config)
-	e.acmeLinker = acme.NewLinker(dns, acmeRoutePrefix)
+	linker := acmeprotocol.NewFlatLinker(dns, acmeProvisionerName, e.auth)
+
 	e.acmeDB = acmeDB
+	e.acmeLinker = linker
 	e.acmeDNS = dns
 
-	router := chi.NewRouter()
-	acmeAPI.Route(router)
-
+	router := acmeprotocol.NewRouter(linker, acmeProvisionerName)
 	e.rebuildBaseContext()
 	e.acmeHandler = newChiProtocolHandler(e, router)
-
 	return nil
 }
 
@@ -137,7 +136,7 @@ func (e *PKIEngine) buildBaseContext() context.Context {
 		ctx = scep.NewContext(ctx, scepAuth)
 	}
 	if e.acmeDB != nil && e.acmeLinker != nil {
-		ctx = acme.NewContext(ctx, e.acmeDB, acme.NewClient(), e.acmeLinker, nil)
+		ctx = acme.NewContext(ctx, e.acmeDB, acmeprotocol.NewChallengeClient(), e.acmeLinker, nil)
 	}
 	return ctx
 }
