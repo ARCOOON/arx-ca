@@ -1,275 +1,230 @@
 package ca
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
-	"github.com/smallstep/certificates/authority"
 	authconfig "github.com/smallstep/certificates/authority/config"
-	"github.com/smallstep/certificates/cas/apiv1"
-	"github.com/smallstep/certificates/pki"
+	"github.com/smallstep/certificates/authority/provisioner"
+
+	"github.com/your-org/arx-ca/internal/models"
 )
 
 const (
-	defaultOIDCProvisionerName = "oidc"
-	sshHostKeyRel              = "secrets/ssh_host_ca_key"
-	sshUserKeyRel              = "secrets/ssh_user_ca_key"
-	sshHostPubRel              = "certs/ssh_host_ca_key.pub"
-	sshUserPubRel              = "certs/ssh_user_ca_key.pub"
+	defaultTokenTTL        = 5 * time.Minute
+	maxProvisionerTokenTTL = 15 * time.Minute
+	oidcProvisionerName    = "oidc-sso"
 )
 
-type oidcProvisionerConfig struct {
-	Name                  string
-	ClientID              string
-	ClientSecret          string
-	ConfigurationEndpoint string
+// ListProvisioners returns provisioners configured in the step-ca authority.
+func (e *PKIEngine) ListProvisioners(ctx context.Context) (*models.ListProvisionersResponse, error) {
+	if e == nil || e.auth == nil {
+		return nil, errors.New("CA engine is not initialized")
+	}
+
+	provisioners, _, err := e.auth.GetProvisioners("", 0)
+	if err != nil {
+		return nil, fmt.Errorf("list provisioners: %w", err)
+	}
+
+	summaries := make([]models.ProvisionerSummary, 0, len(provisioners))
+	for _, prov := range provisioners {
+		summaries = append(summaries, models.ProvisionerSummary{
+			ID:   prov.GetID(),
+			Name: prov.GetName(),
+			Type: prov.GetType().String(),
+		})
+	}
+
+	return &models.ListProvisionersResponse{
+		Provisioners: summaries,
+		Total:        len(summaries),
+	}, nil
 }
 
-func sshPKIExists(basePath string) bool {
-	required := []string{
-		filepath.Join(basePath, sshHostKeyRel),
-		filepath.Join(basePath, sshUserKeyRel),
-		filepath.Join(basePath, sshHostPubRel),
-		filepath.Join(basePath, sshUserPubRel),
+// GenerateProvisionerToken mints a single-use JWK provisioner token for the given subject and SANs.
+func (e *PKIEngine) GenerateProvisionerToken(ctx context.Context, req models.ProvisionerTokenRequest) (*models.ProvisionerTokenResponse, error) {
+	if e == nil || e.auth == nil {
+		return nil, errors.New("CA engine is not initialized")
 	}
-	for _, path := range required {
-		if _, err := os.Stat(path); err != nil {
-			return false
-		}
+
+	cn := strings.TrimSpace(req.CommonName)
+	if cn == "" {
+		return nil, errors.New("common_name is required")
 	}
-	return true
+
+	sans, err := buildSANs(cn, req.DNSSANs, req.IPSANs)
+	if err != nil {
+		return nil, err
+	}
+
+	provisionerName := strings.TrimSpace(req.Provisioner)
+	if provisionerName == "" {
+		provisionerName = defaultProvisioner
+	}
+
+	tokenTTL, err := parseProvisionerTokenTTL(req.TokenTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	token, audience, provType, err := e.createProvisionerSignToken(provisionerName, cn, sans, tokenTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.ProvisionerTokenResponse{
+		Token:           token,
+		Provisioner:     provisionerName,
+		ProvisionerType: provType,
+		ExpiresIn:       int(tokenTTL.Seconds()),
+		Audience:        audience,
+	}, nil
 }
 
-func ensureSSHCA(configPath, basePath string, password []byte) error {
-	cfg, err := authority.LoadConfiguration(configPath)
+func (e *PKIEngine) loadProvisionerByName(name string) (provisioner.Interface, error) {
+	if e.auth == nil {
+		return nil, errors.New("authority is not initialized")
+	}
+
+	prov, err := e.auth.LoadProvisionerByName(name)
 	if err != nil {
-		return fmt.Errorf("load CA configuration: %w", err)
+		return nil, fmt.Errorf("provisioner %q not found", name)
 	}
-	if cfg.SSH != nil && sshPKIExists(basePath) {
-		return ensureOIDCProvisioner(configPath, cfg)
-	}
-
-	if !sshPKIExists(basePath) {
-		if err := generateSSHSigningKeys(basePath, password); err != nil {
-			return err
-		}
-	}
-
-	if err := patchCAConfigSSH(configPath, basePath); err != nil {
-		return err
-	}
-
-	cfg, err = authority.LoadConfiguration(configPath)
-	if err != nil {
-		return fmt.Errorf("reload CA configuration: %w", err)
-	}
-
-	return ensureOIDCProvisioner(configPath, cfg)
+	return prov, nil
 }
 
-func generateSSHSigningKeys(basePath string, password []byte) error {
-	casOptions := apiv1.Options{
-		Type: apiv1.SoftCAS,
-	}
-
-	p, err := pki.New(casOptions, pki.WithSSH())
+func (e *PKIEngine) createProvisionerSignToken(provisionerName, subject string, sans []string, tokenTTL time.Duration) (token, audience, provType string, err error) {
+	prov, err := e.loadProvisionerByName(provisionerName)
 	if err != nil {
-		return fmt.Errorf("create PKI builder for SSH keys: %w", err)
+		return "", "", "", err
 	}
 
-	if err := p.GenerateSSHSigningKeys(password); err != nil {
-		return fmt.Errorf("generate SSH signing keys: %w", err)
-	}
+	provType = prov.GetType().String()
 
-	if err := p.WriteFiles(); err != nil {
-		return fmt.Errorf("write SSH key files: %w", err)
-	}
-
-	_ = basePath
-	return nil
-}
-
-func patchCAConfigSSH(configPath, basePath string) error {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("read CA config: %w", err)
-	}
-
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parse CA config: %w", err)
-	}
-
-	if _, ok := raw["ssh"]; !ok {
-		raw["ssh"] = map[string]string{
-			"hostKey": sshHostKeyRel,
-			"userKey": sshUserKeyRel,
-		}
-	}
-
-	enableSSHCAOnProvisionerClaims(raw)
-
-	updated, err := json.MarshalIndent(raw, "", "\t")
-	if err != nil {
-		return fmt.Errorf("marshal CA config: %w", err)
-	}
-	updated = append(updated, '\n')
-
-	if err := os.WriteFile(configPath, updated, 0o644); err != nil {
-		return fmt.Errorf("write CA config: %w", err)
-	}
-
-	_ = basePath
-	return nil
-}
-
-func enableSSHCAOnProvisionerClaims(raw map[string]any) {
-	authorityBlock, ok := raw["authority"].(map[string]any)
-	if !ok {
-		return
-	}
-
-	provisioners, ok := authorityBlock["provisioners"].([]any)
-	if !ok {
-		return
-	}
-
-	for _, entry := range provisioners {
-		prov, ok := entry.(map[string]any)
-		if !ok {
-			continue
+	switch p := prov.(type) {
+	case *provisioner.JWK:
+		kid, encryptedKey, ok := p.GetEncryptedKey()
+		if !ok || len(encryptedKey) == 0 {
+			return "", "", "", fmt.Errorf("provisioner %q does not have an encrypted signing key", prov.GetName())
 		}
 
-		provType, _ := prov["type"].(string)
-		switch strings.ToLower(provType) {
-		case "jwk", "oidc", "sshpop":
-			claims, ok := prov["claims"].(map[string]any)
-			if !ok {
-				claims = map[string]any{}
-				prov["claims"] = claims
-			}
-			claims["enableSSHCA"] = true
+		signer, err := decryptProvisionerKey(kid, []byte(encryptedKey), e.password)
+		if err != nil {
+			return "", "", "", err
 		}
+
+		audiences := e.config.GetAudiences().Sign
+		if len(audiences) == 0 {
+			return "", "", "", errors.New("no sign audiences configured")
+		}
+		audience = audiences[0]
+
+		token, err = buildProvisionerToken(subject, prov.GetName(), audience, sans, signer, tokenTTL)
+		if err != nil {
+			return "", "", "", err
+		}
+		return token, audience, provType, nil
+	default:
+		return "", "", "", fmt.Errorf("provisioner %q (type %s) cannot mint signing tokens; use a JWK provisioner", prov.GetName(), provType)
 	}
 }
 
-func loadOIDCProvisionerConfigFromEnv() *oidcProvisionerConfig {
+func parseProvisionerTokenTTL(raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultTokenTTL, nil
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid token_ttl: %w", err)
+	}
+	if d <= 0 {
+		return 0, errors.New("token_ttl must be greater than zero")
+	}
+	if d > maxProvisionerTokenTTL {
+		return 0, fmt.Errorf("token_ttl must not exceed %s", maxProvisionerTokenTTL)
+	}
+	return d, nil
+}
+
+// ensureAdvancedProvisioners adds optional OIDC provisioner configuration when environment variables are set.
+func ensureAdvancedProvisioners(configPath string) error {
+	name := strings.TrimSpace(os.Getenv("CA_API_OIDC_NAME"))
 	clientID := strings.TrimSpace(os.Getenv("CA_API_OIDC_CLIENT_ID"))
-	if clientID == "" {
+	configEndpoint := strings.TrimSpace(os.Getenv("CA_API_OIDC_CONFIGURATION_ENDPOINT"))
+
+	if name == "" && clientID == "" && configEndpoint == "" {
 		return nil
 	}
 
-	name := strings.TrimSpace(os.Getenv("CA_API_OIDC_PROVISIONER_NAME"))
 	if name == "" {
-		name = defaultOIDCProvisionerName
+		name = oidcProvisionerName
+	}
+	if clientID == "" || configEndpoint == "" {
+		return errors.New("CA_API_OIDC_CLIENT_ID and CA_API_OIDC_CONFIGURATION_ENDPOINT are required when configuring OIDC")
 	}
 
-	return &oidcProvisionerConfig{
+	cfg, err := authconfig.LoadConfiguration(configPath)
+	if err != nil {
+		return fmt.Errorf("load configuration for OIDC provisioner: %w", err)
+	}
+	if cfg.AuthorityConfig == nil {
+		return errors.New("authority configuration is missing")
+	}
+
+	for _, p := range cfg.AuthorityConfig.Provisioners {
+		if p.GetName() == name && p.GetType() == provisioner.TypeOIDC {
+			return nil
+		}
+	}
+
+	oidcProv := &provisioner.OIDC{
+		Type:                  "OIDC",
 		Name:                  name,
 		ClientID:              clientID,
 		ClientSecret:          os.Getenv("CA_API_OIDC_CLIENT_SECRET"),
-		ConfigurationEndpoint: strings.TrimSpace(os.Getenv("CA_API_OIDC_CONFIGURATION_ENDPOINT")),
+		ConfigurationEndpoint: configEndpoint,
 	}
-}
+	enableSSH := true
+	oidcProv.Claims = &provisioner.Claims{
+		EnableSSHCA: &enableSSH,
+	}
+	if tenant := strings.TrimSpace(os.Getenv("CA_API_OIDC_TENANT_ID")); tenant != "" {
+		oidcProv.TenantID = tenant
+	}
+	if domains := strings.TrimSpace(os.Getenv("CA_API_OIDC_DOMAINS")); domains != "" {
+		oidcProv.Domains = splitCSV(domains)
+	}
 
-func ensureOIDCProvisioner(configPath string, cfg *authconfig.Config) error {
-	oidcCfg := loadOIDCProvisionerConfigFromEnv()
-	if oidcCfg == nil {
-		return nil
-	}
-	if oidcCfg.ConfigurationEndpoint == "" {
-		return errors.New("CA_API_OIDC_CONFIGURATION_ENDPOINT is required when CA_API_OIDC_CLIENT_ID is set")
-	}
+	cfg.AuthorityConfig.Provisioners = append(cfg.AuthorityConfig.Provisioners, oidcProv)
 
-	data, err := os.ReadFile(configPath)
+	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
-		return fmt.Errorf("read CA config: %w", err)
+		return fmt.Errorf("marshal updated CA configuration: %w", err)
+	}
+	data = append(data, '\n')
+
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+		return fmt.Errorf("write updated CA configuration: %w", err)
 	}
 
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return fmt.Errorf("parse CA config: %w", err)
-	}
-
-	if oidcProvisionerExists(raw, oidcCfg.ClientID) {
-		enableSSHCAOnProvisionerClaims(raw)
-		return writeCAConfig(configPath, raw)
-	}
-
-	authorityBlock, ok := raw["authority"].(map[string]any)
-	if !ok {
-		authorityBlock = map[string]any{}
-		raw["authority"] = authorityBlock
-	}
-
-	provisioners, _ := authorityBlock["provisioners"].([]any)
-	provisioners = append(provisioners, map[string]any{
-		"type":                  "OIDC",
-		"name":                  oidcCfg.Name,
-		"clientID":              oidcCfg.ClientID,
-		"clientSecret":          oidcCfg.ClientSecret,
-		"configurationEndpoint": oidcCfg.ConfigurationEndpoint,
-		"claims": map[string]any{
-			"enableSSHCA": true,
-		},
-	})
-	authorityBlock["provisioners"] = provisioners
-
-	enableSSHCAOnProvisionerClaims(raw)
-
-	if err := writeCAConfig(configPath, raw); err != nil {
-		return err
-	}
-
-	_ = cfg
 	return nil
 }
 
-func oidcProvisionerExists(raw map[string]any, clientID string) bool {
-	authorityBlock, ok := raw["authority"].(map[string]any)
-	if !ok {
-		return false
-	}
-
-	provisioners, ok := authorityBlock["provisioners"].([]any)
-	if !ok {
-		return false
-	}
-
-	for _, entry := range provisioners {
-		prov, ok := entry.(map[string]any)
-		if !ok {
-			continue
-		}
-		if strings.EqualFold(provType(prov), "OIDC") {
-			if id, _ := prov["clientID"].(string); id == clientID {
-				return true
-			}
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
 		}
 	}
-
-	return false
-}
-
-func provType(prov map[string]any) string {
-	if t, ok := prov["type"].(string); ok {
-		return t
-	}
-	return ""
-}
-
-func writeCAConfig(configPath string, raw map[string]any) error {
-	updated, err := json.MarshalIndent(raw, "", "\t")
-	if err != nil {
-		return fmt.Errorf("marshal CA config: %w", err)
-	}
-	updated = append(updated, '\n')
-	if err := os.WriteFile(configPath, updated, 0o644); err != nil {
-		return fmt.Errorf("write CA config: %w", err)
-	}
-	return nil
+	return out
 }

@@ -15,7 +15,7 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -trimpath -ldflags="-s -w" -o /out/arx-ca ./cmd/server
+RUN go build -trimpath -ldflags="-s -w" -o /out/arx-ca-server ./cmd/server
 
 FROM alpine:3.20
 
@@ -25,7 +25,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 WORKDIR /app
 
-COPY --from=builder /out/arx-ca /app/arx-ca
+COPY --from=builder /out/arx-ca-server /app/arx-ca-server
 
 RUN mkdir -p /app/data \
     && chown -R app:app /app
@@ -37,4 +37,4 @@ EXPOSE 8080
 ENV CA_API_LISTEN_ADDR=:8080 \
     CA_API_CA_CONFIG=/app/data/config/ca.json
 
-ENTRYPOINT ["/app/arx-ca"]
+ENTRYPOINT ["/app/arx-ca-server"]

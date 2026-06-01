@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -19,7 +18,7 @@ type SSHHandler struct {
 	keyStore   *auth.APIKeyStore
 }
 
-// NewSSHHandler constructs an SSH handler bound to the PKI engine and API authentication.
+// NewSSHHandler constructs an SSH handler bound to the PKI engine.
 func NewSSHHandler(engine *ca.PKIEngine, jwtManager *auth.JWTManager, keyStore *auth.APIKeyStore) *SSHHandler {
 	return &SSHHandler{
 		engine:     engine,
@@ -29,17 +28,12 @@ func NewSSHHandler(engine *ca.PKIEngine, jwtManager *auth.JWTManager, keyStore *
 }
 
 // SignUser handles POST /api/v1/ssh/sign-user.
-// Accepts either API authentication (admin JWT or service-account API key) or an OIDC token
-// from an SSO/OIDC provisioner configured in the CA.
+// API credentials mint an internal JWK token; an optional OIDC/provisioner token
+// in the request body authorizes SSO users directly.
 func (h *SSHHandler) SignUser() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
-			return
-		}
-
-		if !h.engine.SSHEnabled() {
-			api.WriteError(w, http.StatusServiceUnavailable, "SSH certificate authority is not configured")
 			return
 		}
 
@@ -49,16 +43,49 @@ func (h *SSHHandler) SignUser() http.Handler {
 			return
 		}
 
-		oidcToken := strings.TrimSpace(req.OIDCToken)
-		if oidcToken == "" {
-			if err := h.requireAPIAuthentication(w, r); err != nil {
-				return
-			}
+		if strings.TrimSpace(req.PublicKey) == "" {
+			api.WriteError(w, http.StatusBadRequest, "public_key is required")
+			return
+		}
+		if strings.TrimSpace(req.Principal) == "" && len(req.Principals) == 0 {
+			api.WriteError(w, http.StatusBadRequest, "principal is required")
+			return
 		}
 
-		resp, err := h.engine.SignSSHUser(r.Context(), req, oidcToken)
+		signToken := strings.TrimSpace(req.Token)
+		if signToken == "" {
+			if !h.isAuthenticated(r) {
+				api.WriteError(w, http.StatusUnauthorized, "authentication required")
+				return
+			}
+
+			token, err := h.engine.MintSSHUserSignToken(req)
+			if err != nil {
+				if isSSHClientError(err) {
+					api.WriteError(w, http.StatusBadRequest, err.Error())
+					return
+				}
+				status, message := ca.MapCAError(err)
+				if status >= http.StatusInternalServerError {
+					log.Printf("ssh: sign-user mint token: %v", err)
+				}
+				api.WriteError(w, status, message)
+				return
+			}
+			signToken = token
+		}
+
+		resp, err := h.engine.SignSSHUserCertificate(r.Context(), req, signToken)
 		if err != nil {
-			h.writeSSHError(w, err)
+			if isSSHClientError(err) {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			status, message := ca.MapCAError(err)
+			if status >= http.StatusInternalServerError {
+				log.Printf("ssh: sign-user: %v", err)
+			}
+			api.WriteError(w, status, message)
 			return
 		}
 
@@ -74,20 +101,32 @@ func (h *SSHHandler) SignHost() http.Handler {
 			return
 		}
 
-		if !h.engine.SSHEnabled() {
-			api.WriteError(w, http.StatusServiceUnavailable, "SSH certificate authority is not configured")
-			return
-		}
-
 		var req models.SignSSHHostRequest
 		if err := decodeJSONBody(w, r, &req); err != nil {
 			api.WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		resp, err := h.engine.SignSSHHost(r.Context(), req)
+		if strings.TrimSpace(req.PublicKey) == "" {
+			api.WriteError(w, http.StatusBadRequest, "public_key is required")
+			return
+		}
+		if strings.TrimSpace(req.Hostname) == "" && len(req.Principals) == 0 {
+			api.WriteError(w, http.StatusBadRequest, "hostname is required")
+			return
+		}
+
+		resp, err := h.engine.SignSSHHostCertificate(r.Context(), req)
 		if err != nil {
-			h.writeSSHError(w, err)
+			if isSSHClientError(err) {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			status, message := ca.MapCAError(err)
+			if status >= http.StatusInternalServerError {
+				log.Printf("ssh: sign-host: %v", err)
+			}
+			api.WriteError(w, status, message)
 			return
 		}
 
@@ -114,9 +153,14 @@ func (h *SSHHandler) Inspect() http.Handler {
 			return
 		}
 
-		resp, err := h.engine.InspectSSHCertificate(r.Context(), req.Certificate)
+		resp, err := h.engine.InspectSSHCertificate(req.Certificate)
 		if err != nil {
-			h.writeSSHError(w, err)
+			if isSSHClientError(err) {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			log.Printf("ssh: inspect: %v", err)
+			api.WriteError(w, http.StatusInternalServerError, "ssh certificate inspection failed")
 			return
 		}
 
@@ -132,14 +176,14 @@ func (h *SSHHandler) Roots() http.Handler {
 			return
 		}
 
-		if !h.engine.SSHEnabled() {
-			api.WriteError(w, http.StatusServiceUnavailable, "SSH certificate authority is not configured")
-			return
-		}
-
 		resp, err := h.engine.GetSSHRoots(r.Context())
 		if err != nil {
-			h.writeSSHError(w, err)
+			if strings.Contains(err.Error(), "not configured") || strings.Contains(err.Error(), "no SSH CA") {
+				api.WriteError(w, http.StatusNotFound, err.Error())
+				return
+			}
+			log.Printf("ssh: roots: %v", err)
+			api.WriteError(w, http.StatusInternalServerError, "failed to retrieve SSH CA roots")
 			return
 		}
 
@@ -147,59 +191,52 @@ func (h *SSHHandler) Roots() http.Handler {
 	})
 }
 
-func (h *SSHHandler) requireAPIAuthentication(w http.ResponseWriter, r *http.Request) error {
-	if h.authenticateAPIRequest(r) {
-		return nil
-	}
-	api.WriteError(w, http.StatusUnauthorized, "authentication required: provide admin JWT, service-account API key, or oidc_token")
-	return errors.New("unauthenticated")
-}
-
-func (h *SSHHandler) authenticateAPIRequest(r *http.Request) bool {
-	authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
-	if strings.HasPrefix(authHeader, "Bearer ") {
-		token := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-		if token != "" {
-			if _, err := h.jwtManager.ValidateToken(token); err == nil {
-				return true
-			}
-			if _, err := h.keyStore.ValidateAPIKey(token); err == nil {
-				return true
-			}
-		}
-	}
-
-	if key := strings.TrimSpace(r.Header.Get("X-API-Key")); key != "" {
-		if _, err := h.keyStore.ValidateAPIKey(key); err == nil {
+func (h *SSHHandler) isAuthenticated(r *http.Request) bool {
+	if token, ok := extractOptionalBearerToken(r.Header.Get("Authorization")); ok {
+		if _, err := h.jwtManager.ValidateToken(token); err == nil {
 			return true
 		}
 	}
 
-	return false
+	key := strings.TrimSpace(r.Header.Get("X-API-Key"))
+	if key == "" {
+		if token, ok := extractOptionalBearerToken(r.Header.Get("Authorization")); ok {
+			key = token
+		}
+	}
+
+	if key == "" {
+		return false
+	}
+
+	_, err := h.keyStore.ValidateAPIKey(key)
+	return err == nil
 }
 
-func (h *SSHHandler) writeSSHError(w http.ResponseWriter, err error) {
-	msg := err.Error()
-	switch {
-	case strings.Contains(msg, "not configured"),
-		strings.Contains(msg, "no SSH CA"):
-		api.WriteError(w, http.StatusServiceUnavailable, msg)
-	case strings.Contains(msg, "required"),
-		strings.Contains(msg, "invalid"),
-		strings.Contains(msg, "parse"),
-		strings.Contains(msg, "malformed"):
-		api.WriteError(w, http.StatusBadRequest, msg)
-	case strings.Contains(msg, "no OIDC provisioner"),
-		strings.Contains(msg, "unauthorized"),
-		strings.Contains(msg, "forbidden"),
-		strings.Contains(msg, "not allowed"):
-		status, message := ca.MapCAError(err)
-		api.WriteError(w, status, message)
-	default:
-		status, message := ca.MapCAError(err)
-		if status >= http.StatusInternalServerError {
-			log.Printf("ssh: %v", err)
-		}
-		api.WriteError(w, status, message)
+func extractOptionalBearerToken(headerValue string) (string, bool) {
+	const bearerPrefix = "Bearer "
+	headerValue = strings.TrimSpace(headerValue)
+	if headerValue == "" || !strings.HasPrefix(headerValue, bearerPrefix) {
+		return "", false
 	}
+	token := strings.TrimSpace(strings.TrimPrefix(headerValue, bearerPrefix))
+	if token == "" {
+		return "", false
+	}
+	return token, true
+}
+
+func isSSHClientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "public_key") ||
+		strings.Contains(msg, "principal") ||
+		strings.Contains(msg, "hostname") ||
+		strings.Contains(msg, "certificate is required") ||
+		strings.Contains(msg, "parse ssh") ||
+		strings.Contains(msg, "invalid ttl") ||
+		strings.Contains(msg, "not an SSH certificate") ||
+		strings.Contains(msg, "at least one principal")
 }

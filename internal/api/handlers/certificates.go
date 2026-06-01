@@ -42,7 +42,7 @@ func (h *CertificateHandler) Issue() http.Handler {
 			return
 		}
 
-		resp, err := h.engine.IssueCertificate(r.Context(), csrPEM, req.TTL)
+		resp, err := h.engine.IssueCertificate(r.Context(), csrPEM, req.TTL, req.TemplateID, req.Metadata)
 		if err != nil {
 			status, message := ca.MapCAError(err)
 			if status >= http.StatusInternalServerError {
@@ -118,6 +118,47 @@ func (h *CertificateHandler) Revoke() http.Handler {
 		}
 
 		api.WriteSuccess(w, http.StatusOK, resp)
+	})
+}
+
+// IssueWithToken handles POST /api/v1/certificates/issue-with-token.
+func (h *CertificateHandler) IssueWithToken() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		var req models.IssueCertificateWithTokenRequest
+		if err := decodeJSONBody(w, r, &req); err != nil {
+			api.WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if strings.TrimSpace(req.Token) == "" {
+			api.WriteError(w, http.StatusBadRequest, "token is required")
+			return
+		}
+		if strings.TrimSpace(req.CSR) == "" {
+			api.WriteError(w, http.StatusBadRequest, "csr is required")
+			return
+		}
+
+		resp, err := h.engine.IssueCertificateWithToken(r.Context(), req.Token, req.CSR, req.TTL, req.TemplateID, req.Metadata)
+		if err != nil {
+			if strings.Contains(err.Error(), "token is required") || strings.Contains(err.Error(), "parse certificate signing request") {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			status, message := ca.MapCAError(err)
+			if status >= http.StatusInternalServerError {
+				log.Printf("certificates: issue-with-token: %v", err)
+			}
+			api.WriteError(w, status, message)
+			return
+		}
+
+		api.WriteSuccess(w, http.StatusCreated, resp)
 	})
 }
 

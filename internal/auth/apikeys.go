@@ -31,6 +31,7 @@ var (
 type ServiceAccount struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
+	Roles     []Role    `json:"roles"`
 	KeyHash   string    `json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -72,9 +73,14 @@ func hashAPIKey(plaintext string) string {
 }
 
 // CreateServiceAccount registers a new service account and returns the account plus plaintext key.
-func (s *APIKeyStore) CreateServiceAccount(name string) (*ServiceAccount, string, error) {
+func (s *APIKeyStore) CreateServiceAccount(name string, roles []Role) (*ServiceAccount, string, error) {
 	if len(name) == 0 || len(name) > 128 {
 		return nil, "", ErrInvalidServiceAccountName
+	}
+
+	roles = NormalizeRoles(roles)
+	if len(roles) == 0 {
+		roles = DefaultServiceAccountRoles()
 	}
 
 	plaintext, keyHash, err := GenerateAPIKey()
@@ -86,6 +92,7 @@ func (s *APIKeyStore) CreateServiceAccount(name string) (*ServiceAccount, string
 	account := &ServiceAccount{
 		ID:        id,
 		Name:      name,
+		Roles:     roles,
 		KeyHash:   keyHash,
 		CreatedAt: time.Now().UTC(),
 	}

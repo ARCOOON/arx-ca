@@ -60,3 +60,8 @@ config.local.json
 
 # Docker Compose persistent PKI volume
 data/
+
+# Dev container (tracked); ignore local test database volumes only
+.devcontainer/**/postgres-data/
+.devcontainer/**/pgdata/
+.devcontainer/**/db-data/

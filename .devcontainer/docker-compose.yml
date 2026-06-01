@@ -1,0 +1,18 @@
+services:
+  workspace:
+    image: mcr.microsoft.com/devcontainers/go:1-1.22-bullseye
+    command: sleep infinity
+    user: vscode
+    volumes:
+      - ..:/workspaces/arx-ca:cached
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: arx
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: arx
+    expose:
+      - "5432"

@@ -2,6 +2,7 @@ package ca
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"strings"
@@ -19,64 +20,58 @@ import (
 )
 
 const (
-	defaultSSHUserTTL = "8h"
-	sshUserCertType   = provisioner.SSHUserCert
-	sshHostCertType   = provisioner.SSHHostCert
+	defaultSSHUserCertTTL  = 16 * time.Hour
+	defaultSSHHostCertTTL  = 30 * 24 * time.Hour
+	maxSSHUserCertTTL      = 24 * time.Hour
+	maxSSHHostCertTTL      = 30 * 24 * time.Hour
+	sshProvisionerTokenTTL = 5 * time.Minute
 )
 
 type sshStepPayload struct {
 	SSH *provisioner.SignSSHOptions `json:"ssh,omitempty"`
 }
 
-// SignSSHUser issues a short-lived SSH user certificate for the given public key and principal.
-// When oidcToken is non-empty, the OIDC provisioner authorizes the request (SSO path).
-func (e *PKIEngine) SignSSHUser(ctx context.Context, req models.SignSSHUserRequest, oidcToken string) (*models.SSHCertificateResponse, error) {
+// SignSSHUserCertificate signs an SSH user certificate using a provisioner token.
+func (e *PKIEngine) SignSSHUserCertificate(ctx context.Context, req models.SignSSHUserRequest, token string) (*models.SSHCertificateResponse, error) {
 	if e == nil || e.auth == nil {
 		return nil, errors.New("CA engine is not initialized")
 	}
-	if e.config == nil || e.config.SSH == nil {
-		return nil, errors.New("SSH certificate authority is not configured")
+	if !e.SSHEnabled() {
+		return nil, errors.New("SSH CA is not configured")
 	}
 
-	publicKey, err := parseSSHPublicKey(req.PublicKey)
+	pub, err := parseSSHPublicKey(req.PublicKey)
 	if err != nil {
 		return nil, err
 	}
 
-	principal := strings.TrimSpace(req.Principal)
-	if principal == "" {
-		return nil, errors.New("principal is required")
+	principals, err := resolveSSHPrincipals(req.Principal, req.Principals)
+	if err != nil {
+		return nil, err
 	}
 
-	ttl := strings.TrimSpace(req.TTL)
-	if ttl == "" {
-		ttl = defaultSSHUserTTL
+	ttl, err := parseSSHUserTTL(req.TTL)
+	if err != nil {
+		return nil, err
 	}
 
-	signOpts := provisioner.SignSSHOptions{
-		CertType:   sshUserCertType,
-		KeyID:      principal,
-		Principals: []string{principal},
+	opts := provisioner.SignSSHOptions{
+		CertType:   provisioner.SSHUserCert,
+		KeyID:      principals[0],
+		Principals: principals,
+	}
+	if ttl > 0 {
+		var validBefore provisioner.TimeDuration
+		validBefore.SetDuration(ttl)
+		opts.ValidBefore = validBefore
 	}
 
-	var token string
-	switch {
-	case strings.TrimSpace(oidcToken) != "":
-		token = strings.TrimSpace(oidcToken)
-		if _, err := e.findOIDCProvisioner(); err != nil {
-			return nil, err
-		}
-	default:
-		token, err = e.createSSHSignToken(principal, &provisioner.SignSSHOptions{
-			CertType:   sshUserCertType,
-			Principals: []string{principal},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("create SSH signing token: %w", err)
-		}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, errors.New("signing token is required")
 	}
 
-	cert, err := e.signSSH(ctx, publicKey, signOpts, token, ttl)
+	cert, err := e.signSSHWithToken(ctx, pub, opts, token)
 	if err != nil {
 		return nil, err
 	}
@@ -84,96 +79,149 @@ func (e *PKIEngine) SignSSHUser(ctx context.Context, req models.SignSSHUserReque
 	return sshCertificateResponse(cert), nil
 }
 
-// SignSSHHost issues an SSH host certificate for the given public key and hostname.
-func (e *PKIEngine) SignSSHHost(ctx context.Context, req models.SignSSHHostRequest) (*models.SSHCertificateResponse, error) {
+// SignSSHHostCertificate signs an SSH host certificate using the default JWK provisioner.
+func (e *PKIEngine) SignSSHHostCertificate(ctx context.Context, req models.SignSSHHostRequest) (*models.SSHCertificateResponse, error) {
 	if e == nil || e.auth == nil {
 		return nil, errors.New("CA engine is not initialized")
 	}
-	if e.config == nil || e.config.SSH == nil {
-		return nil, errors.New("SSH certificate authority is not configured")
+	if !e.SSHEnabled() {
+		return nil, errors.New("SSH CA is not configured")
 	}
 
-	publicKey, err := parseSSHPublicKey(req.PublicKey)
+	pub, err := parseSSHPublicKey(req.PublicKey)
 	if err != nil {
 		return nil, err
 	}
 
-	hostname := strings.TrimSpace(req.Hostname)
-	if hostname == "" {
-		return nil, errors.New("hostname is required")
-	}
-
-	ttl := strings.TrimSpace(req.TTL)
-	if ttl == "" {
-		ttl = ""
-	}
-
-	signOpts := provisioner.SignSSHOptions{
-		CertType:   sshHostCertType,
-		KeyID:      hostname,
-		Principals: []string{hostname},
-	}
-
-	token, err := e.createSSHSignToken(hostname, &provisioner.SignSSHOptions{
-		CertType:   sshHostCertType,
-		Principals: []string{hostname},
-	})
+	principals, err := resolveSSHPrincipals(req.Hostname, req.Principals)
 	if err != nil {
-		return nil, fmt.Errorf("create SSH signing token: %w", err)
+		return nil, err
 	}
 
-	cert, err := e.signSSH(ctx, publicKey, signOpts, token, ttl)
+	ttl, err := parseSSHHostTTL(req.TTL)
+	if err != nil {
+		return nil, err
+	}
+
+	provisionerName := strings.TrimSpace(req.Provisioner)
+	if provisionerName == "" {
+		provisionerName = defaultProvisioner
+	}
+
+	sshOpts := &provisioner.SignSSHOptions{
+		CertType:   provisioner.SSHHostCert,
+		KeyID:      principals[0],
+		Principals: principals,
+	}
+	if ttl > 0 {
+		var validBefore provisioner.TimeDuration
+		validBefore.SetDuration(ttl)
+		sshOpts.ValidBefore = validBefore
+	}
+
+	token, err := e.createSSHSignToken(provisionerName, principals[0], sshOpts, sshProvisionerTokenTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := provisioner.SignSSHOptions{
+		CertType:   provisioner.SSHHostCert,
+		KeyID:      principals[0],
+		Principals: principals,
+	}
+	if ttl > 0 {
+		opts.ValidBefore = sshOpts.ValidBefore
+	}
+
+	cert, err := e.signSSHWithToken(ctx, pub, opts, token)
 	if err != nil {
 		return nil, err
 	}
 
 	return sshCertificateResponse(cert), nil
+}
+
+// MintSSHUserSignToken creates a provisioner token for SSH user certificate signing.
+func (e *PKIEngine) MintSSHUserSignToken(req models.SignSSHUserRequest) (string, error) {
+	if e == nil || e.auth == nil {
+		return "", errors.New("CA engine is not initialized")
+	}
+
+	principals, err := resolveSSHPrincipals(req.Principal, req.Principals)
+	if err != nil {
+		return "", err
+	}
+
+	ttl, err := parseSSHUserTTL(req.TTL)
+	if err != nil {
+		return "", err
+	}
+
+	provisionerName := strings.TrimSpace(req.Provisioner)
+	if provisionerName == "" {
+		provisionerName = defaultProvisioner
+	}
+
+	sshOpts := &provisioner.SignSSHOptions{
+		CertType:   provisioner.SSHUserCert,
+		KeyID:      principals[0],
+		Principals: principals,
+	}
+	if ttl > 0 {
+		var validBefore provisioner.TimeDuration
+		validBefore.SetDuration(ttl)
+		sshOpts.ValidBefore = validBefore
+	}
+
+	return e.createSSHSignToken(provisionerName, principals[0], sshOpts, sshProvisionerTokenTTL)
 }
 
 // InspectSSHCertificate decodes an SSH certificate and returns its metadata.
-func (e *PKIEngine) InspectSSHCertificate(_ context.Context, certificate string) (*models.SSHCertificateInspection, error) {
+func (e *PKIEngine) InspectSSHCertificate(certificate string) (*models.SSHCertificateInspection, error) {
 	cert, err := parseSSHCertificate(certificate)
 	if err != nil {
 		return nil, err
 	}
 
+	certType := "unknown"
+	switch cert.CertType {
+	case ssh.UserCert:
+		certType = provisioner.SSHUserCert
+	case ssh.HostCert:
+		certType = provisioner.SSHHostCert
+	}
+
+	pubKeyType := ""
+	if cert.Key != nil {
+		pubKeyType = cert.Key.Type()
+	}
+
 	inspection := &models.SSHCertificateInspection{
-		KeyID:       cert.KeyId,
-		Principals:  append([]string(nil), cert.ValidPrincipals...),
-		ValidAfter:  time.Unix(int64(cert.ValidAfter), 0).UTC().Format(time.RFC3339),
-		ValidBefore: time.Unix(int64(cert.ValidBefore), 0).UTC().Format(time.RFC3339),
-		CertType:    sshCertTypeName(cert.CertType),
-		Serial:      cert.Serial,
+		CertificateType: certType,
+		KeyID:           cert.KeyId,
+		Principals:      append([]string(nil), cert.ValidPrincipals...),
+		Serial:          cert.Serial,
+		ValidAfter:      time.Unix(int64(cert.ValidAfter), 0).UTC().Format(time.RFC3339),
+		ValidBefore:     time.Unix(int64(cert.ValidBefore), 0).UTC().Format(time.RFC3339),
+		PublicKeyType:   pubKeyType,
+		CriticalOptions: copyStringMap(cert.CriticalOptions),
+		Extensions:      copyStringMap(cert.Extensions),
 	}
 
 	if cert.SignatureKey != nil {
 		inspection.SignatureKey = strings.TrimSpace(string(ssh.MarshalAuthorizedKey(cert.SignatureKey)))
 	}
 
-	if len(cert.CriticalOptions) > 0 {
-		inspection.CriticalOptions = make(map[string]string, len(cert.CriticalOptions))
-		for k, v := range cert.CriticalOptions {
-			inspection.CriticalOptions[k] = v
-		}
-	}
-
-	if len(cert.Extensions) > 0 {
-		inspection.Extensions = make(map[string]string, len(cert.Extensions))
-		for k, v := range cert.Extensions {
-			inspection.Extensions[k] = v
-		}
-	}
-
 	return inspection, nil
 }
 
-// GetSSHRoots returns the SSH user and host CA public keys.
+// GetSSHRoots returns SSH CA public keys for user and host trust configuration.
 func (e *PKIEngine) GetSSHRoots(ctx context.Context) (*models.SSHRootsResponse, error) {
 	if e == nil || e.auth == nil {
 		return nil, errors.New("CA engine is not initialized")
 	}
-	if e.config == nil || e.config.SSH == nil {
-		return nil, errors.New("SSH certificate authority is not configured")
+	if !e.SSHEnabled() {
+		return nil, errors.New("SSH CA is not configured")
 	}
 
 	keys, err := e.auth.GetSSHRoots(ctx)
@@ -181,106 +229,73 @@ func (e *PKIEngine) GetSSHRoots(ctx context.Context) (*models.SSHRootsResponse, 
 		return nil, fmt.Errorf("get SSH roots: %w", err)
 	}
 
-	resp := &models.SSHRootsResponse{}
-	for _, key := range keys.UserKeys {
-		if key != nil {
-			resp.UserCAKeys = append(resp.UserCAKeys, strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key))))
-		}
-	}
-	for _, key := range keys.HostKeys {
-		if key != nil {
-			resp.HostCAKeys = append(resp.HostCAKeys, strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key))))
-		}
+	resp := &models.SSHRootsResponse{
+		UserKeys: make([]models.SSHRootKey, 0, len(keys.UserKeys)),
+		HostKeys: make([]models.SSHRootKey, 0, len(keys.HostKeys)),
 	}
 
-	if len(resp.UserCAKeys) == 0 && len(resp.HostCAKeys) == 0 {
+	for _, key := range keys.UserKeys {
+		resp.UserKeys = append(resp.UserKeys, sshRootKey(key))
+	}
+	for _, key := range keys.HostKeys {
+		resp.HostKeys = append(resp.HostKeys, sshRootKey(key))
+	}
+
+	if len(resp.UserKeys) == 0 && len(resp.HostKeys) == 0 {
 		return nil, errors.New("no SSH CA public keys found")
 	}
 
 	return resp, nil
 }
 
-// SSHEnabled reports whether the CA has SSH signing keys configured.
-func (e *PKIEngine) SSHEnabled() bool {
-	return e != nil && e.config != nil && e.config.SSH != nil
+func (e *PKIEngine) createSSHSignToken(provisionerName, subject string, sshOpts *provisioner.SignSSHOptions, tokenTTL time.Duration) (string, error) {
+	prov, err := e.loadProvisionerByName(provisionerName)
+	if err != nil {
+		return "", err
+	}
+
+	switch p := prov.(type) {
+	case *provisioner.JWK:
+		kid, encryptedKey, ok := p.GetEncryptedKey()
+		if !ok || len(encryptedKey) == 0 {
+			return "", fmt.Errorf("provisioner %q does not have an encrypted signing key", prov.GetName())
+		}
+
+		signer, err := decryptProvisionerKey(kid, []byte(encryptedKey), e.password)
+		if err != nil {
+			return "", err
+		}
+
+		audiences := e.config.GetAudiences().SSHSign
+		if len(audiences) == 0 {
+			return "", errors.New("no SSH sign audiences configured")
+		}
+
+		return buildSSHProvisionerToken(subject, prov.GetName(), audiences[0], sshOpts, signer, tokenTTL)
+	default:
+		return "", fmt.Errorf("provisioner %q (type %s) cannot mint SSH signing tokens; use a JWK provisioner", prov.GetName(), prov.GetType().String())
+	}
 }
 
-func (e *PKIEngine) signSSH(
-	ctx context.Context,
-	publicKey ssh.PublicKey,
-	opts provisioner.SignSSHOptions,
-	token string,
-	ttl string,
-) (*ssh.Certificate, error) {
+func (e *PKIEngine) signSSHWithToken(ctx context.Context, pub ssh.PublicKey, opts provisioner.SignSSHOptions, token string) (*ssh.Certificate, error) {
 	ctx = provisioner.NewContextWithMethod(ctx, provisioner.SSHSignMethod)
 	ctx = provisioner.NewContextWithToken(ctx, token)
 	ctx = provisioner.NewContextWithCertType(ctx, opts.CertType)
 	ctx = authority.NewContext(ctx, e.auth)
 
-	authOpts, err := e.auth.Authorize(ctx, token)
+	signOpts, err := e.auth.Authorize(ctx, token)
 	if err != nil {
 		return nil, err
 	}
 
-	if strings.TrimSpace(ttl) != "" {
-		notAfter, err := provisioner.ParseTimeDuration(ttl)
-		if err != nil {
-			return nil, fmt.Errorf("invalid ttl: %w", err)
-		}
-		authOpts = append(authOpts, sshTTLModifier{notAfter: notAfter.RelativeTime(time.Now().UTC())})
-	}
-
-	cert, err := e.auth.SignSSH(ctx, publicKey, opts, authOpts...)
-	if err != nil {
-		return nil, err
-	}
-	if cert == nil {
-		return nil, errors.New("signing produced a nil SSH certificate")
-	}
-
-	return cert, nil
+	return e.auth.SignSSH(ctx, pub, opts, signOpts...)
 }
 
-// sshTTLModifier caps SSH certificate validity at the requested TTL.
-type sshTTLModifier struct {
-	notAfter time.Time
-}
-
-func (m sshTTLModifier) Modify(cert *ssh.Certificate, _ provisioner.SignSSHOptions) error {
-	cert.ValidBefore = uint64(m.notAfter.Unix())
-	return nil
-}
-
-func (e *PKIEngine) createSSHSignToken(subject string, sshOpts *provisioner.SignSSHOptions) (string, error) {
-	prov, err := e.loadDefaultProvisioner()
-	if err != nil {
-		return "", err
+func buildSSHProvisionerToken(subject, issuer, audience string, sshOpts *provisioner.SignSSHOptions, signer jose.Signer, tokenTTL time.Duration) (string, error) {
+	if tokenTTL <= 0 {
+		tokenTTL = sshProvisionerTokenTTL
 	}
 
-	jwkProv, ok := prov.(*provisioner.JWK)
-	if !ok {
-		return "", fmt.Errorf("provisioner %q is not a JWK provisioner", prov.GetName())
-	}
-
-	kid, encryptedKey, ok := jwkProv.GetEncryptedKey()
-	if !ok || len(encryptedKey) == 0 {
-		return "", fmt.Errorf("provisioner %q does not have an encrypted signing key", prov.GetName())
-	}
-
-	signer, err := decryptProvisionerKey(kid, []byte(encryptedKey), e.password)
-	if err != nil {
-		return "", err
-	}
-
-	audiences := e.config.GetAudiences().SSHSign
-	if len(audiences) == 0 {
-		return "", errors.New("no SSH sign audiences configured")
-	}
-
-	return buildSSHSignToken(subject, prov.GetName(), audiences[0], sshOpts, signer)
-}
-
-func buildSSHSignToken(subject, issuer, audience string, sshOpts *provisioner.SignSSHOptions, signer jose.Signer) (string, error) {
 	id, err := randutil.ASCII(64)
 	if err != nil {
 		return "", err
@@ -297,7 +312,7 @@ func buildSSHSignToken(subject, issuer, audience string, sshOpts *provisioner.Si
 			Issuer:    issuer,
 			IssuedAt:  jose.NewNumericDate(now),
 			NotBefore: jose.NewNumericDate(now),
-			Expiry:    jose.NewNumericDate(now.Add(5 * time.Minute)),
+			Expiry:    jose.NewNumericDate(now.Add(tokenTTL)),
 			Audience:  []string{audience},
 		},
 		Step: &sshStepPayload{SSH: sshOpts},
@@ -306,42 +321,28 @@ func buildSSHSignToken(subject, issuer, audience string, sshOpts *provisioner.Si
 	return jose.Signed(signer).Claims(claims).CompactSerialize()
 }
 
-func (e *PKIEngine) findOIDCProvisioner() (provisioner.Interface, error) {
-	provisioners, _, err := e.auth.GetProvisioners("", 0)
-	if err != nil {
-		return nil, fmt.Errorf("load provisioners: %w", err)
-	}
-
-	for _, prov := range provisioners {
-		if prov.GetType() == provisioner.TypeOIDC {
-			return prov, nil
-		}
-	}
-
-	return nil, errors.New("no OIDC provisioner configured for SSH user certificate requests")
-}
-
 func parseSSHPublicKey(raw string) (ssh.PublicKey, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return nil, errors.New("public_key is required")
 	}
 
-	if key, _, _, _, err := ssh.ParseAuthorizedKey([]byte(raw)); err == nil {
-		return key, nil
+	if data, err := base64.StdEncoding.DecodeString(raw); err == nil {
+		if pub, err := ssh.ParsePublicKey(data); err == nil {
+			return pub, nil
+		}
 	}
 
-	decoded, err := base64.StdEncoding.DecodeString(raw)
-	if err != nil {
-		return nil, fmt.Errorf("parse SSH public key: %w", err)
+	pub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(raw))
+	if err == nil {
+		return pub, nil
 	}
 
-	key, err := ssh.ParsePublicKey(decoded)
-	if err != nil {
-		return nil, fmt.Errorf("parse SSH public key: %w", err)
+	if pub, err := ssh.ParsePublicKey([]byte(raw)); err == nil {
+		return pub, nil
 	}
 
-	return key, nil
+	return nil, fmt.Errorf("parse ssh public key: %w", err)
 }
 
 func parseSSHCertificate(raw string) (*ssh.Certificate, error) {
@@ -350,49 +351,127 @@ func parseSSHCertificate(raw string) (*ssh.Certificate, error) {
 		return nil, errors.New("certificate is required")
 	}
 
-	if pub, _, _, _, err := ssh.ParseAuthorizedKey([]byte(raw)); err == nil {
-		if cert, ok := pub.(*ssh.Certificate); ok {
-			return cert, nil
-		}
-		return nil, errors.New("parsed key is not an SSH certificate")
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(raw)
+	pub, err := parseSSHPublicKey(raw)
 	if err != nil {
-		return nil, fmt.Errorf("parse SSH certificate: %w", err)
-	}
-
-	pub, err := ssh.ParsePublicKey(decoded)
-	if err != nil {
-		return nil, fmt.Errorf("parse SSH certificate: %w", err)
+		return nil, fmt.Errorf("parse ssh certificate: %w", err)
 	}
 
 	cert, ok := pub.(*ssh.Certificate)
 	if !ok {
-		return nil, errors.New("decoded data is not an SSH certificate")
+		return nil, errors.New("provided key is not an SSH certificate")
 	}
 
 	return cert, nil
 }
 
+func resolveSSHPrincipals(primary string, extras []string) ([]string, error) {
+	primary = strings.TrimSpace(primary)
+	if primary == "" && len(extras) == 0 {
+		return nil, errors.New("at least one principal is required")
+	}
+
+	seen := make(map[string]struct{})
+	out := make([]string, 0, 1+len(extras))
+
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, exists := seen[value]; exists {
+			return
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+
+	add(primary)
+	for _, principal := range extras {
+		add(principal)
+	}
+
+	if len(out) == 0 {
+		return nil, errors.New("at least one principal is required")
+	}
+
+	return out, nil
+}
+
+func parseSSHUserTTL(raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultSSHUserCertTTL, nil
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid ttl: %w", err)
+	}
+	if d <= 0 {
+		return 0, errors.New("ttl must be greater than zero")
+	}
+	if d > maxSSHUserCertTTL {
+		return 0, fmt.Errorf("ttl must not exceed %s", maxSSHUserCertTTL)
+	}
+	return d, nil
+}
+
+func parseSSHHostTTL(raw string) (time.Duration, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultSSHHostCertTTL, nil
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("invalid ttl: %w", err)
+	}
+	if d <= 0 {
+		return 0, errors.New("ttl must be greater than zero")
+	}
+	if d > maxSSHHostCertTTL {
+		return 0, fmt.Errorf("ttl must not exceed %s", maxSSHHostCertTTL)
+	}
+	return d, nil
+}
+
 func sshCertificateResponse(cert *ssh.Certificate) *models.SSHCertificateResponse {
+	certType := provisioner.SSHUserCert
+	if cert.CertType == ssh.HostCert {
+		certType = provisioner.SSHHostCert
+	}
+
 	return &models.SSHCertificateResponse{
-		Certificate: strings.TrimSpace(string(ssh.MarshalAuthorizedKey(cert))),
-		KeyID:       cert.KeyId,
-		Principals:  append([]string(nil), cert.ValidPrincipals...),
-		NotBefore:   time.Unix(int64(cert.ValidAfter), 0).UTC().Format(time.RFC3339),
-		NotAfter:    time.Unix(int64(cert.ValidBefore), 0).UTC().Format(time.RFC3339),
-		CertType:    sshCertTypeName(cert.CertType),
+		Certificate:     strings.TrimSpace(string(ssh.MarshalAuthorizedKey(cert))),
+		CertificateType: certType,
+		KeyID:           cert.KeyId,
+		Principals:      append([]string(nil), cert.ValidPrincipals...),
+		Serial:          cert.Serial,
+		ValidAfter:      time.Unix(int64(cert.ValidAfter), 0).UTC().Format(time.RFC3339),
+		ValidBefore:     time.Unix(int64(cert.ValidBefore), 0).UTC().Format(time.RFC3339),
 	}
 }
 
-func sshCertTypeName(certType uint32) string {
-	switch certType {
-	case ssh.UserCert:
-		return sshUserCertType
-	case ssh.HostCert:
-		return sshHostCertType
-	default:
-		return "unknown"
+func sshRootKey(key ssh.PublicKey) models.SSHRootKey {
+	if key == nil {
+		return models.SSHRootKey{}
 	}
+
+	fingerprint := sha256.Sum256(key.Marshal())
+	return models.SSHRootKey{
+		PublicKey:   strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key))),
+		KeyType:     key.Type(),
+		Fingerprint: "SHA256:" + base64.RawStdEncoding.EncodeToString(fingerprint[:]),
+	}
+}
+
+func copyStringMap(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
