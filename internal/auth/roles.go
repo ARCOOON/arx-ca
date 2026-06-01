@@ -105,15 +105,13 @@ func ParseRoles(raw string) []Role {
 	return out
 }
 
-// RolesForAdmin returns roles assigned to the given admin username.
-func RolesForAdmin(username string) []Role {
-	if username == BootstrapAdminUsername {
-		if roles := ParseRoles(os.Getenv("CA_API_BOOTSTRAP_ROLES")); len(roles) > 0 {
-			return roles
-		}
-		return []Role{RoleSuperAdmin}
-	}
+// RolesForAdmin returns roles assigned to the given admin email when not stored in the database.
+func RolesForAdmin(email string) []Role {
+	_ = email
 	if roles := ParseRoles(os.Getenv("CA_API_ADMIN_ROLES")); len(roles) > 0 {
+		return roles
+	}
+	if roles := ParseRoles(os.Getenv("CA_API_BOOTSTRAP_ROLES")); len(roles) > 0 {
 		return roles
 	}
 	return []Role{RoleSuperAdmin}
