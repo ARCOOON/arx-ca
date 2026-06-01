@@ -25,7 +25,7 @@ cmd/arx/main.go
             └── agent    (local machine operations)
 ```
 
-There are no separate `arx-ca-server`, `arx-ca-cli`, or `arx-cert-service` binaries. Systemd units and documentation refer to the same `arx` executable with subcommands (for example `ExecStart=/usr/local/bin/arx server start --config /etc/arx-ca/server.yaml`).
+There are no separate `arx-ca-server`, `arx-ca-cli`, or `arx-cert-service` binaries. Production deployment uses the **self-installing binary** pattern: `sudo arx server service install` copies the running executable to `/opt/arx/arx`, bootstraps `server.yaml`, and registers `arx-server.service` with `ExecStart=/opt/arx/arx server start --config /opt/arx/server.yaml`.
 
 ## Cobra command tree
 
@@ -57,6 +57,19 @@ arx server start [--config path]
 ```
 
 `server` uses `PersistentPreRunE` to load `server.yaml` via Viper, except for `server config *` and `server service *` (config generation and systemd do not require an existing server config).
+
+### Self-installing binary (Linux)
+
+`internal/server/service` implements `arx server service install|uninstall`:
+
+| Step | `install` | `uninstall` |
+| ---- | --------- | ----------- |
+| Privilege | root (`EUID == 0`) | root |
+| Filesystem | `/opt/arx` (default): copy binary, `config init`, `chown` | `os.RemoveAll(installDir)` |
+| Identity | `useradd --system` for `arx-ca` (default) | `userdel` |
+| systemd | `arx-server.service` with `ProtectSystem=full`, `ExecStartPre` chown/chmod | stop, disable, remove unit |
+
+The unit’s `ExecStartPre=+` hooks re-apply ownership and modes on every start so edits to `server.yaml` with `sudo` do not leave root-owned files that block the service user.
 
 `server start` registers routes in `internal/cmd/arx/server_start.go`, mounts ACME at `/acme/` when the ACME provisioner is active, and handles graceful shutdown on `SIGINT`/`SIGTERM`.
 

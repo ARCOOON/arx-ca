@@ -120,19 +120,61 @@ Missing config:
 No configuration file found at ... Run 'arx server config init' to generate one.
 ```
 
-### `arx server service install` / `uninstall`
+### `arx server service install`
 
-Linux only, root required. Installs `/etc/systemd/system/arx-ca-server.service` with:
+Linux only. **Must run as root** (`sudo`). Implements the **self-installing binary** pattern: the running `arx` executable is copied to `--install-dir` (default `/opt/arx/arx`), configuration is bootstrapped, ownership is applied, and a hardened `arx-server` systemd unit is enabled and started.
 
-```ini
-ExecStart=<arx-binary> server start --config <server.yaml>
+```bash
+sudo ./bin/arx server service install
+sudo ./bin/arx server service install --run-as-user arx-ca --install-dir /opt/arx
 ```
 
-Success:
+| Flag | Default | Description |
+| ---- | ------- | ----------- |
+| `--run-as-user` | `arx-ca` | POSIX user for the service (created with `useradd --system` if missing) |
+| `--install-dir` | `/opt/arx` | Target directory for the binary and `server.yaml` |
+
+Install steps (in order):
+
+1. Ensure the `--run-as-user` account exists (`id`, else `useradd --system --no-create-home`).
+2. Create `--install-dir` with mode `0700`.
+3. Copy the current binary to `<install-dir>/arx` with mode `0700`.
+4. Run `<install-dir>/arx server config init` when `server.yaml` is absent.
+5. `chown -R` the install tree to the service user; `server.yaml` mode `0600`.
+6. Write `/etc/systemd/system/arx-server.service` (hardening + `ExecStartPre` permission self-heal).
+7. `systemctl daemon-reload`, `enable arx-server`, `restart arx-server`.
+
+Example success output:
 
 ```text
-arx CA server systemd service installed and started.
-Ensure the arx-ca user can read the executable, configuration file, and any paths referenced in server.yaml ...
+arx CA server installed and started.
+Service:  arx-server
+Binary:   /opt/arx/arx
+Config:   /opt/arx/server.yaml
+Edit server.yaml (JWT secret, bootstrap password hash) before production use.
+```
+
+If not root:
+
+```text
+service install must be executed as root
+```
+
+### `arx server service uninstall`
+
+Linux only. **Must run as root.** Stops and disables `arx-server`, removes the unit file, deletes `--install-dir`, and runs `userdel` for `--run-as-user`.
+
+```bash
+sudo ./bin/arx server service uninstall
+sudo ./bin/arx server service uninstall --install-dir /opt/arx --run-as-user arx-ca
+```
+
+Uses the same `--run-as-user` and `--install-dir` flags as `install` (same defaults).
+
+Example success output:
+
+```text
+arx CA server uninstalled.
 ```
 
 ---
