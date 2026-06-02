@@ -203,7 +203,8 @@ func ResolveAgentConfigPath(configFlag string) (string, error) {
 	return agentConfigFilePath()
 }
 
-// InitAgentConfig loads or creates ~/.arx-cert-service/agent.yaml and binds it to Viper.
+// InitAgentConfig loads or creates agent.yaml (never server.yaml) and binds it to Viper.
+// The path is ~/.arx-cert-service/agent.yaml unless SetAgentConfigPath was called.
 func InitAgentConfig() error {
 	configPath, err := agentConfigFilePath()
 	if err != nil {
@@ -414,6 +415,15 @@ func normalizeAgentConfig(cfg AgentConfig) AgentConfig {
 	}
 	if strings.TrimSpace(cfg.Daemon.RenewThreshold) == "" {
 		cfg.Daemon.RenewThreshold = def.Daemon.RenewThreshold
+	}
+	for i := range cfg.Daemon.ManagedCerts {
+		m := &cfg.Daemon.ManagedCerts[i]
+		if strings.TrimSpace(m.Protocol) == "" {
+			m.Protocol = AgentProtocolAPI
+		}
+		if m.ProtocolName() == AgentProtocolACME && strings.TrimSpace(m.ChallengeType) == "" {
+			m.ChallengeType = AgentChallengeHTTP01
+		}
 	}
 	return cfg
 }

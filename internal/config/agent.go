@@ -1,14 +1,33 @@
 package config
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+const (
+	AgentProtocolAPI  = "api"
+	AgentProtocolACME = "acme"
+
+	AgentChallengeHTTP01 = "http-01"
+)
 
 // ManagedCert describes a certificate file pair monitored and renewed by the agent daemon.
 type ManagedCert struct {
+	Protocol string `mapstructure:"protocol" yaml:"protocol,omitempty"`
+
 	CertPath   string `mapstructure:"cert_path" yaml:"cert_path"`
 	KeyPath    string `mapstructure:"key_path" yaml:"key_path"`
-	Template   string `mapstructure:"template" yaml:"template"`
+	Template   string `mapstructure:"template" yaml:"template,omitempty"`
 	CommonName string `mapstructure:"common_name" yaml:"common_name"`
 	PostHook   string `mapstructure:"post_hook" yaml:"post_hook,omitempty"`
+
+	ACMEDirectoryURL    string `mapstructure:"acme_directory_url" yaml:"acme_directory_url,omitempty"`
+	ACMEEmail           string `mapstructure:"acme_email" yaml:"acme_email,omitempty"`
+	ChallengeType       string `mapstructure:"challenge_type" yaml:"challenge_type,omitempty"`
+	Webroot             string `mapstructure:"webroot" yaml:"webroot,omitempty"`
+	ChallengeListenPort int    `mapstructure:"challenge_listen_port" yaml:"challenge_listen_port,omitempty"`
 }
 
 // AgentDaemonConfig controls the long-running certificate renewal loop.
@@ -31,6 +50,100 @@ func DefaultAgentConfig() AgentConfig {
 			RenewThreshold: "720h",
 			ManagedCerts:   nil,
 		},
+	}
+}
+
+// TemplateAgentConfig returns a starter configuration with API and ACME examples.
+func TemplateAgentConfig() AgentConfig {
+	return AgentConfig{
+		Daemon: AgentDaemonConfig{
+			CheckInterval:  "24h",
+			RenewThreshold: "720h",
+			ManagedCerts: []ManagedCert{
+				{
+					Protocol:   AgentProtocolAPI,
+					CertPath:   "/etc/nginx/ssl/app.pem",
+					KeyPath:    "/etc/nginx/ssl/app-key.pem",
+					Template:   "web-server",
+					CommonName: "app.internal.example",
+					PostHook:   "systemctl reload nginx",
+				},
+				{
+					Protocol:            AgentProtocolACME,
+					CertPath:            "/etc/nginx/ssl/acme-app.pem",
+					KeyPath:             "/etc/nginx/ssl/acme-app-key.pem",
+					CommonName:          "app.example.com",
+					ACMEDirectoryURL:    "https://ca.example.com/acme/directory",
+					ACMEEmail:           "admin@example.com",
+					ChallengeType:       AgentChallengeHTTP01,
+					Webroot:             "/var/www/html",
+					ChallengeListenPort: 0,
+					PostHook:            "systemctl reload nginx",
+				},
+			},
+		},
+	}
+}
+
+// ProtocolName returns the normalized renewal protocol ("api" or "acme").
+func (m ManagedCert) ProtocolName() string {
+	switch strings.ToLower(strings.TrimSpace(m.Protocol)) {
+	case AgentProtocolACME:
+		return AgentProtocolACME
+	default:
+		return AgentProtocolAPI
+	}
+}
+
+// ChallengeTypeName returns the normalized ACME challenge type.
+func (m ManagedCert) ChallengeTypeName() string {
+	ch := strings.ToLower(strings.TrimSpace(m.ChallengeType))
+	if ch == "" {
+		return AgentChallengeHTTP01
+	}
+	return ch
+}
+
+// Validate checks managed certificate settings for the configured protocol.
+func (m ManagedCert) Validate() error {
+	certPath := strings.TrimSpace(m.CertPath)
+	keyPath := strings.TrimSpace(m.KeyPath)
+	commonName := strings.TrimSpace(m.CommonName)
+
+	if certPath == "" {
+		return fmt.Errorf("cert_path is required")
+	}
+	if keyPath == "" {
+		return fmt.Errorf("key_path is required")
+	}
+	if commonName == "" {
+		return fmt.Errorf("common_name is required")
+	}
+
+	switch m.ProtocolName() {
+	case AgentProtocolAPI:
+		return nil
+	case AgentProtocolACME:
+		if strings.TrimSpace(m.ACMEDirectoryURL) == "" {
+			return fmt.Errorf("acme_directory_url is required when protocol is acme")
+		}
+		if strings.TrimSpace(m.ACMEEmail) == "" {
+			return fmt.Errorf("acme_email is required when protocol is acme")
+		}
+		ch := m.ChallengeTypeName()
+		if ch != AgentChallengeHTTP01 {
+			return fmt.Errorf("unsupported challenge_type %q (only http-01 is supported)", ch)
+		}
+		webroot := strings.TrimSpace(m.Webroot)
+		if webroot == "" && m.ChallengeListenPort <= 0 {
+			return fmt.Errorf("either webroot or challenge_listen_port must be set for http-01")
+		}
+		if webroot != "" && m.ChallengeListenPort > 0 {
+			return fmt.Errorf("webroot and challenge_listen_port are mutually exclusive")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported protocol %q (use api or acme)", m.Protocol)
 	}
 }
 
