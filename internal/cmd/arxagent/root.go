@@ -18,6 +18,7 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	root.AddCommand(
+		newConfigCmd(),
 		newDaemonCmd(),
 		newRunCmd(),
 		newEnrollCmd(),

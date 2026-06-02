@@ -16,7 +16,9 @@ func newDaemonCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "daemon",
 		Short: "Run a long-lived renewal loop for managed certificates",
-		Long:  "Monitors certificate files configured in agent.yaml, renews them through the CA API when their TTL falls below the configured threshold, and optionally runs post-renewal shell hooks.",
+		Long: `Monitors certificate files configured in agent.yaml. When remaining TTL falls below
+renew_threshold, renews each entry using its protocol: native API (protocol: api) or
+ACMEv2 client (protocol: acme). Optional post_hook shell commands run after success.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runAgentDaemon(configPath)
 		},
@@ -31,7 +33,8 @@ func newRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the renewal daemon (alias for daemon)",
-		Long:  "Same as arx-agent daemon. Intended for systemd ExecStart and production service units.",
+		Long: `Same as arx-agent daemon. Intended for systemd ExecStart and production service units.
+Supports API and ACME renewal protocols configured per managed_certs entry.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runAgentDaemon(configPath)
 		},
