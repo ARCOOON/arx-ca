@@ -20,7 +20,7 @@ The default server deployment needs no external database: application state (adm
 | **REST API** | X.509 issuance, revocation, OCSP, templates, SSH CA, enrollment status |
 | **Enrollment protocols** | SCEP and NDES when configured in `ca.json` |
 | **Stateful CLI** | `arx login --url` persists the CA base URL in `~/.arx/cli.yaml` and the JWT in `~/.arx/config.json` |
-| **Agent renewal daemon** | `arx-agent run` monitors local PEM files and renews certificates before expiry via `agent.yaml` |
+| **Agent renewal daemon** | `arx-agent run` renews local PEM files via `agent.yaml` using the native API or ACMEv2 client mode |
 | **Cross-platform CI** | GitHub Actions release pipeline builds both binaries with `CGO_ENABLED=0` |
 
 Works with standard ACME clients and reverse proxies (**Traefik**, **Caddy**, **Certbot**, and any RFC 8555 client). See [docs/acme.md](docs/acme.md).
@@ -153,15 +153,18 @@ Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows
 | `server.yaml` | Server bind, database, CA paths, security, bootstrap, telemetry, optional `service` block (beside `arx`, or `--config`) |
 | `~/.arx/cli.yaml` | CLI defaults: `server_url`, `log_level` (mode `0600`, dir `0700`) |
 | `~/.arx/config.json` | Saved JWT session after `arx login` (used by `arx-agent enroll` / `run` when renewing) |
-| `~/.arx-cert-service/agent.yaml` | Renewal daemon: `check_interval`, `renew_threshold`, `managed_certs` |
+| `~/.arx-cert-service/agent.yaml` | Agent-only renewal daemon config (`protocol: api` or `acme` per cert); see [docs/agent.md](docs/agent.md) |
 | `.pki/` | Root/intermediate certs, `ca.json`, step-ca Badger certificate DB |
 | `arx.db` | Application SQLite DB (default path relative to `server.yaml` directory) |
 
 ```bash
 ./bin/arx server config init
 ./bin/arx server start --config /etc/arx/server.yaml
+./bin/arx-agent config init
 ./bin/arx-agent run --config /opt/arx-agent/agent.yaml
 ```
+
+Each `managed_certs` entry selects **`protocol: api`** (Arx REST API + `arx login`) or **`protocol: acme`** (RFC 8555 client with HTTP-01). Examples: [docs/agent.md](docs/agent.md).
 
 Optional `service` block in `server.yaml` for IaC and `arx server service install`:
 
@@ -198,7 +201,7 @@ Defaults: user `arx-ca`, install dir `/opt/arx`. CLI flags `--run-as-user` and `
 
 Defaults: user `arx-agent`, install dir `/opt/arx-agent`. The unit runs `arx-agent run --config <install-dir>/agent.yaml`.
 
-Before production renewal, run `arx login` on the agent host (or copy credentials) and configure `managed_certs` in `agent.yaml`.
+For **API** renewal entries, run `arx login` on the agent host (or copy credentials). For **ACME** entries, configure `acme_directory_url`, `acme_email`, and HTTP-01 `webroot` or `challenge_listen_port` — no JWT required. Run `arx-agent config init` for a commented template.
 
 Non-Linux platforms return an error from `service install` on both binaries.
 
@@ -239,6 +242,7 @@ Full table: [docs/api_reference.md](docs/api_reference.md). JSON envelope: `{ "d
 | -------- | -------- |
 | [docs/architecture.md](docs/architecture.md) | Split-binary layout, SQLite/CGO, systemd, DDD layers |
 | [docs/cli_reference.md](docs/cli_reference.md) | `arx` and `arx-agent` command reference |
+| [docs/agent.md](docs/agent.md) | `agent.yaml`, API vs ACME renewal |
 | [docs/acme.md](docs/acme.md) | ACME directory, challenge types |
 | [docs/api_reference.md](docs/api_reference.md) | HTTP endpoint reference |
 

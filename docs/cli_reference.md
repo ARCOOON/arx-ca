@@ -7,7 +7,7 @@ Arx ships two command-line binaries:
 | **`arx`** | Control plane — server lifecycle, admin authentication, certificate management, utilities |
 | **`arx-agent`** | Data plane — renewal daemon, local trust stores, public certificate access on client nodes |
 
-Both binaries load `~/.arx/cli.yaml` on startup when they need admin session state (`withCLIConfig`). Authenticate with **`arx login`** before running `arx-agent enroll` or `arx-agent run` / `daemon`.
+Both binaries load `~/.arx/cli.yaml` on startup when they need admin session state (`withCLIConfig`). Authenticate with **`arx login`** before `arx-agent enroll` or API-protocol (`protocol: api`) renewal entries. ACME-protocol entries do not require a JWT.
 
 ## Stateful CLI design
 
@@ -313,28 +313,59 @@ arx-agent enroll --domain example.local -u http://localhost:8080
 | `--ttl` | Certificate lifetime (e.g. `24h`, `720h`) |
 | `--url`, `-u` | Override server URL |
 
+## `arx-agent config init`
+
+Writes a template **`agent.yaml`** (agent-only; never `server.yaml`) with daemon defaults and example `managed_certs` entries for both API and ACME renewal.
+
+```bash
+arx-agent config init
+arx-agent config init --config /opt/arx-agent/agent.yaml --force
+```
+
+| Flag | Description |
+| ---- | ----------- |
+| `--config` | Output path (default: `~/.arx-cert-service/agent.yaml`) |
+| `--force` | Overwrite an existing file |
+
+Full field reference: [agent.md](agent.md).
+
 ## `arx-agent daemon` and `arx-agent run`
 
-Runs a blocking renewal loop for certificates listed in `agent.yaml`. On each check interval the agent reads local PEM files, compares remaining TTL against `renew_threshold`, and when renewal is needed calls `POST /api/v1/certificates/auto` with the stored admin JWT. Renewed PEM files are written with mode `0600`; optional `post_hook` shell commands run after a successful renewal (for example `systemctl reload nginx`).
+Runs a blocking renewal loop for certificates listed in `agent.yaml`. On each check interval the agent reads local PEM files, compares remaining TTL against `renew_threshold`, and renews entries that are due.
 
-Requires a prior `arx login`. The daemon logs to stderr via `slog`. **`run`** is an alias intended for systemd (`ExecStart`).
+| `protocol` | Behavior |
+| ---------- | -------- |
+| `api` (default) | `POST /api/v1/certificates/auto` with the admin JWT from `arx login` |
+| `acme` | RFC 8555 ACME client (`golang.org/x/crypto/acme`) with HTTP-01 via `webroot` or a temporary listener |
+
+Renewed PEM files are written with mode `0600`; optional `post_hook` shell commands run after success. The daemon logs to stderr via `slog`. **`run`** is an alias intended for systemd (`ExecStart`).
 
 ```bash
 arx-agent daemon
 arx-agent run --config /opt/arx-agent/agent.yaml
 ```
 
-Example `agent.yaml`:
+Example `agent.yaml` (API + ACME):
 
 ```yaml
 daemon:
   check_interval: 24h
   renew_threshold: 720h
   managed_certs:
-    - cert_path: /etc/nginx/ssl/app.pem
+    - protocol: api
+      cert_path: /etc/nginx/ssl/app.pem
       key_path: /etc/nginx/ssl/app-key.pem
       template: web-server
       common_name: app.internal
+      post_hook: systemctl reload nginx
+    - protocol: acme
+      cert_path: /etc/nginx/ssl/public.pem
+      key_path: /etc/nginx/ssl/public-key.pem
+      common_name: www.example.com
+      acme_directory_url: https://ca.example.com/acme/directory
+      acme_email: ops@example.com
+      challenge_type: http-01
+      webroot: /var/www/html
       post_hook: systemctl reload nginx
 ```
 
@@ -342,10 +373,16 @@ daemon:
 | ----- | ------- | ----------- |
 | `daemon.check_interval` | `24h` | How often the renewal loop wakes up |
 | `daemon.renew_threshold` | `720h` (30 days) | Renew when remaining certificate TTL is below this value |
+| `managed_certs[].protocol` | `api` | `api` or `acme` |
 | `managed_certs[].cert_path` | — | Path to the local certificate PEM file (required) |
 | `managed_certs[].key_path` | — | Path to the local private key PEM file (required) |
-| `managed_certs[].template` | — | Certificate template / profile name sent as `template_id` |
-| `managed_certs[].common_name` | — | Common Name requested from the CA (required) |
+| `managed_certs[].template` | — | API only: template / profile name (`template_id`) |
+| `managed_certs[].common_name` | — | Primary DNS name (required) |
+| `managed_certs[].acme_directory_url` | — | ACME only: directory URL |
+| `managed_certs[].acme_email` | — | ACME only: account contact email |
+| `managed_certs[].challenge_type` | `http-01` | ACME only: challenge type |
+| `managed_certs[].webroot` | — | ACME HTTP-01: webroot for challenge files |
+| `managed_certs[].challenge_listen_port` | `80` | ACME HTTP-01: standalone listener when `webroot` is empty |
 | `managed_certs[].post_hook` | — | Shell command executed after successful renewal |
 
 | Flag | Description |
@@ -466,6 +503,8 @@ arx
 
 ```text
 arx-agent
+├── config
+│   └── init [--config] [--force]
 ├── daemon [--config]
 ├── run [--config]
 ├── enroll --domain <name> [--ttl] [--url]
@@ -526,8 +565,9 @@ arx-agent enroll --domain app.internal --ttl 2160h
 ### Automated renewal daemon
 
 ```bash
-arx login --url http://localhost:8080
-# edit ~/.arx-cert-service/agent.yaml — add managed_certs entries
+arx-agent config init
+# edit ~/.arx-cert-service/agent.yaml — API entries need arx login; ACME entries do not
+arx login --url http://localhost:8080   # only for protocol: api
 arx-agent run
 ```
 
@@ -536,8 +576,9 @@ arx-agent run
 ```bash
 make build-agent
 sudo ./bin/arx-agent service install
+arx-agent config init --config /opt/arx-agent/agent.yaml --force   # optional template with examples
 # edit /opt/arx-agent/agent.yaml
-arx login --url https://ca.example.com   # on the agent host
+arx login --url https://ca.example.com   # API-protocol entries only
 sudo systemctl status arx-agent
 ```
 
@@ -546,5 +587,6 @@ sudo systemctl status arx-agent
 ## See also
 
 - [architecture.md](architecture.md) — persistence, systemd, and package layout
+- [agent.md](agent.md) — `agent.yaml` and renewal protocols
 - [acme.md](acme.md) — automated enrollment via ACME
 - [../README.md](../README.md) — quick start and API table
