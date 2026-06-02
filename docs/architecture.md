@@ -25,13 +25,13 @@ cmd/arx/main.go
             └── agent    (local machine operations)
 ```
 
-There are no separate `arx-ca-server`, `arx-ca-cli`, or `arx-cert-service` binaries. Production deployment uses the **self-installing binary** pattern: `sudo arx server service install` copies the running executable to `/opt/arx/arx`, bootstraps `server.yaml`, and registers `arx-server.service` with `ExecStart=/opt/arx/arx server start --config /opt/arx/server.yaml`.
+There are no separate `arx-ca-server`, `arx-ca-cli`, or `arx-cert-service` binaries. Production deployment uses the **self-installing binary** pattern: `sudo arx server setup` (interactive) or `sudo arx server service install` copies the running executable to `<install-dir>/arx` (default `/opt/arx`), bootstraps `server.yaml`, and registers `arx-server.service` with `ExecStart=/opt/arx/arx server start --config /opt/arx/server.yaml`. Install parameters can be declared in `server.yaml` under `service` for IaC.
 
 ## Cobra command tree
 
 | Top-level | Subcommands | Role |
 | --------- | ----------- | ---- |
-| `server` | `start`, `config init`, `service install\|uninstall` | Run CA API, generate `server.yaml`, manage systemd |
+| `server` | `start`, `config init`, `setup`, `service install\|uninstall` | Run CA API, generate `server.yaml`, guided or scripted systemd install |
 | `login` | — | Obtain admin JWT; persist URL and token |
 | `ui` | — | Interactive terminal admin UI (requires login) |
 | `cert` | `list`, `revoke <serial>` | Authenticated certificate management |
@@ -56,7 +56,7 @@ arx server start [--config path]
         └── net/http.ServeMux (Go 1.22 method patterns)
 ```
 
-`server` uses `PersistentPreRunE` to load `server.yaml` via Viper, except for `server config *` and `server service *` (config generation and systemd do not require an existing server config).
+`server` uses `PersistentPreRunE` to load `server.yaml` via Viper, except for `server config *`, `server setup`, and `server service *` (config generation and systemd do not require an existing server config at startup).
 
 ### Self-installing binary (Linux)
 

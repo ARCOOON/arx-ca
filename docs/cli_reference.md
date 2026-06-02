@@ -98,6 +98,30 @@ If the file exists and `--force` is omitted:
 Configuration already exists at ... Use --force to overwrite.
 ```
 
+### `arx server setup`
+
+Linux only. **Must run as root** (`sudo`). Interactive wizard that installs the **self-installing binary** pattern: copies the running executable, bootstraps `server.yaml`, registers `arx-server`, and starts the service. Declining the first prompt exits without changes.
+
+```bash
+sudo ./bin/arx server setup
+```
+
+Prompts (press Enter for defaults):
+
+1. `Install ARX Certificate Authority as a systemd service? [Y/n]:`
+2. `Service User [default: arx-ca]:`
+3. `Install Directory [default: /opt/arx]:`
+
+Invalid usernames or non-absolute install paths are rejected with a message and re-prompted.
+
+Uses the same install logic as `arx server service install` (not a subprocess). Success output matches `service install`.
+
+If not root:
+
+```text
+server setup must be executed as root
+```
+
 ### `arx server start`
 
 Starts the HTTP server. Requires an existing `server.yaml` (run `config init` first).
@@ -122,17 +146,21 @@ No configuration file found at ... Run 'arx server config init' to generate one.
 
 ### `arx server service install`
 
-Linux only. **Must run as root** (`sudo`). Implements the **self-installing binary** pattern: the running `arx` executable is copied to `--install-dir` (default `/opt/arx/arx`), configuration is bootstrapped, ownership is applied, and a hardened `arx-server` systemd unit is enabled and started.
+Linux only. **Must run as root** (`sudo`). Implements the **self-installing binary** pattern: the running `arx` executable is copied to `<install-dir>/arx`, configuration is bootstrapped, ownership is applied, and a hardened `arx-server` systemd unit is enabled and started.
+
+Prefer `arx server setup` for guided installation. For IaC, set `service.run_as_user` and `service.install_dir` in `server.yaml` (defaults are written by `config init`).
 
 ```bash
 sudo ./bin/arx server service install
 sudo ./bin/arx server service install --run-as-user arx-ca --install-dir /opt/arx
 ```
 
-| Flag | Default | Description |
-| ---- | ------- | ----------- |
-| `--run-as-user` | `arx-ca` | POSIX user for the service (created with `useradd --system` if missing) |
-| `--install-dir` | `/opt/arx` | Target directory for the binary and `server.yaml` |
+| Flag | Description |
+| ---- | ----------- |
+| `--run-as-user` | Overrides `service.run_as_user` in `server.yaml` when set |
+| `--install-dir` | Overrides `service.install_dir` in `server.yaml` when set |
+
+Resolution order when a flag is omitted: `server.yaml` `service` block, then `arx-ca` / `/opt/arx`.
 
 Install steps (in order):
 
@@ -169,7 +197,7 @@ sudo ./bin/arx server service uninstall
 sudo ./bin/arx server service uninstall --install-dir /opt/arx --run-as-user arx-ca
 ```
 
-Uses the same `--run-as-user` and `--install-dir` flags as `install` (same defaults).
+Uses the same `--run-as-user` and `--install-dir` flags and resolution order as `install`.
 
 Example success output:
 

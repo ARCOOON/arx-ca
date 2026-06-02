@@ -34,9 +34,20 @@ Works with standard ACME clients and reverse-proxy integrations (**Traefik**, **
 
 Deeper design notes: [docs/architecture.md](docs/architecture.md).
 
-## Quick Start (bare metal)
+## Quick Start (Linux production)
 
-Requires **Go 1.22+** (see `go.mod`) or a prebuilt `bin/arx`.
+Requires **Go 1.22+** (see `go.mod`) or a prebuilt `bin/arx`. On Linux with systemd, use the interactive installer (recommended):
+
+```bash
+make build
+sudo ./bin/arx server setup
+```
+
+The wizard copies the binary to `/opt/arx`, bootstraps `server.yaml`, registers `arx-server`, and starts the service. Edit `/opt/arx/server.yaml` before production use (JWT secret, bootstrap password hash).
+
+Non-interactive or IaC installs can set the optional `service` block in `server.yaml` (see [Configuration](#configuration)) and run `sudo ./bin/arx server service install`, or pass `--run-as-user` and `--install-dir` to override the file.
+
+## Quick Start (development)
 
 ```bash
 # Build
@@ -106,7 +117,7 @@ go build -trimpath -ldflags="-s -w" -o bin/arx ./cmd/arx
 
 | File | Purpose |
 | ---- | ------- |
-| `server.yaml` | Server bind, database, CA paths, security, bootstrap, telemetry (beside the `arx` binary, or `--config`) |
+| `server.yaml` | Server bind, database, CA paths, security, bootstrap, telemetry, optional `service` install settings (beside the `arx` binary, or `--config`) |
 | `~/.arx/cli.yaml` | CLI defaults: `server_url`, `log_level` (mode `0600`, dir `0700`) |
 | `~/.arx/config.json` | Saved JWT session after `arx login` |
 | `.pki/` | Root/intermediate certs, `ca.json`, step-ca Badger certificate DB |
@@ -120,6 +131,16 @@ Initialize server config explicitly (recommended):
 ./bin/arx server start --config /etc/arx-ca/server.yaml
 ```
 
+Optional `service` block (included in defaults from `config init`) for Infrastructure as Code and `server service install`:
+
+```yaml
+service:
+  run_as_user: arx-ca
+  install_dir: /opt/arx
+```
+
+CLI flags `--run-as-user` and `--install-dir` override these values when set. When flags are omitted and the fields are empty, install falls back to `arx-ca` and `/opt/arx`.
+
 Environment overrides use the `ARX_` prefix (Viper). Legacy `CA_API_*` and `OTEL_*` variables are populated from YAML when unset. Copy [.env.example](.env.example) for Docker Compose.
 
 ### PostgreSQL (optional)
@@ -128,24 +149,26 @@ Set `database.driver` to `postgres` (or `postgresql`) and provide host, credenti
 
 ## Production install (Linux, systemd)
 
-The `arx` binary is **self-installing**: it copies itself to `/opt/arx`, bootstraps `server.yaml`, registers a hardened `arx-server` systemd unit (with self-healing `ExecStartPre` permission fixes), and starts the service. No separate bash installer is required.
+The `arx` binary is **self-installing**: it copies itself under the install directory, bootstraps `server.yaml`, registers a hardened `arx-server` systemd unit (with self-healing `ExecStartPre` permission fixes), and starts the service. No separate bash installer is required.
 
 ```bash
-# Build, then install as root (from any path; the running binary is copied to /opt/arx/arx)
+# Interactive wizard (recommended)
 make build
-sudo ./bin/arx server service install
+sudo ./bin/arx server setup
 
-# Optional flags
+# Non-interactive: flags override server.yaml service.*, then defaults
+sudo ./bin/arx server service install
 sudo ./bin/arx server service install --run-as-user arx-ca --install-dir /opt/arx
 
-# Remove unit, /opt/arx, and the service user
+# Remove unit, install directory, and the service user
 sudo ./bin/arx server service uninstall
 ```
 
-| Flag | Default | Purpose |
-| ---- | ------- | ------- |
-| `--run-as-user` | `arx-ca` | System account that owns `/opt/arx` and runs the service |
-| `--install-dir` | `/opt/arx` | Install root (`arx` binary and `server.yaml`) |
+| Source | `run_as_user` | `install_dir` |
+| ------ | ------------- | ------------- |
+| CLI flags (when set) | `--run-as-user` | `--install-dir` |
+| `server.yaml` `service` block | `service.run_as_user` | `service.install_dir` |
+| Fallback | `arx-ca` | `/opt/arx` |
 
 After install, edit `/opt/arx/server.yaml` (JWT secret, bootstrap password hash). Check status with `systemctl status arx-server` and logs with `journalctl -u arx-server -f`.
 
