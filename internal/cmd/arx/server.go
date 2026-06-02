@@ -3,12 +3,10 @@ package arxcmd
 import (
 	"errors"
 	"log"
-	"os"
 
 	"github.com/spf13/cobra"
 
 	arxconfig "github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/server/service"
 )
 
 var serverConfigFlag string
@@ -44,6 +42,7 @@ func newServerCmd() *cobra.Command {
 	server.AddCommand(
 		newServerStartCmd(),
 		newServerConfigCmd(),
+		newServerSetupCmd(),
 		newServerServiceCmd(),
 	)
 
@@ -102,24 +101,19 @@ register a hardened arx-server systemd unit, and start the CA API. Requires root
 	}
 
 	addServiceFlags := func(cmd *cobra.Command) {
-		cmd.Flags().StringVar(&runAsUser, "run-as-user", "arx-ca", "POSIX account that runs the arx-server service")
-		cmd.Flags().StringVar(&installDir, "install-dir", "/opt/arx", "Directory where the binary and server.yaml are installed")
+		cmd.Flags().StringVar(&runAsUser, "run-as-user", "", "POSIX account that runs the arx-server service (overrides server.yaml service.run_as_user)")
+		cmd.Flags().StringVar(&installDir, "install-dir", "", "Install root for the binary and server.yaml (overrides server.yaml service.install_dir)")
 	}
 
 	install := &cobra.Command{
 		Use:   "install",
 		Short: "Install the arx binary, configuration, and arx-server systemd unit",
-		Run: func(_ *cobra.Command, _ []string) {
-			if os.Geteuid() != 0 {
-				log.Fatal("service install must be executed as root")
-			}
-			opts := service.InstallOptions{
-				RunAsUser:  runAsUser,
-				InstallDir: installDir,
-			}
-			if err := service.Install(opts); err != nil {
+		Run: func(cmd *cobra.Command, _ []string) {
+			opts, err := resolveServiceInstallOptions(cmd, runAsUser, installDir)
+			if err != nil {
 				log.Fatal(err)
 			}
+			runServerServiceInstall(opts)
 		},
 	}
 	addServiceFlags(install)
@@ -127,17 +121,12 @@ register a hardened arx-server systemd unit, and start the CA API. Requires root
 	uninstall := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Stop the arx-server unit and remove the install directory",
-		Run: func(_ *cobra.Command, _ []string) {
-			if os.Geteuid() != 0 {
-				log.Fatal("service uninstall must be executed as root")
-			}
-			opts := service.InstallOptions{
-				RunAsUser:  runAsUser,
-				InstallDir: installDir,
-			}
-			if err := service.Uninstall(opts); err != nil {
+		Run: func(cmd *cobra.Command, _ []string) {
+			opts, err := resolveServiceInstallOptions(cmd, runAsUser, installDir)
+			if err != nil {
 				log.Fatal(err)
 			}
+			runServerServiceUninstall(opts)
 		},
 	}
 	addServiceFlags(uninstall)
@@ -149,7 +138,7 @@ register a hardened arx-server systemd unit, and start the CA API. Requires root
 func skipsServerConfigInit(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "service", "config":
+		case "service", "config", "setup":
 			return true
 		}
 	}
