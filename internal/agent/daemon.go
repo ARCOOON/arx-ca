@@ -5,15 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
-	cliapi "github.com/your-org/arx-ca/internal/cli/api"
 	"github.com/your-org/arx-ca/internal/cli/runtime"
 	"github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/models"
 )
 
 // RunDaemon blocks and periodically checks managed certificates, renewing them
@@ -37,6 +33,12 @@ func RunDaemon(cfg *config.AgentConfig) error {
 	}
 	if renewThreshold <= 0 {
 		return fmt.Errorf("daemon.renew_threshold must be positive")
+	}
+
+	for i, managed := range cfg.Daemon.ManagedCerts {
+		if err := managed.Validate(); err != nil {
+			return fmt.Errorf("managed_certs[%d]: %w", i, err)
+		}
 	}
 
 	if len(cfg.Daemon.ManagedCerts) == 0 {
@@ -64,40 +66,33 @@ func RunDaemon(cfg *config.AgentConfig) error {
 func runCheck(cfg *config.AgentConfig, renewThreshold time.Duration) {
 	ctx := context.Background()
 
-	client, err := runtime.NewAuthenticatedClient("")
-	if err != nil {
-		slog.Error("daemon check skipped: failed to build authenticated client", "error", err)
-		return
-	}
+	var apiRenewer *APIRenewer
+	var acmeRenewer *ACMERenewer
 
 	for i, managed := range cfg.Daemon.ManagedCerts {
-		if err := checkManagedCert(ctx, client, managed, renewThreshold); err != nil {
+		if err := checkManagedCert(ctx, managed, renewThreshold, &apiRenewer, &acmeRenewer); err != nil {
 			slog.Error("managed certificate check failed",
 				"index", i,
 				"cert_path", managed.CertPath,
 				"common_name", managed.CommonName,
+				"protocol", managed.ProtocolName(),
 				"error", err,
 			)
 		}
 	}
 }
 
-func checkManagedCert(ctx context.Context, client *cliapi.Client, managed config.ManagedCert, renewThreshold time.Duration) error {
+func checkManagedCert(
+	ctx context.Context,
+	managed config.ManagedCert,
+	renewThreshold time.Duration,
+	apiRenewer **APIRenewer,
+	acmeRenewer **ACMERenewer,
+) error {
 	certPath := strings.TrimSpace(managed.CertPath)
-	keyPath := strings.TrimSpace(managed.KeyPath)
 	commonName := strings.TrimSpace(managed.CommonName)
 
-	if certPath == "" {
-		return fmt.Errorf("cert_path is required")
-	}
-	if keyPath == "" {
-		return fmt.Errorf("key_path is required")
-	}
-	if commonName == "" {
-		return fmt.Errorf("common_name is required")
-	}
-
-	ttl, err := GetCertTTL(certPath)
+	ttl, err := certTTLForRenewal(certPath)
 	if err != nil {
 		return err
 	}
@@ -105,6 +100,7 @@ func checkManagedCert(ctx context.Context, client *cliapi.Client, managed config
 	slog.Debug("certificate TTL evaluated",
 		"cert_path", certPath,
 		"common_name", commonName,
+		"protocol", managed.ProtocolName(),
 		"ttl", ttl,
 		"renew_threshold", renewThreshold,
 	)
@@ -121,71 +117,72 @@ func checkManagedCert(ctx context.Context, client *cliapi.Client, managed config
 	slog.Info("renewing certificate",
 		"cert_path", certPath,
 		"common_name", commonName,
+		"protocol", managed.ProtocolName(),
 		"ttl", ttl,
 		"renew_threshold", renewThreshold,
 	)
 
-	req := models.AutoCertificateRequest{
-		CommonName: commonName,
-		DNSSANs:    []string{commonName},
-		TemplateID: strings.TrimSpace(managed.Template),
-	}
-
-	resp, err := client.AutoCertificate(ctx, req)
+	renewer, err := renewerForManaged(managed, apiRenewer, acmeRenewer)
 	if err != nil {
-		return fmt.Errorf("request certificate: %w", err)
-	}
-	if strings.TrimSpace(resp.CertificatePEM) == "" {
-		return fmt.Errorf("renewal response did not include a certificate")
-	}
-	if strings.TrimSpace(resp.PrivateKeyPEM) == "" {
-		return fmt.Errorf("renewal response did not include a private key")
+		return err
 	}
 
-	if err := writePEMFile(certPath, resp.CertificatePEM); err != nil {
-		return fmt.Errorf("write certificate: %w", err)
-	}
-	if err := writePEMFile(keyPath, resp.PrivateKeyPEM); err != nil {
-		return fmt.Errorf("write private key: %w", err)
+	if err := renewer.Renew(ctx, managed); err != nil {
+		return err
 	}
 
 	slog.Info("certificate renewed",
 		"cert_path", certPath,
-		"key_path", keyPath,
+		"key_path", managed.KeyPath,
 		"common_name", commonName,
-		"serial", resp.Serial,
+		"protocol", managed.ProtocolName(),
 	)
 
 	hook := strings.TrimSpace(managed.PostHook)
-	if hook == "" {
-		return nil
+	if hook != "" {
+		slog.Info("post-renewal hook executed", "common_name", commonName, "hook", hook)
 	}
 
-	if err := runPostHook(hook); err != nil {
-		return fmt.Errorf("post-renewal hook failed: %w", err)
-	}
-
-	slog.Info("post-renewal hook executed", "common_name", commonName, "hook", hook)
 	return nil
 }
 
-func writePEMFile(path, pemContent string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create directory %s: %w", dir, err)
+func certTTLForRenewal(certPath string) (time.Duration, error) {
+	ttl, err := GetCertTTL(certPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			slog.Info("certificate file not found; scheduling issuance", "cert_path", certPath)
+			return 0, nil
+		}
+		return 0, err
 	}
-	if err := os.WriteFile(path, []byte(pemContent), 0o600); err != nil {
-		return fmt.Errorf("write file %s: %w", path, err)
-	}
-	return nil
+	return ttl, nil
 }
 
-func runPostHook(hook string) error {
-	cmd := exec.Command("sh", "-c", hook)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("execute hook %q: %w", hook, err)
+func renewerForManaged(
+	managed config.ManagedCert,
+	apiRenewer **APIRenewer,
+	acmeRenewer **ACMERenewer,
+) (Renewer, error) {
+	switch managed.ProtocolName() {
+	case config.AgentProtocolACME:
+		if *acmeRenewer == nil {
+			*acmeRenewer = NewACMERenewer(nil)
+		}
+		return *acmeRenewer, nil
+	default:
+		if *apiRenewer == nil {
+			client, err := runtime.NewAuthenticatedClient("")
+			if err != nil {
+				return nil, fmt.Errorf("build authenticated API client: %w", err)
+			}
+			*apiRenewer = NewAPIRenewer(client)
+		}
+		return *apiRenewer, nil
 	}
-	return nil
 }
+
+// Ensure APIRenewer implements Renewer.
+var _ Renewer = (*APIRenewer)(nil)
+
+// Ensure ACMERenewer implements Renewer.
+var _ Renewer = (*ACMERenewer)(nil)

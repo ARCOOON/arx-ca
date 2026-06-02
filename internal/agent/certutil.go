@@ -3,6 +3,7 @@ package agent
 import (
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -13,6 +14,9 @@ import (
 func GetCertTTL(certPath string) (time.Duration, error) {
 	data, err := os.ReadFile(certPath)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, err
+		}
 		return 0, fmt.Errorf("read certificate %s: %w", certPath, err)
 	}
 
