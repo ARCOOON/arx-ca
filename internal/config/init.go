@@ -24,13 +24,18 @@ const (
 	serverConfigFileName = "server.yaml"
 	cliConfigDirName     = ".arx"
 	cliConfigFileName    = "cli.yaml"
+	agentConfigDirName   = ".arx-cert-service"
+	agentConfigFileName  = "agent.yaml"
 	serverEnvPrefix      = "ARX"
+	agentEnvPrefix       = "ARX_AGENT"
 )
 
 var (
 	activeServerConfig       ServerConfig
 	activeCLIConfig          CLIConfig
+	activeAgentConfig        AgentConfig
 	serverConfigPathOverride string
+	agentConfigPathOverride  string
 )
 
 // SetServerConfigPath forces server.yaml to load from an absolute path on the next InitServerConfig call.
@@ -180,6 +185,64 @@ func CLIConfigFromViper() CLIConfig {
 	return cfg
 }
 
+// SetAgentConfigPath forces agent.yaml to load from an absolute path on the next InitAgentConfig call.
+func SetAgentConfigPath(path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve agent config path: %w", err)
+	}
+	agentConfigPathOverride = abs
+	return nil
+}
+
+// ResolveAgentConfigPath returns the absolute agent.yaml path from an explicit flag or ~/.arx-cert-service/agent.yaml.
+func ResolveAgentConfigPath(configFlag string) (string, error) {
+	if strings.TrimSpace(configFlag) != "" {
+		return filepath.Abs(configFlag)
+	}
+	return agentConfigFilePath()
+}
+
+// InitAgentConfig loads or creates ~/.arx-cert-service/agent.yaml and binds it to Viper.
+func InitAgentConfig() error {
+	configPath, err := agentConfigFilePath()
+	if err != nil {
+		return err
+	}
+
+	defaults := DefaultAgentConfig()
+	if err := ensureYAMLConfigFile(configPath, defaults, 0o600); err != nil {
+		return err
+	}
+
+	viper.Reset()
+	v := viper.GetViper()
+	v.SetConfigFile(configPath)
+	v.SetConfigType("yaml")
+	v.SetEnvPrefix(agentEnvPrefix)
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+	applyAgentViperDefaults(v, defaults)
+
+	if err := v.ReadInConfig(); err != nil {
+		return fmt.Errorf("read agent config %s: %w", configPath, err)
+	}
+	if err := unmarshalAgentConfig(v, &activeAgentConfig); err != nil {
+		return fmt.Errorf("unmarshal agent config: %w", err)
+	}
+	activeAgentConfig = normalizeAgentConfig(activeAgentConfig)
+	return nil
+}
+
+// AgentConfigFromViper returns the active agent configuration after InitAgentConfig.
+func AgentConfigFromViper() AgentConfig {
+	cfg := activeAgentConfig
+	if err := unmarshalAgentConfig(viper.GetViper(), &cfg); err == nil {
+		cfg = normalizeAgentConfig(cfg)
+	}
+	return cfg
+}
+
 // ApplyServerRuntimeFromViper exports server.yaml values into CA_API_* and OTEL_* when unset.
 func ApplyServerRuntimeFromViper() {
 	cfg := ServerConfigFromViper()
@@ -244,6 +307,17 @@ func cliConfigFilePath() (string, error) {
 	return filepath.Join(home, cliConfigDirName, cliConfigFileName), nil
 }
 
+func agentConfigFilePath() (string, error) {
+	if agentConfigPathOverride != "" {
+		return agentConfigPathOverride, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve home directory: %w", err)
+	}
+	return filepath.Join(home, agentConfigDirName, agentConfigFileName), nil
+}
+
 func ensureYAMLConfigFile(path string, defaults any, fileMode os.FileMode) error {
 	if _, err := os.Stat(path); err == nil {
 		return nil
@@ -253,7 +327,7 @@ func ensureYAMLConfigFile(path string, defaults any, fileMode os.FileMode) error
 
 	dir := filepath.Dir(path)
 	dirPerm := os.FileMode(0o755)
-	if filepath.Base(dir) == cliConfigDirName {
+	if filepath.Base(dir) == cliConfigDirName || filepath.Base(dir) == agentConfigDirName {
 		dirPerm = 0o700
 	}
 	if err := os.MkdirAll(dir, dirPerm); err != nil {
@@ -320,6 +394,28 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 
 func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
 	v.SetDefault("log_level", d.LogLevel)
+}
+
+func unmarshalAgentConfig(v *viper.Viper, cfg *AgentConfig) error {
+	return v.Unmarshal(cfg, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+	)))
+}
+
+func applyAgentViperDefaults(v *viper.Viper, d AgentConfig) {
+	v.SetDefault("daemon.check_interval", d.Daemon.CheckInterval)
+	v.SetDefault("daemon.renew_threshold", d.Daemon.RenewThreshold)
+}
+
+func normalizeAgentConfig(cfg AgentConfig) AgentConfig {
+	def := DefaultAgentConfig()
+	if strings.TrimSpace(cfg.Daemon.CheckInterval) == "" {
+		cfg.Daemon.CheckInterval = def.Daemon.CheckInterval
+	}
+	if strings.TrimSpace(cfg.Daemon.RenewThreshold) == "" {
+		cfg.Daemon.RenewThreshold = def.Daemon.RenewThreshold
+	}
+	return cfg
 }
 
 func normalizeServerConfig(cfg ServerConfig) ServerConfig {
