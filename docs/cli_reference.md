@@ -1,6 +1,13 @@
 # CLI Reference
 
-The **arx** binary is the unified operator interface: server lifecycle, admin authentication, certificate management, utilities, and a local **agent** for trust stores and public certificate access. Commands that call the admin API load `~/.arx/cli.yaml` on startup via `withCLIConfig`.
+Arx ships two command-line binaries:
+
+| Binary | Role |
+| ------ | ---- |
+| **`arx`** | Control plane — server lifecycle, admin authentication, certificate management, utilities |
+| **`arx-agent`** | Data plane — renewal daemon, local trust stores, public certificate access on client nodes |
+
+Both binaries load `~/.arx/cli.yaml` on startup when they need admin session state (`withCLIConfig`). Authenticate with **`arx login`** before running `arx-agent enroll` or `arx-agent run` / `daemon`.
 
 ## Stateful CLI design
 
@@ -56,7 +63,7 @@ Expires: 2026-06-02T12:00:00Z
 Roles: SuperAdmin
 ```
 
-Commands that require authentication (`ui`, `cert`, `agent enroll`, `agent daemon`) call `NewAuthenticatedClient` and fail with `not logged in; run arx login first` when no token is present.
+Commands that require authentication (`ui`, `cert`, `arx-agent enroll`, `arx-agent run`, `arx-agent daemon`) call `NewAuthenticatedClient` and fail with `not logged in; run arx login first` when no token is present.
 
 ### Login flags
 
@@ -74,7 +81,7 @@ Interactive login (TTY) may prompt for server URL (if not fully non-interactive)
 
 - Run `arx <command> --help` for subcommand-specific flags.
 - `arx server` accepts persistent `--config` for `server.yaml` location (except `config`, `setup`, and `service` subcommands).
-- Examples use `bin/arx` after `make build`.
+- Examples use `bin/arx` and `bin/arx-agent` after `make build-all`.
 
 ---
 
@@ -289,15 +296,15 @@ arx hash 'MySecureAdminPassword!'
 
 ---
 
-## `arx agent`
+# arx-agent (data plane)
 
-Local certificate inspection, trust installation, public catalog download, and optional enrollment. **Does not download private keys from the server** except via `agent enroll`, which calls `POST /api/v1/certificates/auto` with the admin JWT and stores key material under `~/.arx-cert-service/enrolled/`.
+The **`arx-agent`** binary handles local certificate operations and renewal. It does not embed the CA API, database, or ACME server. **Does not download private keys from the server** except via `enroll`, which calls `POST /api/v1/certificates/auto` with the admin JWT and stores key material under `~/.arx-cert-service/enrolled/`.
 
-### `arx agent enroll`
+## `arx-agent enroll`
 
 ```bash
-arx agent enroll --domain example.local --ttl 720h
-arx agent enroll --domain example.local -u http://localhost:8080
+arx-agent enroll --domain example.local --ttl 720h
+arx-agent enroll --domain example.local -u http://localhost:8080
 ```
 
 | Flag | Description |
@@ -306,15 +313,15 @@ arx agent enroll --domain example.local -u http://localhost:8080
 | `--ttl` | Certificate lifetime (e.g. `24h`, `720h`) |
 | `--url`, `-u` | Override server URL |
 
-### `arx agent daemon`
+## `arx-agent daemon` and `arx-agent run`
 
-Runs a blocking renewal loop for certificates listed in `~/.arx-cert-service/agent.yaml`. On each check interval the agent reads local PEM files, compares remaining TTL against `renew_threshold`, and when renewal is needed calls `POST /api/v1/certificates/auto` with the stored admin JWT. Renewed PEM files are written with mode `0600`; optional `post_hook` shell commands run after a successful renewal (for example `systemctl reload nginx`).
+Runs a blocking renewal loop for certificates listed in `agent.yaml`. On each check interval the agent reads local PEM files, compares remaining TTL against `renew_threshold`, and when renewal is needed calls `POST /api/v1/certificates/auto` with the stored admin JWT. Renewed PEM files are written with mode `0600`; optional `post_hook` shell commands run after a successful renewal (for example `systemctl reload nginx`).
 
-Requires a prior `arx login`. The daemon logs to stderr via `slog`.
+Requires a prior `arx login`. The daemon logs to stderr via `slog`. **`run`** is an alias intended for systemd (`ExecStart`).
 
 ```bash
-arx agent daemon
-arx agent daemon --config /etc/arx/agent.yaml
+arx-agent daemon
+arx-agent run --config /opt/arx-agent/agent.yaml
 ```
 
 Example `agent.yaml`:
@@ -347,26 +354,26 @@ daemon:
 
 Environment overrides use prefix `ARX_AGENT_` (for example `ARX_AGENT_DAEMON_CHECK_INTERVAL=12h`).
 
-### `arx agent local list`
+## `arx-agent local list`
 
 ```bash
-arx agent local list
-arx agent local list --store system --store user
+arx-agent local list
+arx-agent local list --store system --store user
 ```
 
 | Flag | Description |
 | ---- | ----------- |
 | `--store` | Filter: `system`, `user`, `browser` (repeatable) |
 
-### `arx agent local view <id>`
+## `arx-agent local view <id>`
 
 ```bash
-arx agent local view ABCD1234
+arx-agent local view ABCD1234
 ```
 
 Shows thumbprint, store, subject, issuer, serial, validity, and DNS names.
 
-### `arx agent trust`
+## `arx-agent trust`
 
 | Command | Description |
 | ------- | ----------- |
@@ -377,19 +384,49 @@ Shows thumbprint, store, subject, issuer, serial, validity, and DNS names.
 
 `--url` on install commands is persisted to agent config when set.
 
-### `arx agent cert list`
+## `arx-agent cert list`
 
 Public read-only catalog (no admin JWT).
 
 ```bash
-arx agent cert list --url http://localhost:8080
+arx-agent cert list --url http://localhost:8080
 ```
 
-### `arx agent cert download`
+## `arx-agent cert download`
 
 ```bash
-arx agent cert download --url http://localhost:8080 --kind root -o root.pem
-arx agent cert download --serial <hex> --kind leaf -o leaf.pem
+arx-agent cert download --url http://localhost:8080 --kind root -o root.pem
+arx-agent cert download --serial <hex> --kind leaf -o leaf.pem
+```
+
+## `arx-agent service install`
+
+Linux only. **Must run as root** (`sudo`). Copies the running `arx-agent` executable to `/opt/arx-agent/arx-agent` (by default), bootstraps `agent.yaml`, writes `arx-agent.service`, and starts the renewal daemon via `arx-agent run`.
+
+```bash
+sudo ./bin/arx-agent service install
+sudo ./bin/arx-agent service install --run-as-user arx-agent --install-dir /opt/arx-agent
+```
+
+| Flag | Description |
+| ---- | ----------- |
+| `--run-as-user` | POSIX account for the service (default: `arx-agent`) |
+| `--install-dir` | Install root for binary and `agent.yaml` (default: `/opt/arx-agent`) |
+
+Example success output:
+
+```text
+arx-agent installed and started.
+Service:  arx-agent
+Binary:   /opt/arx-agent/arx-agent
+Config:   /opt/arx-agent/agent.yaml
+Edit agent.yaml (managed_certs, thresholds) and ensure admin credentials are available for renewal.
+```
+
+## `arx-agent service uninstall`
+
+```bash
+sudo ./bin/arx-agent service uninstall
 ```
 
 | Flag | Values |
@@ -401,7 +438,9 @@ arx agent cert download --serial <hex> --kind leaf -o leaf.pem
 
 ---
 
-## Command tree (reference)
+## Command trees (reference)
+
+### `arx` (control plane)
 
 ```text
 arx
@@ -420,21 +459,30 @@ arx
 │   └── revoke <serial> [--url] [--reason]
 ├── util
 │   └── hash <password>
-├── hash <password>
-└── agent
-    ├── enroll --domain <name> [--ttl] [--url]
-    ├── daemon [--config]
-    ├── local
-    │   ├── list [--store ...]
-    │   └── view <id>
-    ├── trust
-    │   ├── install-root [--url]
-    │   ├── install-intermediate [--url]
-    │   ├── uninstall-root
-    │   └── uninstall-intermediate
-    └── cert
-        ├── list [--url]
-        └── download [--url] [--kind] [--serial] [-o]
+└── hash <password>
+```
+
+### `arx-agent` (data plane)
+
+```text
+arx-agent
+├── daemon [--config]
+├── run [--config]
+├── enroll --domain <name> [--ttl] [--url]
+├── local
+│   ├── list [--store ...]
+│   └── view <id>
+├── trust
+│   ├── install-root [--url]
+│   ├── install-intermediate [--url]
+│   ├── uninstall-root
+│   └── uninstall-intermediate
+├── cert
+│   ├── list [--url]
+│   └── download [--url] [--kind] [--serial] [-o]
+└── service
+    ├── install [--run-as-user] [--install-dir]
+    └── uninstall [--run-as-user] [--install-dir]
 ```
 
 ---
@@ -464,15 +512,15 @@ make build
 ### Trust the CA on a workstation
 
 ```bash
-arx agent trust install-root --url http://localhost:8080
-arx agent trust install-intermediate --url http://localhost:8080
+arx-agent trust install-root --url http://localhost:8080
+arx-agent trust install-intermediate --url http://localhost:8080
 ```
 
 ### Enroll a leaf cert (admin JWT)
 
 ```bash
 arx login --url http://localhost:8080
-arx agent enroll --domain app.internal --ttl 2160h
+arx-agent enroll --domain app.internal --ttl 2160h
 ```
 
 ### Automated renewal daemon
@@ -480,7 +528,17 @@ arx agent enroll --domain app.internal --ttl 2160h
 ```bash
 arx login --url http://localhost:8080
 # edit ~/.arx-cert-service/agent.yaml — add managed_certs entries
-arx agent daemon
+arx-agent run
+```
+
+### Production agent install (systemd)
+
+```bash
+make build-agent
+sudo ./bin/arx-agent service install
+# edit /opt/arx-agent/agent.yaml
+arx login --url https://ca.example.com   # on the agent host
+sudo systemctl status arx-agent
 ```
 
 ---

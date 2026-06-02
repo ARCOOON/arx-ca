@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes how **arx** is structured in its enterprise form: one static binary, a Cobra command surface, domain-driven internal packages, dual persistence (application SQL + step-ca Badger), and a self-installing Linux deployment path.
+This document describes how **arx** and **arx-agent** are structured: two static binaries sharing internal packages, separate Cobra entrypoints, domain-driven internal packages, dual persistence on the server (application SQL + step-ca Badger), and self-installing Linux deployment paths for both the CA and the renewal agent.
 
 ## Design goals
 
@@ -10,25 +10,33 @@ This document describes how **arx** is structured in its enterprise form: one st
 4. **Separation of concerns** — HTTP handlers stay thin; business logic lives in services and the PKI engine; persistence is isolated in `internal/database` and repositories.
 5. **Future Web UI** — RESTful, stateless JSON API with a consistent `{ "data", "error" }` envelope.
 
-## Single-binary pattern
+## Split-binary pattern
 
-All capabilities compile into `cmd/arx`:
+Control plane and data plane compile from separate entrypoints but share libraries under `internal/`:
 
 ```
 cmd/arx/main.go
     └── internal/cmd/arx.NewRootCmd()
-            ├── server   (API process, config, setup, systemd)
+            ├── server   (API process, config, setup, arx-server systemd)
             ├── login    (admin auth → ~/.arx/)
             ├── ui       (admin TUI)
             ├── cert     (certificate admin API)
             ├── util     (helpers)
-            ├── hash     (bcrypt; alias of util hash)
-            └── agent    (local machine operations)
+            └── hash     (bcrypt; alias of util hash)
+
+cmd/arx-agent/main.go
+    └── internal/cmd/arxagent.NewRootCmd()
+            ├── daemon / run   (renewal loop)
+            ├── enroll         (admin JWT auto-issue)
+            ├── local          (OS cert stores)
+            ├── trust          (root/intermediate install)
+            ├── cert           (public catalog)
+            └── service        (arx-agent systemd self-install)
 ```
 
-There are no separate `arx-ca-server`, `arx-ca-cli`, or `arx-cert-service` binaries. Historical multi-binary layouts and bash-based installers are not part of the current distribution model.
+`arx-agent` does **not** link `internal/database`, `internal/ca`, `internal/api/handlers`, or `internal/acmeprotocol`, keeping the client binary small (~10 MB vs ~41 MB for `arx` in typical release builds).
 
-### Production deployment flow
+### CA server deployment flow
 
 ```
 Operator runs:  sudo ./arx server setup
@@ -52,6 +60,30 @@ Operator runs:  sudo ./arx server setup
 
 Install parameters can be declared in `server.yaml` under `service` for Infrastructure as Code, or supplied at install time via `--run-as-user` and `--install-dir`.
 
+### Renewal agent deployment flow
+
+```
+Operator runs:  sudo ./arx-agent service install
+                      │
+                      ▼
+        internal/agent/service.Install
+                      │
+        ┌─────────────┴─────────────┐
+        ▼                           ▼
+  Copy executable            EnsureAgentConfigFile
+  to /opt/arx-agent/arx-agent → /opt/arx-agent/agent.yaml
+        │                           │
+        └─────────────┬─────────────┘
+                      ▼
+        Write /etc/systemd/system/arx-agent.service
+        systemctl enable --now arx-agent
+                      │
+                      ▼
+        ExecStart=/opt/arx-agent/arx-agent run --config /opt/arx-agent/agent.yaml
+```
+
+Defaults: user `arx-agent`, install dir `/opt/arx-agent`. Override with `--run-as-user` and `--install-dir` at install time.
+
 ## Cobra command tree
 
 | Top-level | Subcommands | Role |
@@ -62,7 +94,17 @@ Install parameters can be declared in `server.yaml` under `service` for Infrastr
 | `cert` | `list`, `revoke <serial>` | Authenticated certificate management |
 | `util` | `hash <password>` | Administrative helpers |
 | `hash` | `<password>` | Top-level alias for `util hash` |
-| `agent` | `enroll`, `daemon`, `local`, `trust`, `cert` | Local stores, trust anchors, public certs, optional enroll, renewal daemon |
+
+**`arx-agent` binary:**
+
+| Top-level | Subcommands | Role |
+| --------- | ----------- | ---- |
+| `daemon` / `run` | `--config` | Renewal loop over `agent.yaml` (`run` is the systemd entrypoint) |
+| `enroll` | `--domain`, `--ttl`, `--url` | Issue and store a leaf cert via admin JWT |
+| `local` | `list`, `view <id>` | Inspect OS certificate stores |
+| `trust` | `install-root`, `install-intermediate`, uninstall variants | Local trust anchors |
+| `cert` | `list`, `download` | Public certificate catalog (no JWT) |
+| `service` | `install`, `uninstall` | Self-install `arx-agent.service` on Linux |
 
 ### Server command lifecycle
 
@@ -149,13 +191,12 @@ Setting **`CGO_ENABLED=0`** for release builds yields:
 | **Cross-compilation** | `GOOS`/`GOARCH` builds from Linux CI without cross-compilers |
 | **Reproducible CI** | Same flags in `Makefile` (`build-linux`, `build-windows`) and `.github/workflows/release.yml` |
 
-The release workflow builds four artifacts on tag push `v*`:
+The release workflow builds eight artifacts on tag push `v*`:
 
-- `arx-linux-amd64`, `arx-linux-arm64`
-- `arx-windows-amd64.exe`
-- `arx-darwin-arm64`
+- `arx-linux-amd64`, `arx-linux-arm64`, `arx-windows-amd64.exe`, `arx-darwin-arm64`
+- `arx-agent-linux-amd64`, `arx-agent-linux-arm64`, `arx-agent-windows-amd64.exe`, `arx-agent-darwin-arm64`
 
-Each step sets `CGO_ENABLED=0` explicitly before `go build -trimpath -ldflags="-s -w" -o … ./cmd/arx`.
+Each step sets `CGO_ENABLED=0` explicitly before `go build -trimpath -ldflags="-s -w" -o … ./cmd/arx` or `./cmd/arx-agent`.
 
 PostgreSQL deployments still benefit from static binaries; only the **server** needs network access to Postgres at runtime.
 
@@ -212,8 +253,10 @@ Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). ste
 | `internal/database` | SQL migrations, user seeding, ACME state store |
 | `internal/config` | `server.yaml`, `~/.arx/cli.yaml`, env bridging |
 | `internal/cli` | Admin HTTP client, login flow, Bubble Tea TUI |
-| `internal/agent` | OS certificate stores, trust installation, enroll helper |
-| `internal/server/service` | systemd unit render, binary copy, install/uninstall |
+| `internal/agent` | OS certificate stores, trust installation, renewal daemon |
+| `internal/cmd/arxagent` | Cobra surface for the `arx-agent` binary |
+| `internal/server/service` | `arx-server` systemd unit render, binary copy, install/uninstall |
+| `internal/agent/service` | `arx-agent` systemd unit render, binary copy, install/uninstall |
 
 ## ACME integration (summary)
 
