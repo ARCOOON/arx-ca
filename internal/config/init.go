@@ -314,6 +314,8 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("telemetry.exporter_endpoint", d.Telemetry.ExporterEndpoint)
 	v.SetDefault("telemetry.exporter_insecure", d.Telemetry.ExporterInsecure)
 	v.SetDefault("telemetry.sdk_disabled", d.Telemetry.SDKDisabled)
+	v.SetDefault("service.run_as_user", d.Service.RunAsUser)
+	v.SetDefault("service.install_dir", d.Service.InstallDir)
 }
 
 func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
