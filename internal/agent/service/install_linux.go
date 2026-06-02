@@ -76,7 +76,7 @@ func Install(opts InstallOptions) error {
 	fmt.Printf("Service:  %s\n", unitName)
 	fmt.Printf("Binary:   %s\n", destBinary)
 	fmt.Printf("Config:   %s\n", configPath)
-	fmt.Println("Edit agent.yaml (managed_certs, thresholds) and ensure admin credentials are available for renewal.")
+	fmt.Println("Edit agent.yaml (managed_certs, protocols, thresholds). Use API renewal with arx login, or ACME with acme_directory_url.")
 	return nil
 }
 
