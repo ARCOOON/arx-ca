@@ -9,11 +9,14 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/your-org/arx-ca/internal/agent"
 	agentenroll "github.com/your-org/arx-ca/internal/agent/enroll"
 	agentlocal "github.com/your-org/arx-ca/internal/agent/local"
 	agentserver "github.com/your-org/arx-ca/internal/agent/server"
 	agenttrust "github.com/your-org/arx-ca/internal/agent/trust"
 	"github.com/your-org/arx-ca/internal/cli/runtime"
+	arxconfig "github.com/your-org/arx-ca/internal/config"
+	"github.com/your-org/arx-ca/internal/logging"
 )
 
 func newAgentCmd() *cobra.Command {
@@ -25,6 +28,7 @@ func newAgentCmd() *cobra.Command {
 
 	agent.AddCommand(
 		newAgentEnrollCmd(),
+		newAgentDaemonCmd(),
 		newAgentLocalCmd(),
 		newAgentTrustCmd(),
 		newAgentCertCmd(),
@@ -72,6 +76,33 @@ func newAgentEnrollCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&serverURL, "url", "u", "", "Override the server URL")
 	cmd.Flags().StringVar(&ttl, "ttl", "", "Certificate lifetime (e.g. 24h, 720h)")
 	_ = cmd.MarkFlagRequired("domain")
+	return cmd
+}
+
+func newAgentDaemonCmd() *cobra.Command {
+	var configPath string
+
+	cmd := &cobra.Command{
+		Use:   "daemon",
+		Short: "Run a long-lived renewal loop for managed certificates",
+		Long:  "Monitors certificate files configured in agent.yaml, renews them through the CA API when their TTL falls below the configured threshold, and optionally runs post-renewal shell hooks.",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			logging.Configure(arxconfig.CLIConfigFromViper().LogLevel)
+
+			if strings.TrimSpace(configPath) != "" {
+				if err := arxconfig.SetAgentConfigPath(configPath); err != nil {
+					return err
+				}
+			}
+			if err := arxconfig.InitAgentConfig(); err != nil {
+				return err
+			}
+
+			cfg := arxconfig.AgentConfigFromViper()
+			return agent.RunDaemon(&cfg)
+		},
+	}
+	cmd.Flags().StringVar(&configPath, "config", "", "Path to agent.yaml (default: ~/.arx-cert-service/agent.yaml)")
 	return cmd
 }
 
