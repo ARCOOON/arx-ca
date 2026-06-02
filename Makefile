@@ -1,8 +1,10 @@
-.PHONY: all build build-linux build-windows build-fips clean test docker-build docker-up docker-down
+.PHONY: all build build-agent build-all build-linux build-linux-agent build-windows build-windows-agent build-fips clean test docker-build docker-up docker-down
 
 BINARY := arx
+AGENT_BINARY := arx-agent
 BIN_DIR := bin
 PKG := ./cmd/arx
+AGENT_PKG := ./cmd/arx-agent
 DOCKER_IMAGE := arx-ca:latest
 COMPOSE := docker compose
 LDFLAGS := -trimpath -ldflags="-s -w"
@@ -12,19 +14,33 @@ export GOFLAGS
 GO_LINUX := GOOS=linux GOARCH=amd64 CGO_ENABLED=0
 GO_WINDOWS := GOOS=windows GOARCH=amd64 CGO_ENABLED=0
 
-all: build
+all: build-all
 
 build:
 	@mkdir -p $(BIN_DIR)
 	go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(PKG)
 
+build-agent:
+	@mkdir -p $(BIN_DIR)
+	go build $(LDFLAGS) -o $(BIN_DIR)/$(AGENT_BINARY) $(AGENT_PKG)
+
+build-all: build build-agent
+
 build-linux:
 	@mkdir -p $(BIN_DIR)
 	$(GO_LINUX) go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(PKG)
 
+build-linux-agent:
+	@mkdir -p $(BIN_DIR)
+	$(GO_LINUX) go build $(LDFLAGS) -o $(BIN_DIR)/$(AGENT_BINARY) $(AGENT_PKG)
+
 build-windows:
 	@mkdir -p $(BIN_DIR)
 	$(GO_WINDOWS) go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY).exe $(PKG)
+
+build-windows-agent:
+	@mkdir -p $(BIN_DIR)
+	$(GO_WINDOWS) go build $(LDFLAGS) -o $(BIN_DIR)/$(AGENT_BINARY).exe $(AGENT_PKG)
 
 build-fips:
 	@mkdir -p $(BIN_DIR)
