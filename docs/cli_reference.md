@@ -1,26 +1,36 @@
 # CLI Reference
 
-The **arx** binary provides server lifecycle, admin authentication, certificate management, utilities, and a local **agent** for trust stores and public certificate access. Commands that talk to the API load `~/.arx/cli.yaml` on startup (`withCLIConfig`).
+The **arx** binary is the unified operator interface: server lifecycle, admin authentication, certificate management, utilities, and a local **agent** for trust stores and public certificate access. Commands that call the admin API load `~/.arx/cli.yaml` on startup via `withCLIConfig`.
 
 ## Stateful CLI design
 
-Admin and agent commands resolve the CA base URL and JWT from local files instead of requiring `--url` on every invocation.
+Admin commands resolve the CA base URL and JWT from local files instead of requiring `--url` on every invocation.
 
 ### Configuration files
 
 | File | Format | Permissions | Contents |
 | ---- | ------ | ----------- | -------- |
 | `~/.arx/cli.yaml` | YAML | file `0600`, dir `0700` | `server_url`, `log_level` |
-| `~/.arx/config.json` | JSON | file `0600`, dir `0700` | `server_url`, `token`, `token_type`, `expires_at`, `username` |
+| `~/.arx/config.json` | JSON | file `0600`, dir `0700` | `server_url`, `token`, `token_type`, `expires_at`, `email` |
 | `~/.arx-cert-service/config.json` | JSON | (agent) | `api_url` — updated when agent commands pass `--url` |
 
-`cli.yaml` is auto-created on first CLI use with default `log_level: info`. **`server_url` is not pre-populated**; set it with a successful login or an explicit flag.
+`cli.yaml` is created on first CLI use with default `log_level: info`. **`server_url` is not pre-populated** until you log in or pass `--url` on a command that persists it.
+
+### How `arx login --url` persists state
+
+On successful login (`internal/cli/login/login.go`):
+
+1. `POST /api/v1/auth/login` with `email` and `password` returns a JWT.
+2. Token and metadata are written to **`~/.arx/config.json`** (`config.Save`).
+3. **`server_url` is written to `~/.arx/cli.yaml`** via `config.SetCLIServerURL` (mode `0600`).
+
+Subsequent commands read `server_url` from Viper (`~/.arx/cli.yaml`) before falling back to `config.json`.
 
 ### URL resolution order
 
 `internal/cli/runtime.ResolveServerURL` applies this precedence:
 
-1. Non-empty `--url` / `-u` flag (when `PersistFlag` is true for commands like `ui` and `cert`, the URL is written back to config files)
+1. Non-empty `--url` / `-u` flag (when `PersistFlag` is true, the URL is written to `cli.yaml` and `config.json`, and optionally agent config)
 2. `server_url` from `~/.arx/cli.yaml` (Viper)
 3. `server_url` from `~/.arx/config.json` (saved at login)
 4. `api_url` from `~/.arx-cert-service/config.json` (only when `UseAgentState` is true — agent subcommands)
@@ -37,18 +47,12 @@ Server URL not configured. Please run 'arx login --url <URL>' first, or provide 
 arx login --url https://ca.example.com
 ```
 
-On success:
-
-1. `POST /api/v1/auth/login` returns a JWT.
-2. Token and metadata are written to `~/.arx/config.json`.
-3. `server_url` is updated in `~/.arx/cli.yaml` via `SetCLIServerURL`.
-
 Example success output:
 
 ```text
-Logged in as admin. Token saved to /home/user/.arx/config.json
+Logged in as admin@arx.local. Token saved to /home/user/.arx/config.json
 Expires: 2026-06-02T12:00:00Z
-Roles: admin
+Roles: SuperAdmin
 ```
 
 Commands that require authentication (`ui`, `cert`, `agent enroll`) call `NewAuthenticatedClient` and fail with `not logged in; run arx login first` when no token is present.
@@ -57,25 +61,31 @@ Commands that require authentication (`ui`, `cert`, `agent enroll`) call `NewAut
 
 | Flag | Description |
 | ---- | ----------- |
-| `--url`, `-u` | Server base URL (required for first login if not already configured) |
-| `--username` | Skip username prompt |
-| `--password` | Skip password prompt (automation only; avoid on shared systems) |
+| `--url`, `-u` | Server base URL; **persisted to `~/.arx/cli.yaml` on successful login** |
+| `--email` | Admin email (skips prompt; default bootstrap: `admin@arx.local`) |
+| `--password` | Admin password (skips prompt; automation only) |
 
-Interactive login (TTY) prompts for server URL (if not fully non-interactive), username, and password. Default bootstrap credentials are documented in [README.md](../README.md#bootstrap-admin).
+Interactive login (TTY) may prompt for server URL (if not fully non-interactive), email, and password.
 
 ---
 
 ## Global conventions
 
 - Run `arx <command> --help` for subcommand-specific flags.
-- Server subcommands accept persistent `--config` for `server.yaml` location.
-- Paths in examples assume `bin/arx` from `make build`.
+- `arx server` accepts persistent `--config` for `server.yaml` location (except `config`, `setup`, and `service` subcommands).
+- Examples use `bin/arx` after `make build`.
 
 ---
 
 ## `arx server`
 
-Manage the CA API process and its configuration.
+Manage the CA API process, configuration, interactive installation, and systemd lifecycle.
+
+Persistent flag (all subcommands except those that skip config init):
+
+| Flag | Description |
+| ---- | ----------- |
+| `--config` | Path to `server.yaml` (default: `server.yaml` beside the executable) |
 
 ### `arx server config init`
 
@@ -86,21 +96,19 @@ Writes a default `server.yaml` beside the executable (or next to the path given 
 ./bin/arx server config init --force
 ```
 
+| Flag | Description |
+| ---- | ----------- |
+| `--force` | Overwrite an existing configuration file |
+
 Success log:
 
 ```text
 Configuration successfully generated at /path/to/bin/server.yaml. Please edit it before starting the server.
 ```
 
-If the file exists and `--force` is omitted:
-
-```text
-Configuration already exists at ... Use --force to overwrite.
-```
-
 ### `arx server setup`
 
-Linux only. **Must run as root** (`sudo`). Interactive wizard that installs the **self-installing binary** pattern: copies the running executable, bootstraps `server.yaml`, registers `arx-server`, and starts the service. Declining the first prompt exits without changes.
+Linux only. **Must run as root** (`sudo`). Interactive wizard for the **self-installing binary** pattern: copies the running executable, bootstraps `server.yaml`, registers `arx-server`, and starts the service. Declining the first prompt exits without changes.
 
 ```bash
 sudo ./bin/arx server setup
@@ -112,9 +120,7 @@ Prompts (press Enter for defaults):
 2. `Service User [default: arx-ca]:`
 3. `Install Directory [default: /opt/arx]:`
 
-Invalid usernames or non-absolute install paths are rejected with a message and re-prompted.
-
-Uses the same install logic as `arx server service install` (not a subprocess). Success output matches `service install`.
+Uses the same install logic as `arx server service install` (in-process, not a subprocess). Success output matches `service install`.
 
 If not root:
 
@@ -128,7 +134,7 @@ Starts the HTTP server. Requires an existing `server.yaml` (run `config init` fi
 
 ```bash
 ./bin/arx server start
-./bin/arx server --config /etc/arx-ca/server.yaml start
+./bin/arx server --config /opt/arx/server.yaml start
 ```
 
 Startup log (when ACME is enabled):
@@ -146,9 +152,7 @@ No configuration file found at ... Run 'arx server config init' to generate one.
 
 ### `arx server service install`
 
-Linux only. **Must run as root** (`sudo`). Implements the **self-installing binary** pattern: the running `arx` executable is copied to `<install-dir>/arx`, configuration is bootstrapped, ownership is applied, and a hardened `arx-server` systemd unit is enabled and started.
-
-Prefer `arx server setup` for guided installation. For IaC, set `service.run_as_user` and `service.install_dir` in `server.yaml` (defaults are written by `config init`).
+Linux only. **Must run as root** (`sudo`). Non-interactive self-install: copies the running `arx` executable to `<install-dir>/arx`, bootstraps configuration, applies ownership, writes a hardened `arx-server` systemd unit (with `ExecStartPre` permission self-heal), and starts the service.
 
 ```bash
 sudo ./bin/arx server service install
@@ -160,16 +164,16 @@ sudo ./bin/arx server service install --run-as-user arx-ca --install-dir /opt/ar
 | `--run-as-user` | Overrides `service.run_as_user` in `server.yaml` when set |
 | `--install-dir` | Overrides `service.install_dir` in `server.yaml` when set |
 
-Resolution order when a flag is omitted: `server.yaml` `service` block, then `arx-ca` / `/opt/arx`.
+Resolution when a flag is omitted: `server.yaml` `service` block, then `arx-ca` / `/opt/arx`.
 
-Install steps (in order):
+Install steps:
 
-1. Ensure the `--run-as-user` account exists (`id`, else `useradd --system --no-create-home`).
-2. Create `--install-dir` with mode `0700`.
-3. Copy the current binary to `<install-dir>/arx` with mode `0700`.
+1. Ensure the service account exists (`id`, else `useradd --system --no-create-home`).
+2. Create install directory mode `0700`.
+3. Copy current binary to `<install-dir>/arx` mode `0700`.
 4. Run `<install-dir>/arx server config init` when `server.yaml` is absent.
-5. `chown -R` the install tree to the service user; `server.yaml` mode `0600`.
-6. Write `/etc/systemd/system/arx-server.service` (hardening + `ExecStartPre` permission self-heal).
+5. `chown -R` install tree to the service user; `server.yaml` mode `0600`.
+6. Write `/etc/systemd/system/arx-server.service`.
 7. `systemctl daemon-reload`, `enable arx-server`, `restart arx-server`.
 
 Example success output:
@@ -182,22 +186,14 @@ Config:   /opt/arx/server.yaml
 Edit server.yaml (JWT secret, bootstrap password hash) before production use.
 ```
 
-If not root:
-
-```text
-service install must be executed as root
-```
-
 ### `arx server service uninstall`
 
-Linux only. **Must run as root.** Stops and disables `arx-server`, removes the unit file, deletes `--install-dir`, and runs `userdel` for `--run-as-user`.
+Linux only. **Must run as root.** Stops and disables `arx-server`, removes the unit file, deletes the install directory, and runs `userdel` for the service user.
 
 ```bash
 sudo ./bin/arx server service uninstall
 sudo ./bin/arx server service uninstall --install-dir /opt/arx --run-as-user arx-ca
 ```
-
-Uses the same `--run-as-user` and `--install-dir` flags and resolution order as `install`.
 
 Example success output:
 
@@ -213,8 +209,10 @@ Authenticate as the bootstrap (or seeded) admin user.
 
 ```bash
 arx login --url http://localhost:8080
-arx login --url https://ca.example.com --username admin --password 'secret'
+arx login --url https://ca.example.com --email admin@arx.local --password 'secret'
 ```
+
+After success, use `arx ui` or `arx cert` without repeating `--url` unless you target a different CA.
 
 ---
 
@@ -247,12 +245,6 @@ SERIAL                          STATUS   SUBJECT                         NOT AFT
 a1b2c3d4...                     active   CN=example.local                2026-07-01
 ```
 
-Empty inventory:
-
-```text
-No issued certificates found.
-```
-
 ### `arx cert revoke <serial>`
 
 ```bash
@@ -265,28 +257,40 @@ Example output:
 Revoked a1b2c3d4e5f6 at 2026-06-01T15:04:05Z
 ```
 
+| Flag | Description |
+| ---- | ----------- |
+| `--url`, `-u` | Override server URL (persisted when set) |
+| `--reason` | Informational revocation reason |
+
 ---
 
-## `arx hash` / `arx util hash`
+## `arx util`
+
+Administrative helper commands.
+
+### `arx util hash <password>`
 
 Generate a bcrypt hash for `bootstrap.admin_password_hash` in `server.yaml`.
 
 ```bash
-arx hash 'MySecureAdminPassword!'
 arx util hash 'MySecureAdminPassword!'
 ```
 
-Example output (one line):
+---
 
-```text
-$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
+## `arx hash`
+
+Top-level alias for `arx util hash`.
+
+```bash
+arx hash 'MySecureAdminPassword!'
 ```
 
 ---
 
 ## `arx agent`
 
-Local certificate inspection, trust installation, public catalog download, and optional enrollment. **Does not download private keys from the server** except via `agent enroll`, which calls `POST /api/v1/certificates/auto` with the admin JWT and stores key material locally under `~/.arx-cert-service/enrolled/`.
+Local certificate inspection, trust installation, public catalog download, and optional enrollment. **Does not download private keys from the server** except via `agent enroll`, which calls `POST /api/v1/certificates/auto` with the admin JWT and stores key material under `~/.arx-cert-service/enrolled/`.
 
 ### `arx agent enroll`
 
@@ -295,12 +299,11 @@ arx agent enroll --domain example.local --ttl 720h
 arx agent enroll --domain example.local -u http://localhost:8080
 ```
 
-Success:
-
-```text
-Enrolled certificate for example.local (serial ...).
-Files saved under ~/.arx-cert-service/enrolled/
-```
+| Flag | Description |
+| ---- | ----------- |
+| `--domain` | DNS name for the issued certificate (required) |
+| `--ttl` | Certificate lifetime (e.g. `24h`, `720h`) |
+| `--url`, `-u` | Override server URL |
 
 ### `arx agent local list`
 
@@ -309,12 +312,9 @@ arx agent local list
 arx agent local list --store system --store user
 ```
 
-Example output:
-
-```text
-ID          STORE    LOCATION    SUBJECT              NOT AFTER
-ABCD1234... system   LocalMachine CN=Example CA        2030-01-01
-```
+| Flag | Description |
+| ---- | ----------- |
+| `--store` | Filter: `system`, `user`, `browser` (repeatable) |
 
 ### `arx agent local view <id>`
 
@@ -322,35 +322,18 @@ ABCD1234... system   LocalMachine CN=Example CA        2030-01-01
 arx agent local view ABCD1234
 ```
 
-Example output:
-
-```text
-Thumbprint: ABCD1234...
-Store:      system (LocalMachine)
-Subject:    CN=Example
-Issuer:     CN=Example Root
-Serial:     01
-Valid:      2024-01-01 — 2030-01-01
-Is CA:      false
-```
+Shows thumbprint, store, subject, issuer, serial, validity, and DNS names.
 
 ### `arx agent trust`
 
 | Command | Description |
 | ------- | ----------- |
-| `install-root --url <base>` | Fetch root CA PEM and install locally |
-| `install-intermediate --url <base>` | Install intermediate CA |
+| `install-root [--url]` | Fetch root CA PEM and install locally |
+| `install-intermediate [--url]` | Install intermediate CA |
 | `uninstall-root` | Remove installed root |
 | `uninstall-intermediate` | Remove installed intermediate |
 
 `--url` on install commands is persisted to agent config when set.
-
-Success:
-
-```text
-Root CA installed into local trust stores.
-State saved under ~/.arx-cert-service/
-```
 
 ### `arx agent cert list`
 
@@ -358,13 +341,6 @@ Public read-only catalog (no admin JWT).
 
 ```bash
 arx agent cert list --url http://localhost:8080
-```
-
-Example output:
-
-```text
-SERIAL    SUBJECT              NOT AFTER    REVOKED
-01        CN=example.local     2026-07-01   no
 ```
 
 ### `arx agent cert download`
@@ -379,6 +355,7 @@ arx agent cert download --serial <hex> --kind leaf -o leaf.pem
 | `--kind` | `leaf` (default), `intermediate`, `root` |
 | `--serial` | Required for `leaf` |
 | `-o`, `--output` | Output PEM path |
+| `--url` | Base URL of the CA server |
 
 ---
 
@@ -386,14 +363,15 @@ arx agent cert download --serial <hex> --kind leaf -o leaf.pem
 
 ```text
 arx
-├── server
+├── server [--config]
 │   ├── start
 │   ├── config
 │   │   └── init [--force]
+│   ├── setup
 │   └── service
-│       ├── install
-│       └── uninstall
-├── login [--url] [--username] [--password]
+│       ├── install [--run-as-user] [--install-dir]
+│       └── uninstall [--run-as-user] [--install-dir]
+├── login [--url] [--email] [--password]
 ├── ui [--url]
 ├── cert
 │   ├── list [--url]
@@ -420,43 +398,44 @@ arx
 
 ## Typical operator workflows
 
-### First-time server + admin
+### Production install + admin
+
+```bash
+make build
+sudo ./bin/arx server setup
+# edit /opt/arx/server.yaml
+arx login --url https://ca.example.com
+arx ui
+```
+
+### Development server + admin
 
 ```bash
 make build
 ./bin/arx server config init
-# edit bin/server.yaml (jwt_secret, bootstrap hash)
 ./bin/arx server start
 ./bin/arx login --url http://localhost:8080
 ./bin/arx ui
 ```
 
-### Issue and list certificates
-
-Use the TUI or API; then:
+### Trust the CA on a workstation
 
 ```bash
-./bin/arx cert list
+arx agent trust install-root --url http://localhost:8080
+arx agent trust install-intermediate --url http://localhost:8080
 ```
 
-### Trust the local CA on a workstation
+### Enroll a leaf cert (admin JWT)
 
 ```bash
-./bin/arx agent trust install-root --url http://localhost:8080
-./bin/arx agent trust install-intermediate --url http://localhost:8080
-```
-
-### Enroll a leaf cert on the same machine (admin JWT)
-
-```bash
-./bin/arx login --url http://localhost:8080
-./bin/arx agent enroll --domain app.internal --ttl 2160h
+arx login --url http://localhost:8080
+arx agent enroll --domain app.internal --ttl 2160h
 ```
 
 ---
 
 ## See also
 
-- [architecture.md](architecture.md) — persistence and package layout
+- [architecture.md](architecture.md) — persistence, systemd, and package layout
 - [acme.md](acme.md) — automated enrollment via ACME
 - [../README.md](../README.md) — quick start and API table

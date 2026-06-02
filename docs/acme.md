@@ -1,6 +1,6 @@
 # ACME (RFC 8555)
 
-**arx** exposes an ACMEv2 endpoint compatible with standard clients and reverse proxies. The implementation builds on [smallstep/certificates](https://github.com/smallstep/certificates) for JWS, nonce, and order flow, with **arx-specific** flat URL layout, SQLite-backed ACME state, and multi-challenge validation in `internal/acmeprotocol`.
+**arx** exposes an ACMEv2 endpoint compatible with standard clients and reverse proxies. The implementation builds on [smallstep/certificates](https://github.com/smallstep/certificates) for JWS, nonce, and order flow, with **arx-specific** flat URL layout, SQLite-backed ACME state (by default), and **multi-challenge validation** in `internal/acmeprotocol`.
 
 ## Enabling ACME
 
@@ -27,7 +27,7 @@ export CA_API_ACME_DISABLED=true
 | Item | Value |
 | ---- | ----- |
 | **URL path** | `/acme/directory` |
-| **Mount** | Handlers are registered at `/acme/`; clients use the public path without a provisioner segment |
+| **Mount** | Handlers registered at `/acme/`; public paths omit the internal provisioner segment |
 | **Provisioner (internal)** | `acme` — used inside step-ca routing but omitted from public URLs |
 
 ### Discovering the directory
@@ -36,23 +36,13 @@ export CA_API_ACME_DISABLED=true
 curl -s https://ca.example.com/acme/directory | jq .
 ```
 
-For a local dev server on port 8080:
+Local development (port 8080):
 
 ```bash
 curl -s http://localhost:8080/acme/directory | jq .
 ```
 
-The directory JSON follows RFC 8555 (`newNonce`, `newAccount`, `newOrder`, `revokeCert`, `keyChange`, `meta`, etc.). Resource URLs for accounts, orders, authorizations, and challenges are under `/acme/account/...`, `/acme/order/...`, `/acme/authz/...`, and `/acme/challenge/...`.
-
-### Directory URL helper
-
-The PKI engine computes a local directory URL from the listen address:
-
-```text
-http://localhost:8080/acme/directory
-```
-
-(Scheme and host follow `CA_API_ACME_DNS`, `ca.json` DNS names, or the request `Host` header via `FlatLinker`.)
+The directory JSON follows RFC 8555 (`newNonce`, `newAccount`, `newOrder`, `revokeCert`, `keyChange`, `meta`, etc.). Resource URLs use `/acme/account/...`, `/acme/order/...`, `/acme/authz/...`, and `/acme/challenge/...`.
 
 ## URL layout
 
@@ -70,39 +60,34 @@ Public clients see a **flat** tree (no `/acme/acme/...` provisioner prefix):
 | Challenge | `/acme/challenge/{authzID}/{challengeID}` |
 | Certificate | `/acme/certificate/{id}` |
 
-`internal/acmeprotocol/linker.go` implements `FlatLinker` to generate these links. Incoming requests are adapted to step-ca’s internal provisioner-scoped paths in `pathAdapter` (`router.go`).
+`internal/acmeprotocol/linker.go` (`FlatLinker`) generates these links. Incoming requests are adapted to step-ca’s internal provisioner-scoped paths in `pathAdapter` (`router.go`).
 
-## Supported challenge types
+## Multi-challenge support
 
-All three mainstream domain-validation challenges are validated by arx before an authorization is marked valid:
+arx validates **all three** mainstream domain-validation challenge types before marking an authorization valid. Clients choose the challenge type offered in the authorization object; arx performs **outbound** proof checks from the CA process when the client POSTs to the challenge URL.
 
-| Type | RFC | Validation behavior |
-| ---- | --- | --------------------- |
-| **http-01** | RFC 8555 §8.3 | Outbound HTTP GET to `http://<host>/.well-known/acme-challenge/<token>`; body must equal key authorization |
-| **dns-01** | RFC 8555 §8.4 | TXT lookup at `_acme-challenge.<domain>`; record must match SHA-256 digest of key authorization (base64url) |
-| **tls-alpn-01** | RFC 8737 | TLS to port 443 (or configured port) with ALPN `acme-tls/1`; self-signed cert must contain critical `id-pe-acmeIdentifier` extension with SHA-256(keyAuthorization) |
+| Type | RFC | Validator | Proof |
+| ---- | --- | --------- | ----- |
+| **http-01** | RFC 8555 §8.3 | `VerifyHTTP01` (`http01.go`) | HTTP GET `http://<host>/.well-known/acme-challenge/<token>`; body equals key authorization |
+| **dns-01** | RFC 8555 §8.4 | `VerifyDNS01` (`dns01.go`) | TXT at `_acme-challenge.<domain>` equals `DNS01Digest(keyAuthorization)` |
+| **tls-alpn-01** | RFC 8737 | `VerifyTLSALPN01` (`tlsalpn01.go`) | TLS to identifier port with ALPN `acme-tls/1`; leaf cert has critical `id-pe-acmeIdentifier` with SHA-256(keyAuthorization) |
 
-Implementation files:
+Orchestration: `internal/acmeprotocol/validate.go` transitions challenges `pending` → `processing` → `valid` | `invalid`. The HTTP handler `GetChallenge` (`challenge_handler.go`) invokes `Validator.ValidateChallenge` on each client-triggered validation.
 
-- `internal/acmeprotocol/http01.go` — `VerifyHTTP01`
-- `internal/acmeprotocol/dns01.go` — `VerifyDNS01`
-- `internal/acmeprotocol/tlsalpn01.go` — `VerifyTLSALPN01`
-- `internal/acmeprotocol/validate.go` — state transitions `pending` → `processing` → `valid` | `invalid`
-
-Wildcard identifiers use DNS-01 (per RFC); HTTP-01 and TLS-ALPN-01 apply to non-wildcard hostnames and IPs as usual.
-
-### When to use each challenge
+### Challenge selection guide
 
 | Challenge | Best for | Requirements |
 | --------- | -------- | -------------- |
-| **HTTP-01** | Single servers, reverse proxies, Traefik/Caddy HTTP routers | Port **80** reachable from the CA for the identifier (or `CA_API_ACME_HTTP_PORT` in lab setups); place token at `/.well-known/acme-challenge/<token>` |
-| **DNS-01** | Wildcards, internal names, multi-host, CDN frontends | Create `_acme-challenge.<name>` TXT record; no inbound HTTP to the origin required |
-| **TLS-ALPN-01** | TLS termination on 443 without HTTP-01 path | Port **443** (or `CA_API_ACME_TLS_PORT`) serves temporary ALPN certificate during validation |
+| **HTTP-01** | Single servers, reverse proxies, Traefik/Caddy HTTP routers | Port **80** reachable from the CA for the identifier (or `CA_API_ACME_HTTP_PORT` in lab setups); token at `/.well-known/acme-challenge/<token>` |
+| **DNS-01** | Wildcards, internal names, multi-host, CDN frontends | `_acme-challenge.<name>` TXT record; no inbound HTTP to the origin required |
+| **TLS-ALPN-01** | TLS on 443 without HTTP-01 path | Port **443** (or `CA_API_ACME_TLS_PORT`) serves temporary ALPN certificate during validation |
+
+**Wildcards:** RFC 8555 requires **DNS-01** for wildcard identifiers; HTTP-01 and TLS-ALPN-01 apply to non-wildcard hostnames and IP identifiers as usual.
 
 ### HTTP-01 details
 
 - Request URL: `http://<identifier>/.well-known/acme-challenge/<token>` (IPv6 addresses bracketed in URLs).
-- For development, set `CA_API_ACME_HTTP_PORT` so the CA connects to a non-80 port (for example when the API listens on 8080 and a proxy maps challenge traffic).
+- Development: set `CA_API_ACME_HTTP_PORT` when the CA must connect to a non-80 port (for example API on 8080 behind a challenge proxy).
 
 ### DNS-01 details
 
@@ -132,7 +117,7 @@ sequenceDiagram
     CA-->>Client: challenge JSON
 ```
 
-Clients trigger validation by posting to the challenge URL (RFC 8555). arx performs **outbound** checks from the CA process (not in-band hook callbacks).
+Clients trigger validation by posting to the challenge URL (RFC 8555). arx does not use in-band hook callbacks from the applicant; the CA initiates outbound checks.
 
 ## Persistence
 
@@ -163,8 +148,6 @@ Admin API (JWT required):
 
 ### Traefik
 
-Use the built-in ACME resolver with your arx directory URL:
-
 ```yaml
 certificatesResolvers:
   arx:
@@ -176,14 +159,16 @@ certificatesResolvers:
         entryPoint: web
 ```
 
-For DNS-01, configure Traefik’s DNS provider; arx still validates the TXT record at `_acme-challenge.<domain>`.
+For DNS-01, configure Traefik’s DNS provider; arx validates the TXT record at `_acme-challenge.<domain>`.
 
-Ensure challenge traffic reaches the host the CA can query:
+Ensure challenge traffic is reachable from the CA host:
 
-- **HTTP-01:** Port 80 on the identifier resolves to a listener that serves the challenge token (or set `CA_API_ACME_HTTP_PORT` consistently in dev).
+- **HTTP-01:** Port 80 on the identifier serves the challenge token (or align `CA_API_ACME_HTTP_PORT` in dev).
 - **TLS-ALPN-01:** Port 443 terminates TLS with ALPN support on the target.
 
 ### Caddy
+
+Global CA:
 
 ```caddyfile
 {
@@ -191,7 +176,7 @@ Ensure challenge traffic reaches the host the CA can query:
 }
 ```
 
-Or per-site:
+Per-site:
 
 ```caddyfile
 example.com {
@@ -202,9 +187,8 @@ example.com {
   }
 }
 ```
-```
 
-Caddy selects challenge types automatically; use DNS challenge plugin configuration for wildcards.
+Caddy selects challenge types automatically; use a DNS challenge plugin for wildcards (DNS-01).
 
 ### Certbot
 
@@ -212,14 +196,14 @@ Caddy selects challenge types automatically; use DNS challenge plugin configurat
 certbot certonly \
   --server https://ca.example.com/acme/directory \
   -d www.example.com \
-  --standalone   # http-01 when 80 is available to certbot
+  --standalone
 ```
 
 For DNS-01, use a Certbot DNS plugin and ensure TXT records match arx validation timing.
 
 ### Private CA / TLS trust
 
-Clients must trust your arx **root** (and often intermediate) CA. Distribute PEMs from:
+Clients must trust your arx **root** (and often intermediate) CA:
 
 ```bash
 curl -s https://ca.example.com/api/v1/ca/root
@@ -235,9 +219,9 @@ arx agent trust install-intermediate --url https://ca.example.com
 
 ## Operational notes
 
-1. **Reachability** — The CA validates challenges by connecting **to** the identifier from the server process. NAT, firewalls, or wrong DNS are the most common failure modes.
+1. **Reachability** — The CA validates challenges by connecting **to** the identifier from the server process. NAT, firewalls, and wrong DNS are the most common failure modes.
 2. **Directory hostname** — Set `CA_API_ACME_DNS` to the public hostname clients use (not an internal bind address).
-3. **Rate limits** — Follow step-ca / arx logs for authorization and validation errors; failed challenges return to `pending` or `invalid` per error type.
+3. **Rate limits** — Follow step-ca / arx logs for authorization and validation errors; failed challenges return `pending` or `invalid` per error type.
 4. **EAB** — When `CA_API_ACME_REQUIRE_EAB=true`, create binding keys via `POST /api/v1/acme/eab-keys` before `newAccount`.
 
 ## See also

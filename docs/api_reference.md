@@ -1,8 +1,9 @@
 # Arx CA HTTP API Reference
 
-Interactive reference for every HTTP endpoint exposed by **arx-ca-server**. Routes are registered in `internal/cmd/arx/server_start.go`. JSON management APIs use a standard envelope; ACME, OCSP, CRL, SCEP, and NDES use protocol-specific formats.
+Interactive reference for every HTTP endpoint exposed by **arx-ca-server**. Routes are registered in `internal/cmd/arx/server_start.go`. JSON management APIs under `/api/v1` use a standard envelope; ACME, OCSP, CRL, SCEP, and NDES use protocol-specific formats.
 
 ## Base URL and Versioning
+
 
 | Item | Value |
 | ---- | ----- |
@@ -14,7 +15,11 @@ Example base: `https://ca.example.com/api/v1`
 
 ## Standard JSON Envelope
 
-All `/api/v1/*` handlers return:
+
+All `/api/v1/*` handlers return a standard envelope. Examples in endpoint sections show the **`data`** payload only; wrap successful responses in the envelope when calling the API.
+
+<details>
+  <summary><strong>View Success Envelope</strong></summary>
 
 ```json
 {
@@ -23,7 +28,10 @@ All `/api/v1/*` handlers return:
 }
 ```
 
-On failure, `error` is a string message and `data` is `null`:
+</details>
+
+<details>
+  <summary><strong>View Error Envelope</strong></summary>
 
 ```json
 {
@@ -32,26 +40,26 @@ On failure, `error` is a string message and `data` is `null`:
 }
 ```
 
-The examples below show the **`data`** payload only. Wrap successful responses in the envelope when calling the API.
+</details>
 
-## Authentication
+## Authentication Overview
 
-### Admin JWT (interactive / bootstrap users)
+
+### Admin JWT
 
 1. `POST /api/v1/auth/login` with email and password.
-2. Use the returned token on protected routes:
+2. Send the returned token on protected routes:
 
 ```http
-Authorization: Bearer <token>
+Authorization: Bearer <jwt>
 ```
 
-- **Token type:** `Bearer` (field `token_type` in login response).
-- **Algorithm:** HS256 JWT; issuer and expiry come from server security config.
-- **Roles:** JWT may include `roles` (`SuperAdmin`, `CA-Admin`, `Revocation-Manager`, `Read-Only`). Endpoints enforce RBAC permissions derived from roles.
+| Field | Description |
+| ----- | ----------- |
+| `token_type` | Always `Bearer` |
+| `roles` | `SuperAdmin`, `CA-Admin`, `Revocation-Manager`, `Read-Only` |
 
-### Service account API key
-
-Automation clients may use either header:
+### Service account (Agent) API key
 
 ```http
 X-API-Key: <api_key>
@@ -63,12 +71,23 @@ or
 Authorization: Bearer <api_key>
 ```
 
-API keys are created via `POST /api/v1/auth/service-accounts` (admin JWT required). Keys are shown once at creation.
+API keys are created via `POST /api/v1/auth/service-accounts` (admin only).
 
-### Permission matrix (RBAC)
+### Permission labels in this document
 
-| Permission | Typical roles |
-| ---------- | --------------- |
+| Label | Meaning |
+| ----- | ------- |
+| `None` | No credentials required |
+| `Admin` | Valid admin JWT required |
+| `Agent` | Valid service-account API key required |
+| `Admin \| Agent` | Either JWT or API key; RBAC capability noted when enforced |
+
+Missing or invalid credentials → `401`. Valid credentials without RBAC capability → `403`.
+
+### RBAC capability matrix
+
+| Capability | Roles that grant it |
+| ---------- | ------------------- |
 | `certificates:issue` | SuperAdmin, CA-Admin |
 | `certificates:revoke` | SuperAdmin, Revocation-Manager |
 | `certificates:read` | SuperAdmin, CA-Admin, Revocation-Manager, Read-Only |
@@ -83,11 +102,8 @@ API keys are created via `POST /api/v1/auth/service-accounts` (admin JWT require
 | `ssh:sign_host` | SuperAdmin, CA-Admin |
 | `ssh:inspect` | SuperAdmin, CA-Admin |
 
-Missing or invalid credentials → `401`. Valid credentials without permission → `403`.
-
----
-
 ## Table of Contents
+
 
 1. [Health & Status](#health--status)
 2. [Authentication](#authentication-endpoints)
@@ -107,23 +123,68 @@ Missing or invalid credentials → `401`. Valid credentials without permission �
 
 ## Health & Status
 
+
 ### GET /api/v1/health
+> Returns process uptime, memory statistics, API version, and PKI engine status.
 
-Returns process uptime, memory statistics, API version, and PKI engine status.
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Authentication:** No
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `uptime` | object | Yes | Server uptime (see below) |
+| `memory` | object | Yes | Go runtime memory stats (see below) |
+| `api` | object | Yes | API layer status (see below) |
+| `ca_backend` | object | Yes | PKI engine status (see below) |
+
+**`uptime` Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `seconds` | int64 | Yes | Uptime in seconds |
+| `human` | string | Yes | Human-readable uptime |
+
+**`memory` Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alloc_bytes` | uint64 | Yes | Bytes allocated and in use |
+| `total_alloc_bytes` | uint64 | Yes | Cumulative bytes allocated |
+| `sys_bytes` | uint64 | Yes | Bytes obtained from OS |
+| `heap_alloc_bytes` | uint64 | Yes | Heap bytes allocated |
+| `heap_inuse_bytes` | uint64 | Yes | Heap bytes in use |
+| `heap_objects` | uint64 | Yes | Number of heap objects |
+| `stack_inuse_bytes` | uint64 | Yes | Stack bytes in use |
+| `num_gc` | uint32 | Yes | Completed GC cycles |
+| `last_gc_unix` | int64 | Yes | Last GC time (Unix seconds); `0` if none |
+| `goroutines` | int | Yes | Active goroutine count |
+
+**`api` Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | Yes | API health (`healthy`) |
+| `version` | string | Yes | API version (`v1`) |
+
+**`ca_backend` Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | Yes | Engine status |
+| `message` | string | No | Additional status detail |
+| `engine` | string | Yes | Engine identifier (`step-ca`) |
+| `initialized` | bool | Yes | Whether PKI engine initialized |
+
+**Example JSON (`data`):**
 ```json
 {
-  "uptime": {
-    "seconds": 3600,
-    "human": "1h 0m 0s"
-  },
+  "uptime": {"seconds": 3600, "human": "1h 0m 0s"},
   "memory": {
     "alloc_bytes": 10485760,
     "total_alloc_bytes": 52428800,
@@ -136,10 +197,7 @@ Returns process uptime, memory statistics, API version, and PKI engine status.
     "last_gc_unix": 1717347845,
     "goroutines": 18
   },
-  "api": {
-    "status": "healthy",
-    "version": "v1"
-  },
+  "api": {"status": "healthy", "version": "v1"},
   "ca_backend": {
     "status": "healthy",
     "message": "",
@@ -151,92 +209,114 @@ Returns process uptime, memory statistics, API version, and PKI engine status.
 
 </details>
 
-**Error codes:**
-
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — unexpected failure encoding response
+**Error Codes:**
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — encoding failure.
 
 ---
-
 ## Authentication Endpoints
 
+
 ### POST /api/v1/auth/login
+> Authenticates an admin user and returns a short-lived HS256 JWT with assigned roles.
 
-Authenticates an admin user and returns a short-lived JWT.
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Authentication:** No
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | Yes | Admin email address |
+| `password` | string | Yes | Admin password |
+
+**Example JSON:**
 ```json
-{
-  "email": "admin@example.com",
-  "password": "secretpassword"
-}
+{"email": "admin@example.com", "password": "secretpassword"}
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `token` | string | Yes | JWT access token |
+| `expires_at` | string (RFC3339) | Yes | Token expiration |
+| `token_type` | string | Yes | Token scheme (`Bearer`) |
+| `roles` | string[] | No | Assigned RBAC roles |
+
+**Example JSON (`data`):**
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "expires_at": "2026-06-03T12:00:00Z",
   "token_type": "Bearer",
-  "roles": [
-    "SuperAdmin"
-  ]
+  "roles": ["SuperAdmin"]
 }
 ```
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing/invalid JSON, empty body, unknown fields
-- `401 Unauthorized` — invalid email or password
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — credential store or token generation failure
+**Error Codes:**
+* `400 Bad Request` — invalid JSON payload.
+* `401 Unauthorized` — invalid email or password.
+* `405 Method Not Allowed` — non-POST request.
+* `500 Internal Server Error` — login failure.
 
 ---
-
 ### POST /api/v1/auth/service-accounts
+> Creates a service account and returns a one-time API key for automation clients.
 
-Creates a service account and returns a one-time API key.
+- **Authentication:** Required (Bearer JWT)
+- **Permissions:** `Admin` — requires RBAC `service_accounts:manage`
 
-**Authentication:** Required — Admin JWT (`Authorization: Bearer <token>`). Permission: `service_accounts:manage`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique service account name |
+| `roles` | string[] | No | RBAC roles; unknown roles are ignored |
+
+**Example JSON:**
 ```json
-{
-  "name": "ci-deploy-bot",
-  "roles": [
-    "CA-Admin"
-  ]
-}
+{"name": "ci-deploy-bot", "roles": ["CA-Admin"]}
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Service account ID |
+| `name` | string | Yes | Service account name |
+| `roles` | string[] | Yes | Assigned roles |
+| `api_key` | string | Yes | Plaintext API key (shown once) |
+| `created_at` | string (RFC3339) | Yes | Creation timestamp |
+
+**Example JSON (`data`):**
 ```json
 {
   "id": "sa_01HXYZABCDEF",
   "name": "ci-deploy-bot",
-  "roles": [
-    "CA-Admin"
-  ],
+  "roles": ["CA-Admin"],
   "api_key": "arx_sk_live_abcdefghijklmnopqrstuvwxyz",
   "created_at": "2026-06-02T10:00:00Z"
 }
@@ -244,124 +324,144 @@ Creates a service account and returns a one-time API key.
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — invalid name or JSON body
-- `401 Unauthorized` — missing or invalid JWT
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `409 Conflict` — duplicate service account name
-- `500 Internal Server Error` — creation failure
+**Error Codes:**
+* `400 Bad Request` — invalid JSON or service account name.
+* `401 Unauthorized` — missing or invalid JWT.
+* `403 Forbidden` — insufficient permissions.
+* `409 Conflict` — duplicate name.
+* `500 Internal Server Error` — creation failure.
 
 ---
-
 ## CA Certificates & Revocation Lists
 
+
 ### GET /api/v1/ca/root
+> Returns the Root CA certificate PEM for trust store installation.
 
-Returns the Root CA certificate PEM for trust store installation.
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Authentication:** No
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pem` | string | Yes | Root CA certificate PEM |
+
+**Example JSON (`data`):**
 ```json
-{
-  "pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n"
-}
+{"pem": "-----BEGIN CERTIFICATE-----\nMIIB...\n-----END CERTIFICATE-----\n"}
 ```
 
 </details>
 
-**Error codes:**
-
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — root certificate unavailable
+**Error Codes:**
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — root certificate unavailable.
 
 ---
-
 ### GET /api/v1/ca/crl
+> Returns the current Certificate Revocation List in DER or PEM format. Not wrapped in the JSON envelope.
 
-Returns the current Certificate Revocation List. **Not** wrapped in the JSON envelope.
+- **Authentication:** Not required
+- **Permissions:** `None`
+- **Query Parameters:** `pem` (flag) — if present, response is PEM; otherwise DER (`application/pkix-crl`)
 
-**Authentication:** No
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
-**Parameters / Query Strings:**
+**Response body:** raw CRL bytes (DER or PEM).
 
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| `pem` | flag (presence) | If present, response is PEM-encoded CRL; otherwise DER (`application/pkix-crl`) |
+**Response headers:**
 
-**Response (success):**
+| Header | Description |
+|--------|-------------|
+| `Content-Type` | `application/pkix-crl` or `application/x-pem-file` |
+| `Content-Disposition` | `attachment; filename="crl.crl"` or `crl.pem` |
+| `Expires` | CRL next-update (RFC1123) |
 
-- **Status:** `200 OK`
-- **Body:** raw CRL bytes (DER or PEM)
-- **Headers:** `Content-Type`, `Content-Disposition`, `Expires` (CRL next-update)
+*(Binary body — no JSON example.)*
 
-**Error codes:**
+</details>
 
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — CRL unavailable (plain text body via `http.Error`)
+**Error Codes:**
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — CRL unavailable (plain text via `http.Error`).
 
 ---
-
 ## Public / Agent Read-Only API
 
-Unauthenticated endpoints used by the **arx agent** (`internal/agent/api`) for trust installation and certificate discovery. They never expose private keys or signing operations.
-
+> Unauthenticated endpoints used by the **arx agent** for trust installation and certificate discovery. They never expose private keys or signing operations.
 ### GET /api/v1/public/ca/intermediate
+> Returns the Intermediate CA certificate PEM.
 
-Returns the Intermediate CA certificate PEM.
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Authentication:** No
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pem` | string | Yes | Intermediate CA certificate PEM |
+
+**Example JSON (`data`):**
 ```json
-{
-  "pem": "-----BEGIN CERTIFICATE-----\nMIIC...\n-----END CERTIFICATE-----\n"
-}
+{"pem": "-----BEGIN CERTIFICATE-----\nMIIC...\n-----END CERTIFICATE-----\n"}
 ```
 
 </details>
 
-**Error codes:**
-
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — intermediate certificate unavailable
+**Error Codes:**
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — intermediate unavailable.
 
 ---
-
 ### GET /api/v1/public/certificates
+> Lists issued certificates with public metadata (no private key material).
 
-Lists issued certificates with public metadata (no PEM private data).
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Authentication:** No
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificates` | array | Yes | Certificate summaries (see below) |
+| `total` | int | Yes | Number of entries |
+
+**`certificates[]` Element:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `serial` | string | Yes | Certificate serial |
+| `subject` | string | Yes | Distinguished name |
+| `dns_names` | string[] | No | DNS SANs |
+| `ip_addresses` | string[] | No | IP SANs |
+| `not_before` | string | Yes | Validity start |
+| `not_after` | string | Yes | Validity end |
+| `revoked` | bool | Yes | Revocation flag |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificates": [
     {
       "serial": "12345678901234567890",
       "subject": "CN=www.example.com",
-      "dns_names": [
-        "www.example.com",
-        "example.com"
-      ],
-      "ip_addresses": [
-        "203.0.113.10"
-      ],
+      "dns_names": ["www.example.com", "example.com"],
+      "ip_addresses": ["203.0.113.10"],
       "not_before": "2026-06-01T00:00:00Z",
       "not_after": "2026-09-01T00:00:00Z",
       "revoked": false
@@ -373,65 +473,69 @@ Lists issued certificates with public metadata (no PEM private data).
 
 </details>
 
-**Error codes:**
-
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — database or CA engine failure
+**Error Codes:**
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — list failure.
 
 ---
-
 ### GET /api/v1/public/certificates/{serial}
+> Downloads a single certificate PEM by decimal serial number.
 
-Downloads a single certificate PEM by serial number.
+- **Authentication:** Not required
+- **Permissions:** `None`
+- **Query Parameters:** `serial` (path) — certificate serial number
 
-**Authentication:** No
-
-**Parameters / Query Strings:**
-
-| Name | Location | Description |
-| ---- | -------- | ----------- |
-| `serial` | path | Certificate serial (decimal string) |
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | Yes | Certificate PEM |
+| `serial` | string | Yes | Serial number |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
-  "serial": "12345678901234567890",
-  "not_before": "",
-  "not_after": ""
+  "serial": "12345678901234567890"
 }
 ```
 
 </details>
 
-Note: `not_before` and `not_after` may be empty strings when only PEM is returned from the backing store.
-
-**Error codes:**
-
-- `400 Bad Request` — empty serial
-- `404 Not Found` — certificate not found
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — retrieval failure
+**Error Codes:**
+* `400 Bad Request` — empty serial.
+* `404 Not Found` — certificate not found.
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — retrieval failure.
 
 ---
-
 ## Certificate Management
 
-Protected routes accept **Admin JWT** or **Service account API key** with the listed permission.
 
 ### POST /api/v1/certificates/issue
+> Signs a PEM-encoded CSR with the intermediate CA.
 
-Signs a PEM-encoded CSR with the intermediate CA.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
 
-**Authentication:** Required — JWT or API key. Permission: `certificates:issue`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csr` | string | Yes | PEM-encoded certificate signing request |
+| `ttl` | string | No | Certificate lifetime (e.g. `720h`, `24h`) |
+| `template_id` | string | No | Issuance template identifier |
+| `metadata` | object | No | Arbitrary string-keyed metadata map |
+
+**Example JSON:**
 ```json
 {
   "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIC...\n-----END CERTIFICATE REQUEST-----\n",
@@ -446,9 +550,20 @@ Signs a PEM-encoded CSR with the intermediate CA.
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | Yes | Issued certificate PEM |
+| `serial` | string | Yes | Certificate serial number |
+| `not_before` | string | Yes | Validity start (RFC3339) |
+| `not_after` | string | Yes | Validity end (RFC3339) |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
@@ -460,100 +575,127 @@ Signs a PEM-encoded CSR with the intermediate CA.
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing CSR, invalid CSR, validation errors
-- `401 Unauthorized` — authentication required or invalid credentials
-- `403 Forbidden` — insufficient permissions or CA policy denial
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — signing failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing or invalid CSR.
+* `500 Internal Server Error` — signing failure.
 
 ---
-
 ### POST /api/v1/certificates/issue-with-token
+> Signs a CSR using a provisioner-issued single-use JWK token.
 
-Signs a CSR using a provisioner-issued single-use JWK token.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
 
-**Authentication:** Required — JWT or API key. Permission: `certificates:issue`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `token` | string | Yes | Provisioner signing token |
+| `csr` | string | Yes | PEM-encoded CSR |
+| `ttl` | string | No | Certificate lifetime |
+| `template_id` | string | No | Issuance template ID |
+| `metadata` | object | No | Arbitrary metadata map |
+
+**Example JSON:**
 ```json
 {
   "token": "eyJhbGciOiJFUzI1NiIs...",
   "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIC...\n-----END CERTIFICATE REQUEST-----\n",
   "ttl": "24h",
-  "template_id": "",
-  "metadata": {
-    "workload": "batch-job-42"
-  }
+  "metadata": {"workload": "batch-job-42"}
 }
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | Yes | Issued certificate PEM |
+| `serial` | string | Yes | Certificate serial number |
+| `not_before` | string | Yes | Validity start (RFC3339) |
+| `not_after` | string | Yes | Validity end (RFC3339) |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
-  "serial": "98765432109876543210",
+  "serial": "12345678901234567890",
   "not_before": "2026-06-02T10:00:00Z",
-  "not_after": "2026-06-03T10:00:00Z"
+  "not_after": "2026-07-02T10:00:00Z"
 }
 ```
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing `token` or `csr`, invalid CSR or token
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — signing failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing `token` or `csr`, or invalid token/CSR.
 
 ---
-
 ### POST /api/v1/certificates/auto
+> Generates a key pair and signs a certificate in one step (used by `arx agent enroll`).
 
-Generates a key pair and signs a certificate in one step. Used by `arx agent enroll`.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
 
-**Authentication:** Required — JWT or API key. Permission: `certificates:issue`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `common_name` | string | Yes | Primary common name |
+| `dns_sans` | string[] | No | Additional DNS SANs |
+| `ip_sans` | string[] | No | IP address SANs |
+| `ttl` | string | No | Certificate lifetime |
+| `template_id` | string | No | Issuance template ID |
+| `metadata` | object | No | Arbitrary metadata map |
+
+**Example JSON:**
 ```json
 {
   "common_name": "www.example.com",
-  "dns_sans": [
-    "www.example.com",
-    "example.com"
-  ],
-  "ip_sans": [
-    "203.0.113.10"
-  ],
+  "dns_sans": ["www.example.com", "example.com"],
+  "ip_sans": ["203.0.113.10"],
   "ttl": "2160h",
-  "template_id": "",
-  "metadata": {
-    "agent": "arx",
-    "host": "web-01"
-  }
+  "metadata": {"agent": "arx", "host": "web-01"}
 }
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | Yes | Issued certificate PEM |
+| `private_key_pem` | string | Yes | Generated private key PEM |
+| `serial` | string | Yes | Certificate serial |
+| `not_before` | string | Yes | Validity start |
+| `not_after` | string | Yes | Validity end |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
@@ -566,82 +708,104 @@ Generates a key pair and signs a certificate in one step. Used by `arx agent enr
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing `common_name`, invalid SANs
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — key generation or signing failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing `common_name` or invalid SANs.
 
 ---
-
 ### POST /api/v1/certificates/revoke
+> Revokes a certificate by serial number in the CA database.
 
-Revokes a certificate by serial number in the CA database.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:revoke`
 
-**Authentication:** Required — JWT or API key. Permission: `certificates:revoke`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `serial` | string | Yes | Certificate serial to revoke |
+| `reason` | string | No | Revocation reason string |
+| `reason_code` | int | No | RFC 5280 reason code |
+
+**Example JSON:**
 ```json
-{
-  "serial": "12345678901234567890",
-  "reason": "keyCompromise",
-  "reason_code": 1
-}
+{"serial": "12345678901234567890", "reason": "keyCompromise", "reason_code": 1}
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `serial` | string | Yes | Revoked serial |
+| `revoked_at` | string | Yes | Revocation timestamp |
+
+**Example JSON (`data`):**
 ```json
-{
-  "serial": "12345678901234567890",
-  "revoked_at": "2026-06-02T11:30:00Z"
-}
+{"serial": "12345678901234567890", "revoked_at": "2026-06-02T11:30:00Z"}
 ```
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing serial
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `404 Not Found` — certificate not found
-- `409 Conflict` — certificate already revoked
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — revocation failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing serial.
+* `404 Not Found` — certificate not found.
+* `409 Conflict` — already revoked.
 
 ---
-
 ### GET /api/v1/certificates
+> Lists all certificates in the CA database with operator metadata.
 
-Lists all certificates in the CA database with full operator metadata.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:read`
 
-**Authentication:** Required — JWT or API key. Permission: `certificates:read`.
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificates` | array | Yes | Certificate summaries (see below) |
+| `total` | int | Yes | Entry count |
+
+**`certificates[]` Element:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `serial` | string | Yes | Certificate serial |
+| `subject` | string | Yes | Distinguished name |
+| `dns_names` | string[] | No | DNS SANs |
+| `ip_addresses` | string[] | No | IP SANs |
+| `not_before` | string (RFC3339) | Yes | Validity start |
+| `not_after` | string (RFC3339) | Yes | Validity end |
+| `revoked` | bool | Yes | Revocation flag |
+| `provisioner_id` | string | No | Provisioner resource ID |
+| `provisioner` | string | No | Provisioner name |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificates": [
     {
       "serial": "12345678901234567890",
       "subject": "CN=www.example.com",
-      "dns_names": [
-        "www.example.com"
-      ],
-      "ip_addresses": [],
+      "dns_names": ["www.example.com"],
       "not_before": "2026-06-01T00:00:00Z",
       "not_after": "2026-09-01T00:00:00Z",
       "revoked": false,
@@ -655,37 +819,66 @@ Lists all certificates in the CA database with full operator metadata.
 
 </details>
 
-**Error codes:**
-
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — list failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — list failure.
 
 ---
-
 ### POST /api/v1/certificates/lint
+> Runs RFC 5280 / CA/Browser Forum lint checks on a PEM certificate. Not available on Windows server builds.
 
-Runs RFC 5280 / CA/Browser Forum lint checks on a PEM certificate. **Not available on Windows server builds.**
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:lint`
 
-**Authentication:** Required — JWT or API key. Permission: `certificates:lint`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | Yes | PEM-encoded certificate |
+
+**Example JSON:**
 ```json
-{
-  "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n"
-}
+{"certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n"}
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `findings` | array | Yes | Lint findings (see below) |
+| `summary` | object | Yes | Severity counts (see below) |
+
+**`findings[]` Element:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `lint` | string | Yes | Lint rule identifier |
+| `source` | string | Yes | Lint engine source |
+| `severity` | string | Yes | `fatal`, `error`, `warn`, or `notice` |
+| `message` | string | No | Human-readable detail |
+
+**`summary` Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `errors` | int | Yes | Error count |
+| `warnings` | int | Yes | Warning count |
+| `notices` | int | Yes | Notice count |
+| `fatals` | int | Yes | Fatal count |
+
+**Example JSON (`data`):**
 ```json
 {
   "findings": [
@@ -696,41 +889,44 @@ Runs RFC 5280 / CA/Browser Forum lint checks on a PEM certificate. **Not availab
       "message": "Subject Common Name is present"
     }
   ],
-  "summary": {
-    "errors": 0,
-    "warnings": 1,
-    "notices": 0,
-    "fatals": 0
-  }
+  "summary": {"errors": 0, "warnings": 1, "notices": 0, "fatals": 0}
 }
 ```
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing or unparsable `certificate_pem`
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `501 Not Implemented` — Windows build (linting disabled)
-- `500 Internal Server Error` — lint engine failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing or unparsable `certificate_pem`.
+* `501 Not Implemented` — Windows build.
+* `500 Internal Server Error` — lint engine failure.
 
 ---
-
 ## Certificate Renewal & Rekey
 
+
 ### POST /api/v1/certificates/renew
+> Re-issues a certificate with the same public key (non-ACME renewal flow).
 
-Re-issues a certificate with the same public key (non-ACME renewal flow).
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:renew`
 
-**Authentication:** Required — JWT or API key. Permission: `certificates:renew`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | No* | Existing certificate PEM |
+| `renew_token` | string | No* | Renewal authorization token |
+
+*At least one of `certificate_pem` or `renew_token` is required.
+
+**Example JSON:**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
@@ -738,45 +934,61 @@ Re-issues a certificate with the same public key (non-ACME renewal flow).
 }
 ```
 
-Either `certificate_pem` or `renew_token` must be provided (not both empty).
-
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | Yes | Issued certificate PEM |
+| `serial` | string | Yes | Certificate serial number |
+| `not_before` | string | Yes | Validity start (RFC3339) |
+| `not_after` | string | Yes | Validity end (RFC3339) |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
   "serial": "12345678901234567890",
-  "not_before": "2026-06-02T12:00:00Z",
-  "not_after": "2026-07-02T12:00:00Z"
+  "not_before": "2026-06-02T10:00:00Z",
+  "not_after": "2026-07-02T10:00:00Z"
 }
 ```
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing `certificate_pem` and `renew_token`, parse errors
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions or renewal denied
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — renewal failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing renewal credential or parse errors.
 
 ---
-
 ### POST /api/v1/certificates/rekey
+> Re-issues a certificate with a new key from the supplied CSR.
 
-Re-issues a certificate with a new key from the supplied CSR.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:renew`
 
-**Authentication:** Required — JWT or API key. Permission: `certificates:renew`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | No* | Existing certificate PEM |
+| `renew_token` | string | No* | Renewal authorization token |
+| `csr` | string | Yes | PEM-encoded CSR for the new key |
+
+*At least one of `certificate_pem` or `renew_token` is required.
+
+**Example JSON:**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
@@ -787,60 +999,88 @@ Re-issues a certificate with a new key from the supplied CSR.
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | Yes | Issued certificate PEM |
+| `serial` | string | Yes | Certificate serial number |
+| `not_before` | string | Yes | Validity start (RFC3339) |
+| `not_after` | string | Yes | Validity end (RFC3339) |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
   "serial": "12345678901234567890",
-  "not_before": "2026-06-02T12:00:00Z",
-  "not_after": "2026-07-02T12:00:00Z"
+  "not_before": "2026-06-02T10:00:00Z",
+  "not_after": "2026-07-02T10:00:00Z"
 }
 ```
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing `csr`, missing renewal credential, parse errors
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — rekey failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing `csr` or renewal credential.
 
 ---
-
 ## Provisioners & Enrollment Status
 
+
 ### POST /api/v1/provisioners/token
+> Mints a single-use JWK signing token for JWK/OIDC/K8s-style provisioners.
 
-Mints a single-use JWK signing token for JWK/OIDC/K8s-style provisioners.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `provisioners:token`
 
-**Authentication:** Required — JWT or API key. Permission: `provisioners:token`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `provisioner` | string | No | Provisioner name (default from CA config) |
+| `common_name` | string | Yes | Subject common name |
+| `dns_sans` | string[] | No | DNS subject alternative names |
+| `ip_sans` | string[] | No | IP subject alternative names |
+| `token_ttl` | string | No | Token lifetime (e.g. `5m`) |
+
+**Example JSON:**
 ```json
 {
   "provisioner": "jwk",
   "common_name": "app.example.com",
-  "dns_sans": [
-    "app.example.com"
-  ],
-  "ip_sans": [],
+  "dns_sans": ["app.example.com"],
   "token_ttl": "5m"
 }
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `token` | string | Yes | JWK signing token |
+| `provisioner` | string | Yes | Provisioner name |
+| `provisioner_type` | string | Yes | Provisioner type (e.g. `JWK`) |
+| `expires_in` | int | Yes | Token lifetime in seconds |
+| `audience` | string | Yes | Token audience URL |
+
+**Example JSON (`data`):**
 ```json
 {
   "token": "eyJhbGciOiJFUzI1NiIs...",
@@ -853,27 +1093,34 @@ Mints a single-use JWK signing token for JWK/OIDC/K8s-style provisioners.
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing `common_name`, unknown provisioner, invalid TTL/SANs
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — token mint failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing `common_name` or invalid SANs/TTL.
 
 ---
-
 ### GET /api/v1/k8s/status
+> Reports Kubernetes Service Account provisioner configuration.
 
-Reports Kubernetes Service Account provisioner configuration.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `enrollment:status`
 
-**Authentication:** Required — JWT or API key. Permission: `enrollment:status`.
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | bool | Yes | Whether K8s provisioner is configured |
+| `provisioner` | string | No | Provisioner name |
+| `review_mode` | string | No | Token review mode |
+| `has_public_keys` | bool | Yes | Whether public keys are configured |
+| `uses_token_review_api` | bool | Yes | Whether TokenReview API is used |
+
+**Example JSON (`data`):**
 ```json
 {
   "enabled": true,
@@ -886,35 +1133,42 @@ Reports Kubernetes Service Account provisioner configuration.
 
 </details>
 
-**Error codes:**
-
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-GET request
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
 
 ---
-
 ### GET /api/v1/acme/status
+> Reports ACME directory URL, configured challenges, and EAB requirements.
 
-Reports ACME directory URL, challenges, and EAB requirements.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `enrollment:status`
 
-**Authentication:** Required — JWT or API key. Permission: `enrollment:status`.
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | bool | Yes | Whether ACME is active |
+| `directory_url` | string | No | Public directory URL (when enabled) |
+| `provisioner` | string | No | Internal provisioner name (`acme`) |
+| `challenges` | string[] | No | Supported challenge types |
+| `dns_name` | string | No | Directory hostname |
+| `require_eab` | bool | Yes | Whether EAB is mandatory |
+| `device_attest_enabled` | bool | Yes | Device attestation enabled |
+| `attestation_formats` | string[] | No | Supported attestation formats |
+
+**Example JSON (`data`):**
 ```json
 {
   "enabled": true,
   "directory_url": "https://ca.example.com/acme/directory",
   "provisioner": "acme",
-  "challenges": [
-    "http-01",
-    "dns-01",
-    "tls-alpn-01"
-  ],
+  "challenges": ["http-01", "dns-01", "tls-alpn-01"],
   "dns_name": "ca.example.com",
   "require_eab": false,
   "device_attest_enabled": false,
@@ -924,37 +1178,51 @@ Reports ACME directory URL, challenges, and EAB requirements.
 
 </details>
 
-**Error codes:**
-
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-GET request
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
 
 ---
-
 ### POST /api/v1/acme/eab-keys
+> Creates an ACME External Account Binding (EAB) credential pair.
 
-Creates an ACME External Account Binding (EAB) credential pair.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `acme:eab`
 
-**Authentication:** Required — JWT or API key. Permission: `acme:eab`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `provisioner` | string | No | ACME provisioner name |
+| `reference` | string | No | External reference label |
+
+**Example JSON:**
 ```json
-{
-  "provisioner": "acme",
-  "reference": "customer-42"
-}
+{"provisioner": "acme", "reference": "customer-42"}
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key_id` | string | Yes | EAB key identifier |
+| `provisioner` | string | Yes | Provisioner name |
+| `hmac_key` | string | Yes | Base64url-encoded HMAC secret |
+| `reference` | string | No | External reference |
+| `created_at` | string | Yes | Creation timestamp |
+
+**Example JSON (`data`):**
 ```json
 {
   "key_id": "eab-key-01HXYZ",
@@ -967,27 +1235,33 @@ Creates an ACME External Account Binding (EAB) credential pair.
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — invalid provisioner or reference
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — EAB creation failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — invalid provisioner or reference.
 
 ---
-
 ### GET /api/v1/scep/status
+> Reports SCEP endpoint availability when a SCEP provisioner is configured.
 
-Reports SCEP endpoint availability (when SCEP provisioner is configured).
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `enrollment:status`
 
-**Authentication:** Required — JWT or API key. Permission: `enrollment:status`.
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | bool | Yes | Whether SCEP is active |
+| `base_url` | string | No | SCEP base URL |
+| `provisioner` | string | No | SCEP provisioner name |
+| `challenge_hint` | string | No | Challenge configuration hint |
+
+**Example JSON (`data`):**
 ```json
 {
   "enabled": true,
@@ -999,60 +1273,73 @@ Reports SCEP endpoint availability (when SCEP provisioner is configured).
 
 </details>
 
-**Error codes:**
-
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-GET request
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
 
 ---
-
 ### GET /api/v1/ndes/status
+> Reports NDES connector endpoints for AD CS migration paths.
 
-Reports NDES connector endpoints for AD CS migration paths.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `enrollment:status`
 
-**Authentication:** Required — JWT or API key. Permission: `enrollment:status`.
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | bool | Yes | Whether NDES is active |
+| `scep_endpoint` | string | No | MSCEP DLL URL |
+| `admin_endpoint` | string | No | MSCEP admin DLL URL |
+| `connectors` | string[] | No | Configured connector names |
+| `adcs_compatible` | bool | Yes | AD CS compatibility flag |
+
+**Example JSON (`data`):**
 ```json
 {
   "enabled": true,
   "scep_endpoint": "http://localhost:8080/certsrv/mscep/mscep.dll",
   "admin_endpoint": "http://localhost:8080/certsrv/mscep_admin/mscep_admin.dll",
-  "connectors": [
-    "default"
-  ],
+  "connectors": ["default"],
   "adcs_compatible": true
 }
 ```
 
 </details>
 
-**Error codes:**
-
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-GET request
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
 
 ---
-
 ## Certificate Templates
 
+
 ### POST /api/v1/templates
+> Creates a certificate issuance template (Go `text/template` body rendering JSON SAN/extension data).
 
-Creates a certificate issuance template (Go `text/template` body rendering JSON SAN/extension data).
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `templates:manage`
 
-**Authentication:** Required — JWT or API key. Permission: `templates:manage`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Unique template name |
+| `description` | string | No | Human-readable description |
+| `body` | string | Yes | Go text/template rendering issuance JSON |
+
+**Example JSON:**
 ```json
 {
   "name": "web-server",
@@ -1063,15 +1350,28 @@ Creates a certificate issuance template (Go `text/template` body rendering JSON 
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Template ID |
+| `name` | string | Yes | Template name |
+| `description` | string | No | Description |
+| `body` | string | Yes | Template body |
+| `created_at` | string (RFC3339) | Yes | Created timestamp |
+| `updated_at` | string (RFC3339) | Yes | Updated timestamp |
+
+**Example JSON (`data`):**
 ```json
 {
   "id": "tpl_01HXYZ",
   "name": "web-server",
   "description": "Standard TLS web server template",
-  "body": "{\"dnsNames\": [\"{{ .CommonName }}\"], \"keyUsage\": [\"digitalSignature\", \"keyEncipherment\"]}",
+  "body": "{\"dnsNames\": [\"{{ .CommonName }}\"]}",
   "created_at": "2026-06-02T10:00:00Z",
   "updated_at": "2026-06-02T10:00:00Z"
 }
@@ -1079,27 +1379,31 @@ Creates a certificate issuance template (Go `text/template` body rendering JSON 
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — validation errors, duplicate name, invalid template body
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — persistence failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — validation or duplicate name errors.
 
 ---
-
 ### GET /api/v1/templates
+> Lists all certificate issuance templates.
 
-Lists all certificate templates.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `templates:read`
 
-**Authentication:** Required — JWT or API key. Permission: `templates:read`.
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `templates` | array | Yes | Template objects (same shape as create response) |
+| `total` | int | Yes | Template count |
+
+**Example JSON (`data`):**
 ```json
 {
   "templates": [
@@ -1118,56 +1422,75 @@ Lists all certificate templates.
 
 </details>
 
-**Error codes:**
-
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — list failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — list failure.
 
 ---
-
 ## SSH Certificate Authority
 
+
 ### POST /api/v1/ssh/sign-user
+> Issues a short-lived SSH user certificate. Without a body `token`, callers must authenticate so the server can mint an internal sign token.
 
-Issues a short-lived SSH **user** certificate. Authenticated callers without a body `token` receive an internal minted JWK token automatically.
+- **Authentication:** Optional (Bearer JWT or X-API-Key) — required unless `token` is set in the body
+- **Permissions:** `None` (with body `token`) | `Admin | Agent` (without body `token`)
 
-**Authentication:** Optional — JWT or API key **unless** `token` is set in the body (OIDC/provisioner token path).
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `public_key` | string | Yes | SSH public key (authorized_keys format) |
+| `principal` | string | No* | Primary principal |
+| `principals` | string[] | No* | Additional principals |
+| `ttl` | string | No | Certificate lifetime |
+| `token` | string | No | OIDC/provisioner token (bypasses API auth) |
+| `provisioner` | string | No | Provisioner name when using `token` |
+
+*Either `principal` or a non-empty `principals` array is required.
+
+**Example JSON:**
 ```json
 {
   "public_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ...",
   "principal": "alice",
-  "principals": [
-    "alice",
-    "admin"
-  ],
+  "principals": ["alice", "admin"],
   "ttl": "8h",
-  "token": "",
   "provisioner": "ssh-oidc"
 }
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate` | string | Yes | OpenSSH certificate string |
+| `certificate_type` | string | Yes | `user` |
+| `key_id` | string | Yes | Certificate key ID |
+| `principals` | string[] | Yes | Allowed principals |
+| `serial` | uint64 | Yes | Certificate serial |
+| `valid_after` | string | Yes | Validity start |
+| `valid_before` | string | Yes | Validity end |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate": "ssh-rsa-cert-v01@openssh.com AAAAB3NzaC1yc2EAAAADAQABAAABAQ...",
   "certificate_type": "user",
   "key_id": "alice",
-  "principals": [
-    "alice",
-    "admin"
-  ],
+  "principals": ["alice", "admin"],
   "serial": 42,
   "valid_after": "2026-06-02T10:00:00",
   "valid_before": "2026-06-02T18:00:00"
@@ -1176,53 +1499,59 @@ Issues a short-lived SSH **user** certificate. Authenticated callers without a b
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing `public_key` or principals
-- `401 Unauthorized` — no credentials and no body `token`
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — signing failure
+**Error Codes:**
+* `400 Bad Request` — missing `public_key` or principals.
+* `401 Unauthorized` — no credentials and no body `token`.
+* `500 Internal Server Error` — signing failure.
 
 ---
-
 ### POST /api/v1/ssh/sign-host
+> Issues an SSH host certificate.
 
-Issues an SSH **host** certificate.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `ssh:sign_host`
 
-**Authentication:** Required — JWT or API key. Permission: `ssh:sign_host`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `public_key` | string | Yes | SSH public key |
+| `hostname` | string | No* | Primary hostname principal |
+| `principals` | string[] | No* | Host principals |
+| `ttl` | string | No | Certificate lifetime |
+| `provisioner` | string | No | SSH host provisioner name |
+
+*Either `hostname` or a non-empty `principals` array is required.
+
+**Example JSON:**
 ```json
 {
   "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...",
   "hostname": "web-01.example.com",
-  "principals": [
-    "web-01.example.com",
-    "localhost"
-  ],
-  "ttl": "8760h",
-  "provisioner": "ssh-host"
+  "principals": ["web-01.example.com", "localhost"],
+  "ttl": "8760h"
 }
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 201 Created</strong></summary>
+  <summary><strong>View Response (201 Created)</strong></summary>
 
+**Properties (`data`):** same shape as `sign-user`; `certificate_type` is `host`.
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate": "ssh-ed25519-cert-v01@openssh.com AAAAC3NzaC1lZDI1NTE5AAAAI...",
   "certificate_type": "host",
   "key_id": "web-01.example.com",
-  "principals": [
-    "web-01.example.com",
-    "localhost"
-  ],
+  "principals": ["web-01.example.com", "localhost"],
   "serial": 7,
   "valid_after": "2026-06-02T10:00:00",
   "valid_before": "2027-06-02T10:00:00"
@@ -1231,80 +1560,106 @@ Issues an SSH **host** certificate.
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing `public_key` or hostname/principals
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — signing failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing `public_key` or hostname/principals.
 
 ---
-
 ### POST /api/v1/ssh/inspect
+> Decodes an SSH certificate and returns metadata.
 
-Decodes an SSH certificate and returns metadata.
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `ssh:inspect`
 
-**Authentication:** Required — JWT or API key. Permission: `ssh:inspect`.
-
-**Parameters / Query Strings:** None
-
+#### Request
 <details>
-<summary><strong>Request Body (JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate` | string | Yes | OpenSSH certificate string |
+
+**Example JSON:**
 ```json
-{
-  "certificate": "ssh-rsa-cert-v01@openssh.com AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
-}
+{"certificate": "ssh-rsa-cert-v01@openssh.com AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."}
 ```
 
 </details>
 
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_type` | string | Yes | `user` or `host` |
+| `key_id` | string | Yes | Key ID |
+| `principals` | string[] | Yes | Principals |
+| `serial` | uint64 | Yes | Serial number |
+| `valid_after` | string | Yes | Validity start |
+| `valid_before` | string | Yes | Validity end |
+| `public_key_type` | string | Yes | Underlying public key type |
+| `critical_options` | object | No | Critical options map |
+| `extensions` | object | No | Extensions map |
+| `signature_key` | string | No | CA signature key |
+
+**Example JSON (`data`):**
 ```json
 {
   "certificate_type": "user",
   "key_id": "alice",
-  "principals": [
-    "alice"
-  ],
+  "principals": ["alice"],
   "serial": 42,
   "valid_after": "2026-06-02T10:00:00",
   "valid_before": "2026-06-02T18:00:00",
   "public_key_type": "ssh-rsa",
   "critical_options": {},
-  "extensions": {
-    "permit-pty": ""
-  },
+  "extensions": {"permit-pty": ""},
   "signature_key": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
 }
 ```
 
 </details>
 
-**Error codes:**
-
-- `400 Bad Request` — missing or invalid certificate
-- `401 Unauthorized` — authentication required
-- `403 Forbidden` — insufficient permissions
-- `405 Method Not Allowed` — non-POST request
-- `500 Internal Server Error` — inspection failure
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing or invalid certificate.
 
 ---
-
 ### GET /api/v1/ssh/roots
+> Returns SSH CA public keys for `known_hosts` / `authorized_keys` trust configuration.
 
-Returns SSH CA public keys for `known_hosts` / `authorized_keys` trust configuration.
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Authentication:** No
-
-**Parameters / Query Strings:** None
-
+#### Response
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `user_keys` | array | Yes | SSH user CA keys (see below) |
+| `host_keys` | array | Yes | SSH host CA keys (see below) |
+
+**`user_keys[]` / `host_keys[]` Element:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `public_key` | string | Yes | Public key (authorized_keys format) |
+| `key_type` | string | Yes | Key algorithm |
+| `fingerprint` | string | Yes | SHA256 fingerprint |
+
+**Example JSON (`data`):**
 ```json
 {
   "user_keys": [
@@ -1326,77 +1681,114 @@ Returns SSH CA public keys for `known_hosts` / `authorized_keys` trust configura
 
 </details>
 
-**Error codes:**
-
-- `404 Not Found` — SSH CA not configured
-- `405 Method Not Allowed` — non-GET request
-- `500 Internal Server Error` — retrieval failure
+**Error Codes:**
+* `404 Not Found` — SSH CA not configured.
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — retrieval failure.
 
 ---
 
 ## OCSP Responder
 
+
 RFC 6960 endpoints. Responses are **DER** `application/ocsp-response`, not the JSON envelope.
 
 ### POST /ocsp
+> Submits an OCSP request in the request body.
 
-Submits an OCSP request body.
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Authentication:** No
+#### Request
 
-**Parameters / Query Strings:** None
+<details>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
-**Request body:** `application/ocsp-request` (DER-encoded OCSP request)
+**Body:** `application/ocsp-request` — DER-encoded OCSP request (max 64 KiB).
 
-**Response (success):** `200 OK`, `Content-Type: application/ocsp-response`, DER-encoded OCSP response
+</details>
 
-**Error codes:**
+#### Response
 
-- `400 Bad Request` — unreadable request or invalid OCSP request
-- `405 Method Not Allowed` — non-POST request
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Body:** DER `application/ocsp-response`.
+
+**Headers:** `Content-Type: application/ocsp-response`, `Cache-Control: no-cache`
+
+</details>
+
+**Error Codes:**
+
+* `400 Bad Request` — unreadable or invalid OCSP request.
+* `405 Method Not Allowed` — non-POST request.
 
 ---
 
 ### GET /ocsp/{request}
+> Submits an OCSP request as a URL-safe Base64 (or standard Base64) path segment.
 
-Submits an OCSP request as a URL-safe Base64 (or standard Base64) path segment.
+- **Authentication:** Not required
+- **Permissions:** `None`
+- **Query Parameters:** `request` (path) — Base64url, padded Base64url, or standard Base64 OCSP request DER
 
-**Authentication:** No
+#### Response
 
-**Parameters / Query Strings:**
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
-| Name | Location | Description |
-| ---- | -------- | ----------- |
-| `request` | path | Base64url, Base64url with padding, or standard Base64 OCSP request DER |
+Same as `POST /ocsp`.
 
-**Response (success):** Same as `POST /ocsp`
+</details>
 
-**Error codes:**
+**Error Codes:**
 
-- `400 Bad Request` — empty path, decode failure, invalid OCSP request
-- `405 Method Not Allowed` — non-GET request
+* `400 Bad Request` — empty path, decode failure, or invalid OCSP request.
+* `405 Method Not Allowed` — non-GET request.
 
 ---
 
 ## ACMEv2 (RFC 8555)
 
-Mounted at `/acme/` when ACME is enabled (`CA_API_ACME_DISABLED` is not `true` and an ACME provisioner exists). Public URLs use a **flat** layout (no provisioner name in paths). Requests and responses use **JWS** (`Content-Type: application/jose+json`) per RFC 8555, not the arx JSON envelope.
 
-**Authentication:** ACME account key JWS on mutating endpoints; `GET` directory and certificate download use no admin JWT.
+Mounted at `/acme/` when ACME is enabled (`CA_API_ACME_DISABLED` is not `true` and an ACME provisioner exists). Public URLs use a **flat** layout (no provisioner name in paths). Mutating requests use **JWS** (`Content-Type: application/jose+json`), not the arx JSON envelope.
 
-**Provisioner (internal name):** `acme`
+**Internal provisioner name:** `acme`
 
 ### GET /acme/directory
 
-Returns the ACME directory object listing all resource URLs.
+> Returns the ACME directory object listing all resource URLs.
 
-**Authentication:** No
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Parameters / Query Strings:** None
+#### Response
 
 <details>
-<summary><strong>Response: 200 OK (application/json)</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `newNonce` | string | Yes | Nonce endpoint URL |
+| `newAccount` | string | Yes | Account registration URL |
+| `newOrder` | string | Yes | Order creation URL |
+| `revokeCert` | string | Yes | Certificate revocation URL |
+| `keyChange` | string | Yes | Account key change URL |
+| `meta` | object | No | Directory metadata (see below) |
+
+**`meta` Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `termsOfService` | string | No | Terms of service URL |
+| `website` | string | No | CA website URL |
+| `caaIdentities` | string[] | No | CAA identities |
+| `externalAccountRequired` | bool | No | Whether EAB is required |
+
+**Example JSON:**
 ```json
 {
   "newNonce": "https://ca.example.com/acme/new-nonce",
@@ -1407,9 +1799,7 @@ Returns the ACME directory object listing all resource URLs.
   "meta": {
     "termsOfService": "https://ca.example.com/tos",
     "website": "https://ca.example.com",
-    "caaIdentities": [
-      "ca.example.com"
-    ],
+    "caaIdentities": ["ca.example.com"],
     "externalAccountRequired": false
   }
 }
@@ -1417,63 +1807,107 @@ Returns the ACME directory object listing all resource URLs.
 
 </details>
 
-**Error codes:**
+**Error Codes:**
 
-- `404 Not Found` — ACME disabled
-- `500 Internal Server Error` — provisioner load failure
+* `404 Not Found` — ACME disabled.
+* `500 Internal Server Error` — provisioner load failure.
 
 ---
 
 ### HEAD /acme/new-nonce
+> Issues a fresh anti-replay nonce for JWS requests (header only, no body).
 
+- **Authentication:** Not required
+- **Permissions:** `None`
+
+#### Response
+<details>
+  <summary><strong>View Response (204 No Content)</strong></summary>
+
+**Header:** `Replay-Nonce: <nonce>`
+
+</details>
+
+**Error Codes:**
+* `404 Not Found` — ACME disabled.
+
+---
 ### GET /acme/new-nonce
+> Issues a fresh anti-replay nonce for JWS requests (same semantics as HEAD).
 
-Issues a fresh anti-replay nonce.
+- **Authentication:** Not required
+- **Permissions:** `None`
 
-**Authentication:** No
+#### Response
+<details>
+  <summary><strong>View Response (204 No Content)</strong></summary>
 
-**Response (success):** `204 No Content` with header `Replay-Nonce: <nonce>`
+**Header:** `Replay-Nonce: <nonce>`
 
-**Error codes:**
+</details>
 
-- `404 Not Found` — ACME disabled
+**Error Codes:**
+* `404 Not Found` — ACME disabled.
 
 ---
 
 ### POST /acme/new-account
 
-Creates or updates an ACME account. Use JWS with an empty payload to look up an existing account (RFC 8555).
+> Creates or looks up an ACME account (empty JWS payload looks up an existing account per RFC 8555).
 
-**Authentication:** JWS signed with account key (optional EAB when `externalAccountRequired` is true)
+- **Authentication:** Required (JWS signed with account key; EAB when `externalAccountRequired` is true)
+- **Permissions:** `None`
+
+#### Request
 
 <details>
-<summary><strong>Request (JWS payload, decoded JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+**JWS payload (decoded JSON):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `termsOfServiceAgreed` | bool | No | ToS acceptance |
+| `contact` | string[] | No | Contact URIs |
+| `externalAccountBinding` | object | No | EAB JWS object (see below) |
+
+**`externalAccountBinding` Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `protected` | string | Yes | Base64url-encoded protected header |
+| `payload` | string | Yes | Base64url-encoded payload |
+| `signature` | string | Yes | Base64url-encoded signature |
+
+**Example JSON (decoded JWS payload):**
 ```json
 {
   "termsOfServiceAgreed": true,
-  "contact": [
-    "mailto:admin@example.com"
-  ],
-  "externalAccountBinding": {
-    "protected": "eyJhbGciOiJIUzI1NiIs...",
-    "payload": "eyJhbGciOiJIUzI1NiIs...",
-    "signature": "abc..."
-  }
+  "contact": ["mailto:admin@example.com"]
 }
 ```
 
 </details>
 
-<details>
-<summary><strong>Response: 201 Created or 200 OK</strong></summary>
+#### Response
 
+<details>
+  <summary><strong>View Response (201 Created or 200 OK)</strong></summary>
+
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | Yes | Account status (`valid`, etc.) |
+| `contact` | string[] | No | Contact URIs |
+| `orders` | string | Yes | Orders collection URL |
+| `key` | object | Yes | Account public JWK |
+
+**Example JSON:**
 ```json
 {
   "status": "valid",
-  "contact": [
-    "mailto:admin@example.com"
-  ],
+  "contact": ["mailto:admin@example.com"],
   "orders": "https://ca.example.com/acme/account/acc-01/orders",
   "key": {
     "kty": "EC",
@@ -1486,34 +1920,46 @@ Creates or updates an ACME account. Use JWS with an empty payload to look up an 
 
 </details>
 
-**Error codes:**
+**Error Codes:**
 
-- `400 Bad Request` — malformed JWS or payload
-- `401 Unauthorized` — invalid EAB or account key
-- `403 Forbidden` — policy violation
-- `404 Not Found` — ACME disabled
-- `409 Conflict` — account URL mismatch
-- `500 Internal Server Error` — server error
+* `400 Bad Request` — malformed JWS or payload.
+* `401 Unauthorized` — invalid EAB or account key.
+* `403 Forbidden` — policy violation.
+* `404 Not Found` — ACME disabled.
+* `409 Conflict` — account URL mismatch.
+* `500 Internal Server Error` — server error.
 
 ---
 
 ### POST /acme/new-order
 
-Creates a certificate order for one or more identifiers.
+> Creates a certificate order for one or more identifiers.
 
-**Authentication:** JWS (account key, `kid` in protected header after registration)
+- **Authentication:** Required (JWS with account `kid`)
+- **Permissions:** `None`
+
+#### Request
 
 <details>
-<summary><strong>Request (JWS payload, decoded JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `identifiers` | array | Yes | Identifiers to authorize (see below) |
+| `notBefore` | string | No | Certificate validity start |
+| `notAfter` | string | No | Certificate validity end |
+
+**`identifiers[]` Element:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | `dns` or `ip` |
+| `value` | string | Yes | Identifier value |
+
+**Example JSON (decoded JWS payload):**
 ```json
 {
-  "identifiers": [
-    {
-      "type": "dns",
-      "value": "www.example.com"
-    }
-  ],
+  "identifiers": [{"type": "dns", "value": "www.example.com"}],
   "notBefore": "2026-06-02T00:00:00Z",
   "notAfter": "2026-09-02T00:00:00Z"
 }
@@ -1521,22 +1967,27 @@ Creates a certificate order for one or more identifiers.
 
 </details>
 
-<details>
-<summary><strong>Response: 201 Created</strong></summary>
+#### Response
 
+<details>
+  <summary><strong>View Response (201 Created)</strong></summary>
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | Yes | Order status |
+| `expires` | string | Yes | Order expiration |
+| `identifiers` | array | Yes | Requested identifiers |
+| `authorizations` | string[] | Yes | Authorization URLs |
+| `finalize` | string | Yes | Finalize URL |
+| `certificate` | string | null | Certificate URL when issued |
+
+**Example JSON:**
 ```json
 {
   "status": "pending",
   "expires": "2026-06-03T00:00:00Z",
-  "identifiers": [
-    {
-      "type": "dns",
-      "value": "www.example.com"
-    }
-  ],
-  "authorizations": [
-    "https://ca.example.com/acme/authz/authz-01"
-  ],
+  "identifiers": [{"type": "dns", "value": "www.example.com"}],
+  "authorizations": ["https://ca.example.com/acme/authz/authz-01"],
   "finalize": "https://ca.example.com/acme/order/ord-01/finalize",
   "certificate": null
 }
@@ -1544,55 +1995,54 @@ Creates a certificate order for one or more identifiers.
 
 </details>
 
-**Error codes:**
+**Error Codes:**
 
-- `400 Bad Request` — invalid identifiers
-- `401 Unauthorized` — invalid JWS
-- `403 Forbidden` — unauthorized identifier
-- `404 Not Found` — ACME disabled
-- `500 Internal Server Error` — order creation failure
+* `400 Bad Request` — invalid identifiers.
+* `401 Unauthorized` — invalid JWS.
+* `403 Forbidden` — unauthorized identifier.
+* `404 Not Found` — ACME disabled.
+* `500 Internal Server Error` — order creation failure.
 
 ---
 
 ### POST /acme/order/{orderID}/finalize
 
-Submits a CSR to finalize a ready order.
+> Submits a CSR to finalize a ready order.
 
-**Authentication:** JWS (account key)
+- **Authentication:** Required (JWS with account `kid`)
+- **Permissions:** `None`
+- **Query Parameters:** `orderID` (path) — order identifier
 
-**Parameters / Query Strings:**
-
-| Name | Location | Description |
-| ---- | -------- | ----------- |
-| `orderID` | path | Order identifier |
+#### Request
 
 <details>
-<summary><strong>Request (JWS payload, decoded JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csr` | string | Yes | Base64url-encoded CSR DER |
+
+**Example JSON (decoded JWS payload):**
 ```json
-{
-  "csr": "MIIB...base64url-encoded-CSR-DER..."
-}
+{"csr": "MIIB...base64url-encoded-CSR-DER..."}
 ```
 
 </details>
 
-<details>
-<summary><strong>Response: 200 OK</strong></summary>
+#### Response
 
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+Order object with `status` `valid` and `certificate` URL set when successful.
+
+**Example JSON:**
 ```json
 {
   "status": "valid",
   "expires": "2026-06-03T00:00:00Z",
-  "identifiers": [
-    {
-      "type": "dns",
-      "value": "www.example.com"
-    }
-  ],
-  "authorizations": [
-    "https://ca.example.com/acme/authz/authz-01"
-  ],
+  "identifiers": [{"type": "dns", "value": "www.example.com"}],
+  "authorizations": ["https://ca.example.com/acme/authz/authz-01"],
   "finalize": "https://ca.example.com/acme/order/ord-01/finalize",
   "certificate": "https://ca.example.com/acme/certificate/cert-01"
 }
@@ -1600,86 +2050,89 @@ Submits a CSR to finalize a ready order.
 
 </details>
 
-**Error codes:**
+**Error Codes:**
 
-- `400 Bad Request` — invalid CSR or order state
-- `401 Unauthorized` — invalid JWS
-- `403 Forbidden` — finalize not allowed
-- `404 Not Found` — unknown order
-- `500 Internal Server Error` — signing failure
+* `400 Bad Request` — invalid CSR or order state.
+* `401 Unauthorized` — invalid JWS.
+* `403 Forbidden` — finalize not allowed.
+* `404 Not Found` — unknown order.
+* `500 Internal Server Error` — signing failure.
 
 ---
 
 ### GET /acme/order/{orderID}
 
-Polls order status.
+> Polls order status (typically via JWS POST-as-GET per RFC 8555).
 
-**Authentication:** JWS (account key)
+- **Authentication:** Required (JWS with account `kid`)
+- **Permissions:** `None`
+- **Query Parameters:** `orderID` (path) — order identifier
+
+#### Response
 
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
-```json
-{
-  "status": "valid",
-  "expires": "2026-06-03T00:00:00Z",
-  "identifiers": [
-    {
-      "type": "dns",
-      "value": "www.example.com"
-    }
-  ],
-  "authorizations": [
-    "https://ca.example.com/acme/authz/authz-01"
-  ],
-  "finalize": "https://ca.example.com/acme/order/ord-01/finalize",
-  "certificate": "https://ca.example.com/acme/certificate/cert-01"
-}
-```
+Same shape as order creation/finalize responses.
 
 </details>
 
-**Error codes:**
+**Error Codes:**
 
-- `401 Unauthorized` — invalid JWS
-- `404 Not Found` — unknown order
-- `500 Internal Server Error` — retrieval failure
+* `401 Unauthorized` — invalid JWS.
+* `404 Not Found` — unknown order.
+* `500 Internal Server Error` — retrieval failure.
 
 ---
 
 ### GET /acme/authz/{authzID}
 
-Returns authorization status and associated challenges.
+> Returns authorization status and associated challenges.
 
-**Authentication:** JWS (account key)
+- **Authentication:** Required (JWS with account `kid`)
+- **Permissions:** `None`
+- **Query Parameters:** `authzID` (path) — authorization identifier
+
+#### Response
 
 <details>
-<summary><strong>Response: 200 OK</strong></summary>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `identifier` | object | Yes | Authorized identifier (see below) |
+| `status` | string | Yes | Authorization status |
+| `expires` | string | Yes | Authorization expiration |
+| `challenges` | array | Yes | Challenge objects (see below) |
+| `wildcard` | bool | No | Whether identifier is a wildcard |
+
+**`identifier` Object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | `dns` or `ip` |
+| `value` | string | Yes | Identifier value |
+
+**`challenges[]` Element:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | `http-01`, `dns-01`, or `tls-alpn-01` |
+| `url` | string | Yes | Challenge URL |
+| `status` | string | Yes | Challenge status |
+| `token` | string | Yes | Challenge token |
+| `validated` | string | No | Validation timestamp when valid |
+
+**Example JSON:**
 ```json
 {
-  "identifier": {
-    "type": "dns",
-    "value": "www.example.com"
-  },
+  "identifier": {"type": "dns", "value": "www.example.com"},
   "status": "pending",
   "expires": "2026-06-03T00:00:00Z",
   "challenges": [
     {
       "type": "http-01",
       "url": "https://ca.example.com/acme/challenge/authz-01/ch-01",
-      "status": "pending",
-      "token": "token-abc123"
-    },
-    {
-      "type": "dns-01",
-      "url": "https://ca.example.com/acme/challenge/authz-01/ch-02",
-      "status": "pending",
-      "token": "token-abc123"
-    },
-    {
-      "type": "tls-alpn-01",
-      "url": "https://ca.example.com/acme/challenge/authz-01/ch-03",
       "status": "pending",
       "token": "token-abc123"
     }
@@ -1690,37 +2143,39 @@ Returns authorization status and associated challenges.
 
 </details>
 
-**Error codes:**
+**Error Codes:**
 
-- `401 Unauthorized` — invalid JWS
-- `404 Not Found` — unknown authorization
-- `500 Internal Server Error` — retrieval failure
+* `401 Unauthorized` — invalid JWS.
+* `404 Not Found` — unknown authorization.
+* `500 Internal Server Error` — retrieval failure.
 
 ---
 
 ### POST /acme/challenge/{authzID}/{challengeID}
 
-Triggers challenge validation. arx performs outbound **http-01**, **dns-01**, or **tls-alpn-01** checks.
+> Triggers challenge validation. arx performs outbound http-01, dns-01, or tls-alpn-01 checks.
 
-**Authentication:** JWS (account key)
+- **Authentication:** Required (JWS with account `kid`)
+- **Permissions:** `None`
+- **Query Parameters:** `authzID` (path), `challengeID` (path)
 
-**Parameters / Query Strings:**
-
-| Name | Location | Description |
-| ---- | -------- | ----------- |
-| `authzID` | path | Authorization ID |
-| `challengeID` | path | Challenge ID |
+#### Request
 
 <details>
-<summary><strong>Request (JWS payload)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
-Empty JSON object `{}` (payload may be empty string in JWS).
+Empty JSON object `{}` (JWS payload may be empty string).
 
 </details>
 
-<details>
-<summary><strong>Response: 200 OK</strong></summary>
+#### Response
 
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+Challenge object with updated `status` (`valid` or `invalid`).
+
+**Example JSON:**
 ```json
 {
   "type": "http-01",
@@ -1733,71 +2188,102 @@ Empty JSON object `{}` (payload may be empty string in JWS).
 
 </details>
 
-**Error codes:**
+**Error Codes:**
 
-- `400 Bad Request` — malformed JWS
-- `401 Unauthorized` — invalid JWS
-- `403 Forbidden` — challenge not acceptable
-- `404 Not Found` — unknown challenge
-- `500 Internal Server Error` — validation error
+* `400 Bad Request` — malformed JWS.
+* `401 Unauthorized` — invalid JWS.
+* `403 Forbidden` — challenge not acceptable.
+* `404 Not Found` — unknown challenge.
+* `500 Internal Server Error` — validation error.
 
 ---
 
 ### GET /acme/certificate/{certID}
 
-Downloads the issued certificate chain (DER), typically `application/pem-certificate-chain` or `application/pkix-cert`.
+> Downloads the issued certificate chain (PEM or DER per `Accept` header).
 
-**Authentication:** JWS (account key) for POST-as-GET per RFC 8555; implementation may accept `Accept` negotiation.
+- **Authentication:** Required (JWS POST-as-GET per RFC 8555)
+- **Permissions:** `None`
+- **Query Parameters:** `certID` (path) — certificate resource identifier
 
-**Response (success):** PEM certificate chain or DER per client `Accept` header
+#### Response
 
-**Error codes:**
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
-- `401 Unauthorized` — invalid JWS
-- `404 Not Found` — unknown certificate
-- `500 Internal Server Error` — download failure
+PEM certificate chain (`application/pem-certificate-chain`) or DER per client `Accept` negotiation.
+
+</details>
+
+**Error Codes:**
+
+* `401 Unauthorized` — invalid JWS.
+* `404 Not Found` — unknown certificate.
+* `500 Internal Server Error` — download failure.
 
 ---
 
 ### POST /acme/revoke-cert
 
-Revokes a certificate.
+> Revokes a certificate via ACME.
 
-**Authentication:** JWS with either account key (`kid`) or certificate key (`jwk` in protected header)
+- **Authentication:** Required (JWS with account `kid` or certificate key `jwk`)
+- **Permissions:** `None`
+
+#### Request
 
 <details>
-<summary><strong>Request (JWS payload, decoded JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate` | string | Yes | Base64url-encoded certificate DER |
+| `reason` | int | No | Revocation reason code |
+
+**Example JSON (decoded JWS payload):**
 ```json
-{
-  "certificate": "MIIB...base64url-encoded-cert-DER...",
-  "reason": 1
-}
+{"certificate": "MIIB...base64url-encoded-cert-DER...", "reason": 1}
 ```
 
 </details>
 
-**Response (success):** `200 OK` with empty body
+#### Response
 
-**Error codes:**
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
-- `400 Bad Request` — malformed request
-- `401 Unauthorized` — invalid JWS
-- `403 Forbidden` — revocation not permitted
-- `404 Not Found` — ACME disabled
-- `500 Internal Server Error` — revocation failure
+Empty body on success.
+
+</details>
+
+**Error Codes:**
+
+* `400 Bad Request` — malformed request.
+* `401 Unauthorized` — invalid JWS.
+* `403 Forbidden` — revocation not permitted.
+* `404 Not Found` — ACME disabled.
+* `500 Internal Server Error` — revocation failure.
 
 ---
 
 ### POST /acme/key-change
 
-Rotates the ACME account key (RFC 8555 key rollover).
+> Rotates the ACME account key (RFC 8555 key rollover).
 
-**Authentication:** JWS signed by both old and new keys per RFC 8555
+- **Authentication:** Required (JWS signed by old and new keys)
+- **Permissions:** `None`
+
+#### Request
 
 <details>
-<summary><strong>Request (JWS payload, decoded JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `account` | string | Yes | Account URL |
+| `oldKey` | object | Yes | Previous account public JWK |
+
+**Example JSON (decoded JWS payload):**
 ```json
 {
   "account": "https://ca.example.com/acme/account/acc-01",
@@ -1812,47 +2298,60 @@ Rotates the ACME account key (RFC 8555 key rollover).
 
 </details>
 
-**Response (success):** `200 OK` with updated account body
+#### Response
 
-**Error codes:**
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
-- `400 Bad Request` — invalid rollover proof
-- `401 Unauthorized` — invalid JWS
-- `403 Forbidden` — rollover denied
-- `404 Not Found` — ACME disabled
-- `500 Internal Server Error` — update failure
+Updated account object.
+
+</details>
+
+**Error Codes:**
+
+* `400 Bad Request` — invalid rollover proof.
+* `401 Unauthorized` — invalid JWS.
+* `403 Forbidden` — rollover denied.
+* `404 Not Found` — ACME disabled.
+* `500 Internal Server Error` — update failure.
 
 ---
 
 ### POST /acme/account/{accountID}
 
-Updates account contact information or deactivates the account.
+> Updates account contact information or deactivates the account.
 
-**Authentication:** JWS (account key)
+- **Authentication:** Required (JWS with account `kid`)
+- **Permissions:** `None`
+- **Query Parameters:** `accountID` (path) — account identifier
+
+#### Request
 
 <details>
-<summary><strong>Request (JWS payload, decoded JSON)</strong></summary>
+  <summary><strong>View Request Schema & JSON</strong></summary>
 
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `contact` | string[] | No | Updated contact URIs |
+| `status` | string | No | Set to `deactivated` to deactivate |
+
+**Example JSON (decoded JWS payload):**
 ```json
-{
-  "contact": [
-    "mailto:ops@example.com"
-  ],
-  "status": "deactivated"
-}
+{"contact": ["mailto:ops@example.com"], "status": "deactivated"}
 ```
 
 </details>
 
-<details>
-<summary><strong>Response: 200 OK</strong></summary>
+#### Response
 
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Example JSON:**
 ```json
 {
   "status": "deactivated",
-  "contact": [
-    "mailto:ops@example.com"
-  ],
+  "contact": ["mailto:ops@example.com"],
   "orders": "https://ca.example.com/acme/account/acc-01/orders",
   "key": {
     "kty": "EC",
@@ -1865,12 +2364,12 @@ Updates account contact information or deactivates the account.
 
 </details>
 
-**Error codes:**
+**Error Codes:**
 
-- `400 Bad Request` — invalid payload
-- `401 Unauthorized` — invalid JWS
-- `404 Not Found` — unknown account
-- `500 Internal Server Error` — update failure
+* `400 Bad Request` — invalid payload.
+* `401 Unauthorized` — invalid JWS.
+* `404 Not Found` — unknown account.
+* `500 Internal Server Error` — update failure.
 
 ---
 
@@ -1880,11 +2379,10 @@ ACME errors use `application/problem+json` problem documents (`type`, `detail`, 
 
 ## SCEP (optional)
 
+
 Registered at `/scep/` when a SCEP provisioner exists in `ca.json`. Uses the **smallstep SCEP** protocol (PKCS#7/CMS), not JSON.
 
 **Base path:** `/scep/{provisioner}` (default provisioner name: `scep`)
-
-Typical operations (HTTP methods vary by operation; see [smallstep SCEP API](https://github.com/smallstep/certificates)):
 
 | Operation | Description |
 | --------- | ----------- |
@@ -1892,52 +2390,71 @@ Typical operations (HTTP methods vary by operation; see [smallstep SCEP API](htt
 | GetCACert | Retrieve CA certificate(s) |
 | PKIOperation | Enrollment and renewal messages |
 
-**Authentication:** SCEP challenge password when `CA_API_SCEP_CHALLENGE` is configured.
+- **Authentication:** SCEP challenge password when `CA_API_SCEP_CHALLENGE` is configured
+- **Permissions:** `None` (protocol credentials, not arx RBAC)
 
 **Status discovery (JSON API):** `GET /api/v1/scep/status`
 
-**Error codes:** Protocol-specific HTTP statuses; `404` when SCEP is not enabled.
+**Error Codes:** Protocol-specific HTTP statuses; `404` when SCEP is not enabled.
 
 ---
 
 ## NDES (optional)
 
+
 Registered at `/certsrv/` for Microsoft AD CS–compatible paths when NDES connectors are configured.
 
 ### GET /certsrv/mscep/mscep.dll
 
-Proxies to the configured SCEP connector (same protocol as `/scep/scep`).
+> Proxies to the configured SCEP connector (same protocol as `/scep/scep`).
 
-**Authentication:** SCEP challenge password
+- **Authentication:** SCEP challenge password
+- **Permissions:** `None`
 
-**Response:** SCEP PKCS#7 payloads (not JSON)
+#### Response
 
-**Error codes:**
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
-- `503 Service Unavailable` — connector not configured
-- `404 Not Found` — NDES disabled
+SCEP PKCS#7 payloads (not JSON).
+
+</details>
+
+**Error Codes:**
+
+* `503 Service Unavailable` — connector not configured.
+* `404 Not Found` — NDES disabled.
 
 ---
 
 ### GET /certsrv/mscep_admin/mscep_admin.dll
 
-Returns the SCEP challenge password for NDES enrollment workflows.
+> Returns the SCEP challenge password for NDES enrollment workflows.
 
-**Authentication:** Optional `X-NDES-Admin-Secret` header or `?secret=` query parameter when `NDES` admin secret is configured
+- **Authentication:** Optional `X-NDES-Admin-Secret` header or `?secret=` query when admin secret is configured
+- **Permissions:** `None`
 
-**Response (success):** `200 OK`, `text/plain` challenge password body
+#### Response
 
-**Error codes:**
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
 
-- `401 Unauthorized` — invalid admin secret
-- `405 Method Not Allowed` — non-GET request
-- `503 Service Unavailable` — `CA_API_SCEP_CHALLENGE` not set
+`text/plain` challenge password body.
+
+</details>
+
+**Error Codes:**
+
+* `401 Unauthorized` — invalid admin secret.
+* `405 Method Not Allowed` — non-GET request.
+* `503 Service Unavailable` — `CA_API_SCEP_CHALLENGE` not set.
 
 **Status discovery (JSON API):** `GET /api/v1/ndes/status`
 
 ---
 
 ## Related Documentation
+
 
 - [acme.md](acme.md) — ACME challenge behavior, environment variables, reverse-proxy examples
 - [cli_reference.md](cli_reference.md) — `arx` CLI and agent commands
