@@ -57,6 +57,12 @@ type Bootstrap struct {
 	AdminPasswordHash string `mapstructure:"admin_password_hash" yaml:"admin_password_hash"`
 }
 
+// ServiceConfig holds systemd self-install parameters for Infrastructure as Code.
+type ServiceConfig struct {
+	RunAsUser  string `mapstructure:"run_as_user" yaml:"run_as_user"`
+	InstallDir string `mapstructure:"install_dir" yaml:"install_dir"`
+}
+
 // TelemetryConfig holds OpenTelemetry exporter settings.
 type TelemetryConfig struct {
 	ServiceName      string `mapstructure:"service_name" yaml:"service_name"`
@@ -73,6 +79,7 @@ type ServerConfig struct {
 	Security  SecurityConfig  `mapstructure:"security" yaml:"security"`
 	Bootstrap Bootstrap       `mapstructure:"bootstrap" yaml:"bootstrap"`
 	Telemetry TelemetryConfig `mapstructure:"telemetry" yaml:"telemetry"`
+	Service   ServiceConfig   `mapstructure:"service" yaml:"service"`
 }
 
 // DefaultServerConfig returns the built-in defaults used when server.yaml is created.
@@ -113,6 +120,10 @@ func DefaultServerConfig() ServerConfig {
 			ExporterEndpoint: "http://localhost:4318",
 			ExporterInsecure: true,
 			SDKDisabled:      false,
+		},
+		Service: ServiceConfig{
+			RunAsUser:  "arx-ca",
+			InstallDir: "/opt/arx",
 		},
 	}
 }
