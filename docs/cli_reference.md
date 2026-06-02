@@ -13,6 +13,7 @@ Admin commands resolve the CA base URL and JWT from local files instead of requi
 | `~/.arx/cli.yaml` | YAML | file `0600`, dir `0700` | `server_url`, `log_level` |
 | `~/.arx/config.json` | JSON | file `0600`, dir `0700` | `server_url`, `token`, `token_type`, `expires_at`, `email` |
 | `~/.arx-cert-service/config.json` | JSON | (agent) | `api_url` — updated when agent commands pass `--url` |
+| `~/.arx-cert-service/agent.yaml` | YAML | file `0600`, dir `0700` | Daemon renewal loop: `check_interval`, `renew_threshold`, `managed_certs` |
 
 `cli.yaml` is created on first CLI use with default `log_level: info`. **`server_url` is not pre-populated** until you log in or pass `--url` on a command that persists it.
 
@@ -55,7 +56,7 @@ Expires: 2026-06-02T12:00:00Z
 Roles: SuperAdmin
 ```
 
-Commands that require authentication (`ui`, `cert`, `agent enroll`) call `NewAuthenticatedClient` and fail with `not logged in; run arx login first` when no token is present.
+Commands that require authentication (`ui`, `cert`, `agent enroll`, `agent daemon`) call `NewAuthenticatedClient` and fail with `not logged in; run arx login first` when no token is present.
 
 ### Login flags
 
@@ -305,6 +306,47 @@ arx agent enroll --domain example.local -u http://localhost:8080
 | `--ttl` | Certificate lifetime (e.g. `24h`, `720h`) |
 | `--url`, `-u` | Override server URL |
 
+### `arx agent daemon`
+
+Runs a blocking renewal loop for certificates listed in `~/.arx-cert-service/agent.yaml`. On each check interval the agent reads local PEM files, compares remaining TTL against `renew_threshold`, and when renewal is needed calls `POST /api/v1/certificates/auto` with the stored admin JWT. Renewed PEM files are written with mode `0600`; optional `post_hook` shell commands run after a successful renewal (for example `systemctl reload nginx`).
+
+Requires a prior `arx login`. The daemon logs to stderr via `slog`.
+
+```bash
+arx agent daemon
+arx agent daemon --config /etc/arx/agent.yaml
+```
+
+Example `agent.yaml`:
+
+```yaml
+daemon:
+  check_interval: 24h
+  renew_threshold: 720h
+  managed_certs:
+    - cert_path: /etc/nginx/ssl/app.pem
+      key_path: /etc/nginx/ssl/app-key.pem
+      template: web-server
+      common_name: app.internal
+      post_hook: systemctl reload nginx
+```
+
+| Field | Default | Description |
+| ----- | ------- | ----------- |
+| `daemon.check_interval` | `24h` | How often the renewal loop wakes up |
+| `daemon.renew_threshold` | `720h` (30 days) | Renew when remaining certificate TTL is below this value |
+| `managed_certs[].cert_path` | — | Path to the local certificate PEM file (required) |
+| `managed_certs[].key_path` | — | Path to the local private key PEM file (required) |
+| `managed_certs[].template` | — | Certificate template / profile name sent as `template_id` |
+| `managed_certs[].common_name` | — | Common Name requested from the CA (required) |
+| `managed_certs[].post_hook` | — | Shell command executed after successful renewal |
+
+| Flag | Description |
+| ---- | ----------- |
+| `--config` | Path to `agent.yaml` (default: `~/.arx-cert-service/agent.yaml`) |
+
+Environment overrides use prefix `ARX_AGENT_` (for example `ARX_AGENT_DAEMON_CHECK_INTERVAL=12h`).
+
 ### `arx agent local list`
 
 ```bash
@@ -381,6 +423,7 @@ arx
 ├── hash <password>
 └── agent
     ├── enroll --domain <name> [--ttl] [--url]
+    ├── daemon [--config]
     ├── local
     │   ├── list [--store ...]
     │   └── view <id>
@@ -430,6 +473,14 @@ arx agent trust install-intermediate --url http://localhost:8080
 ```bash
 arx login --url http://localhost:8080
 arx agent enroll --domain app.internal --ttl 2160h
+```
+
+### Automated renewal daemon
+
+```bash
+arx login --url http://localhost:8080
+# edit ~/.arx-cert-service/agent.yaml — add managed_certs entries
+arx agent daemon
 ```
 
 ---

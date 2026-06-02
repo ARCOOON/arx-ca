@@ -13,6 +13,7 @@
 | **REST API** | X.509 issuance, revocation, OCSP, templates, SSH CA, enrollment status |
 | **Enrollment protocols** | SCEP and NDES when configured in `ca.json` |
 | **Stateful CLI** | `arx login --url` persists the CA base URL in `~/.arx/cli.yaml` and the JWT in `~/.arx/config.json` |
+| **Agent renewal daemon** | `arx agent daemon` monitors local PEM files and renews certificates before expiry via `agent.yaml` |
 | **Cross-platform CI** | GitHub Actions release pipeline builds static binaries with `CGO_ENABLED=0` |
 
 Works with standard ACME clients and reverse proxies (**Traefik**, **Caddy**, **Certbot**, and any RFC 8555 client). See [docs/acme.md](docs/acme.md).
@@ -236,9 +237,9 @@ Seeded into the `users` table on first start when no row exists for `bootstrap.a
 | `internal/ca` | PKI engine (step-ca), ACME/SCEP/NDES |
 | `internal/acmeprotocol` | RFC 8555 routing, JWS, challenge validation |
 | `internal/database` | SQLite/PostgreSQL application store and ACME persistence |
-| `internal/config` | Viper YAML for server and CLI |
+| `internal/config` | Viper YAML for server, CLI, and agent daemon |
 | `internal/cli` | Admin API client, login, TUI |
-| `internal/agent` | Local stores, trust install, public cert download |
+| `internal/agent` | Local stores, trust install, public cert download, renewal daemon |
 | `internal/server/service` | Self-installing systemd deployment |
 
 ## License

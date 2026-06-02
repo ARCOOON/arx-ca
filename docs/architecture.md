@@ -62,7 +62,7 @@ Install parameters can be declared in `server.yaml` under `service` for Infrastr
 | `cert` | `list`, `revoke <serial>` | Authenticated certificate management |
 | `util` | `hash <password>` | Administrative helpers |
 | `hash` | `<password>` | Top-level alias for `util hash` |
-| `agent` | `enroll`, `local`, `trust`, `cert` | Local stores, trust anchors, public certs, optional enroll |
+| `agent` | `enroll`, `daemon`, `local`, `trust`, `cert` | Local stores, trust anchors, public certs, optional enroll, renewal daemon |
 
 ### Server command lifecycle
 
