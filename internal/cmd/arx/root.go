@@ -9,12 +9,12 @@ func Execute() error {
 	return NewRootCmd().Execute()
 }
 
-// NewRootCmd builds the unified arx CLI (server, admin tools, and agent).
+// NewRootCmd builds the arx control-plane CLI (server, admin tools, and utilities).
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "arx",
-		Short: "Arx Certificate Authority platform",
-		Long:  "arx is the unified binary for the Arx CA API server, administration CLI, and local certificate agent.",
+		Short: "Arx Certificate Authority control plane",
+		Long:  "arx is the control-plane binary for the Arx CA API server, administration CLI, and operator utilities. Use arx-agent on client nodes for renewal and local certificate operations.",
 	}
 
 	root.AddCommand(
@@ -24,7 +24,6 @@ func NewRootCmd() *cobra.Command {
 		newCertCmd(),
 		newUtilCmd(),
 		utilHashCmd(),
-		newAgentCmd(),
 	)
 
 	return root
