@@ -8,6 +8,7 @@ import (
 
 	"github.com/your-org/arx-ca/internal/api"
 	"github.com/your-org/arx-ca/internal/auth"
+	"github.com/your-org/arx-ca/internal/ca"
 )
 
 const (
@@ -111,6 +112,35 @@ func RequireServiceAccount(store *auth.APIKeyStore, next http.Handler) http.Hand
 		ctx := auth.WithServiceAccount(r.Context(), account)
 		ctx = auth.WithRoles(ctx, account.Roles)
 		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// RequireAdminOrMTLS accepts either a valid admin JWT or a verified mTLS client certificate.
+func RequireAdminOrMTLS(jwtManager *auth.JWTManager, certValidator *ca.ClientCertValidator, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if token, err := extractBearerToken(r.Header.Get(headerAuthorization)); err == nil {
+			if claims, jwtErr := jwtManager.ValidateToken(token); jwtErr == nil {
+				ctx := auth.WithAdminUsername(r.Context(), claims.Username)
+				roles := claims.Roles
+				if len(roles) == 0 {
+					roles = auth.RolesForAdmin(claims.Username)
+				}
+				ctx = auth.WithRoles(ctx, roles)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
+
+		if certValidator != nil {
+			cert, err := certValidator.ClientCertificateFromRequest(r)
+			if err == nil {
+				ctx := auth.WithMTLSAuthentication(r.Context(), cert)
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+		}
+
+		api.WriteError(w, http.StatusUnauthorized, "authentication required")
 	})
 }
 
