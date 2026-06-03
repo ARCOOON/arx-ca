@@ -8,7 +8,7 @@ This document describes how **arx** and **arx-agent** are structured: two static
 2. **Portability** — Build fully static Linux/Windows/macOS artifacts with `CGO_ENABLED=0` for CI and air-gapped installs.
 3. **Compatibility** — Keep step-ca as the signing engine and RFC 8555 ACME for ecosystem tools (Traefik, Caddy, Certbot).
 4. **Separation of concerns** — HTTP handlers stay thin; business logic lives in services and the PKI engine; persistence is isolated in `internal/database` and repositories.
-5. **Future Web UI** — RESTful, stateless JSON API with a consistent `{ "data", "error" }` envelope.
+5. **Dedicated Web UI** — Optional static WebUI on a separate listener (`webui` in `server.yaml`); the REST API remains stateless with a `{ "data", "error" }` envelope.
 
 ## Split-binary pattern
 
@@ -141,7 +141,55 @@ arx server start [--config path]
 | Identity | `useradd --system` for service user (default `arx-ca`) | `userdel` |
 | systemd | Write `arx-server.service`, `daemon-reload`, `enable`, `restart` | stop, disable, remove unit |
 
-`server start` registers routes in `internal/cmd/arx/server_start.go`, mounts ACME at `/acme/` when the ACME provisioner is active, and handles graceful shutdown on `SIGINT`/`SIGTERM`.
+`server start` registers routes in `internal/cmd/arx/server_start.go`, mounts ACME at `/acme/` when the ACME provisioner is active, optionally starts the dedicated WebUI server (`internal/server/webui.go`), and handles graceful shutdown on `SIGINT`/`SIGTERM` for both listeners.
+
+### Dedicated WebUI server
+
+When `webui.enabled` is `true`, the CA API process also runs an **isolated** `net/http` server for static frontend assets. It does not share the API listener (`server.host` / `server.port`); operators bind it separately (default `:8443`) and can enable TLS with dedicated certificate paths.
+
+```
+                    ┌─────────────────────────────────────┐
+  Browser / CDN ──► │  WebUI listener (webui.listen_address) │
+                    │  PathPrefix + static UIDir           │
+                    └─────────────────────────────────────┘
+
+                    ┌─────────────────────────────────────┐
+  Clients / CLI ──► │  API listener (server.host:port)     │
+                    │  /api/v1/*, /acme/, /ocsp, …         │
+                    └─────────────────────────────────────┘
+```
+
+| Setting | Default | Role |
+| ------- | ------- | ---- |
+| `webui.enabled` | `false` | Turn on the dedicated WebUI server |
+| `webui.ui_dir` | `/opt/arx/ui` | Directory of built SPA assets (`index.html` required) |
+| `webui.path_prefix` | `/` | URL path under which the UI is served (see below) |
+| `webui.listen_address` | `:8443` | Bind address for the WebUI only |
+| `webui.max_body_size` | `2097152` (2 MiB) | Request body cap via `http.MaxBytesReader` |
+| `webui.read_timeout` | `10s` | `http.Server.ReadTimeout` |
+| `webui.write_timeout` | `10s` | `http.Server.WriteTimeout` |
+| `webui.tls.enabled` | `true` | Use `ListenAndServeTLS` when cert/key paths are set |
+| `webui.tls.cert_file` / `key_file` | (empty) | TLS material (required when TLS is enabled) |
+| `webui.cors.allowed_origins` | `["*"]` | CORS `Access-Control-Allow-Origin` |
+| `webui.cors.allowed_methods` | `["GET", "OPTIONS"]` | CORS allowed methods |
+
+**Path prefix and deployment architecture**
+
+`path_prefix` defines the **base URL path** for the SPA, not a filesystem path. The WebUI mux strips this prefix before resolving files under `ui_dir`:
+
+| `path_prefix` | User opens | Static file served from |
+| ------------- | ---------- | ------------------------ |
+| `/` | `https://ca.example:8443/` | `ui_dir/index.html` |
+| `/ui` | `https://ca.example:8443/ui/` | `ui_dir/index.html` (after strip) |
+| `/admin` | `https://ca.example:8443/admin/app` | `ui_dir/app` or SPA fallback to `index.html` |
+
+Use a non-root prefix when the same host also terminates other paths (reverse proxy, shared ingress) or when operators want the API on `/` and the console under `/ui`. The frontend build must set its router `base` / `homepage` to match `path_prefix` so client-side routes resolve correctly.
+
+Requests that do not match a file under `ui_dir` receive **SPA fallback** (`index.html`) so deep links work. Middleware applies configured CORS and `max_body_size` before the file handler.
+
+Startup logs include the effective URL, for example: `WebUI server starting url=https://0.0.0.0:8443/ui` when `path_prefix` is `/ui` and TLS is enabled.
+
+Relative `ui_dir` and TLS paths resolve against the directory containing `server.yaml`, consistent with `database.path`.
 
 ## Systemd self-healing (`ExecStartPre`)
 
@@ -255,6 +303,7 @@ Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). ste
 | `internal/cli` | Admin HTTP client, login flow, Bubble Tea TUI |
 | `internal/agent` | OS certificate stores, trust installation, renewal daemon |
 | `internal/cmd/arxagent` | Cobra surface for the `arx-agent` binary |
+| `internal/server` | Dedicated WebUI static server (`webui.go`) |
 | `internal/server/service` | `arx-server` systemd unit render, binary copy, install/uninstall |
 | `internal/agent/service` | `arx-agent` systemd unit render, binary copy, install/uninstall |
 
@@ -272,7 +321,7 @@ Challenge validation (**HTTP-01**, **DNS-01**, **TLS-ALPN-01**) runs in `interna
 
 | Concern | Mechanism |
 | ------- | --------- |
-| Server config | `server.yaml` beside binary; override with `arx server --config` |
+| Server config | `server.yaml` beside binary; override with `arx server --config`; optional `webui` block for static UI |
 | Env overrides | `ARX_*` via Viper; exported to `CA_API_*` when unset |
 | CLI state | `~/.arx/cli.yaml` (`server_url`), `~/.arx/config.json` (JWT) |
 | Agent state | `~/.arx-cert-service/` (trust + enroll artifacts) |

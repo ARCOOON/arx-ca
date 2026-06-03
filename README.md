@@ -150,7 +150,7 @@ Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows
 
 | File | Purpose |
 | ---- | ------- |
-| `server.yaml` | Server bind, database, CA paths, security, bootstrap, telemetry, optional `service` block (beside `arx`, or `--config`) |
+| `server.yaml` | Server bind, database, CA paths, security, bootstrap, telemetry, optional `service` and `webui` blocks (beside `arx`, or `--config`) |
 | `~/.arx/cli.yaml` | CLI defaults: `server_url`, `log_level` (mode `0600`, dir `0700`) |
 | `~/.arx/config.json` | Saved JWT session after `arx login` (used by `arx-agent enroll` / `run` when renewing) |
 | `~/.arx-cert-service/agent.yaml` | Agent-only renewal daemon config (`protocol: api` or `acme` per cert); see [docs/agent.md](docs/agent.md) |
@@ -173,6 +173,50 @@ service:
   run_as_user: arx-ca
   install_dir: /opt/arx
 ```
+
+### Dedicated WebUI server
+
+The REST API and the browser UI run on **separate listeners**. Enable the WebUI with `webui.enabled: true` and place built static assets in `webui.ui_dir` (default `/opt/arx/ui`, must contain `index.html`).
+
+| Parameter | Default | Description |
+| --------- | ------- | ----------- |
+| `webui.enabled` | `false` | Start the dedicated WebUI HTTP server |
+| `webui.ui_dir` | `/opt/arx/ui` | Static SPA root directory |
+| `webui.path_prefix` | `/` | URL path prefix (e.g. `/ui` → console at `https://host:8443/ui/`) |
+| `webui.listen_address` | `:8443` | WebUI bind address (independent of `server.port`) |
+| `webui.max_body_size` | `2097152` | Max request body size (bytes) |
+| `webui.read_timeout` / `write_timeout` | `10s` | Server timeouts |
+| `webui.tls.enabled` | `true` | HTTPS for the WebUI listener |
+| `webui.tls.cert_file` / `key_file` | (empty) | TLS certificate and key (required when TLS is on) |
+| `webui.cors.allowed_origins` | `["*"]` | CORS origins for static assets |
+| `webui.cors.allowed_methods` | `["GET", "OPTIONS"]` | CORS methods |
+
+**`path_prefix` and deployment:** A prefix of `/` serves the SPA at the WebUI listener root. A prefix of `/ui` strips `/ui` before looking up files under `ui_dir`, so operators can colocate the API behind one hostname (port 8080) and the console on another port or path without mixing handlers. Configure your frontend build `base` to match `path_prefix`. Unmatched paths under the prefix fall back to `index.html` for client-side routing.
+
+Example (UI under `/ui` on HTTPS port 8443):
+
+```yaml
+webui:
+  enabled: true
+  ui_dir: /opt/arx/ui
+  path_prefix: /ui
+  listen_address: ":8443"
+  max_body_size: 2097152
+  read_timeout: 10s
+  write_timeout: 10s
+  tls:
+    enabled: true
+    cert_file: /opt/arx/certs/webui.crt
+    key_file: /opt/arx/certs/webui.key
+  cors:
+    allowed_origins:
+      - "*"
+    allowed_methods:
+      - GET
+      - OPTIONS
+```
+
+`arx server config init` writes this block with defaults. Set `webui.tls.cert_file` and `key_file` before enabling TLS in production.
 
 Environment overrides use the `ARX_` prefix (Viper) and `ARX_AGENT_` for agent daemon settings. See [.env.example](.env.example) for Docker Compose.
 
@@ -222,7 +266,9 @@ The container runs `arx server start` on **8080**; PKI data is mounted at `./dat
 | `GET` | `/api/v1/health` | — | Health and runtime metrics |
 | `GET` | `/api/v1/ca/root` | — | Root CA PEM |
 | `POST` | `/api/v1/auth/login` | — | Admin JWT (`email` + `password`) |
-| `POST` | `/api/v1/certificates/auto` | Service / Admin | Generate key + sign |
+| `POST` | `/api/v1/certificates/issue` | Service / Admin | Sign CSR (certificate only) |
+| `POST` | `/api/v1/certificates/auto` | Admin | Generate ECDSA P-384 key + sign |
+| `POST` | `/api/v1/certificates/renew` | Admin / mTLS | Renew existing certificate |
 | `GET` | `/acme/directory` | ACME JWS | ACME directory (when enabled) |
 
 Full table: [docs/api_reference.md](docs/api_reference.md). JSON envelope: `{ "data": …, "error": null | { "message": "…" } }`.

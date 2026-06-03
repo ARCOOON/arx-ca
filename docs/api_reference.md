@@ -81,8 +81,33 @@ API keys are created via `POST /api/v1/auth/service-accounts` (admin only).
 | `Admin` | Valid admin JWT required |
 | `Agent` | Valid service-account API key required |
 | `Admin \| Agent` | Either JWT or API key; RBAC capability noted when enforced |
+| `Admin \| mTLS` | Valid admin JWT **or** verified mutual TLS client certificate (see below) |
 
 Missing or invalid credentials → `401`. Valid credentials without RBAC capability → `403`.
+
+### Mutual TLS (mTLS) client authentication
+
+When the API server is configured with TLS (`server.tls.enabled: true`), selected endpoints accept **mutual TLS** as an alternative to admin JWT. The client must present a **valid, non-revoked certificate** issued by this CA over the TLS connection.
+
+| Requirement | Detail |
+| ----------- | ------ |
+| Transport | HTTPS with a client certificate (`server.tls.enabled: true`) |
+| Certificate | Issued by this CA, not expired, not revoked |
+| Identity binding | On `/renew` and `/rekey`, the client certificate **Common Name (CN)** must match the CN of the certificate being renewed |
+
+<details>
+  <summary><strong>View mTLS Renewal Example (curl)</strong></summary>
+
+```bash
+curl --cert client.crt --key client.key --cacert root_ca.crt \
+  -X POST https://ca.example.com:8443/api/v1/certificates/renew \
+  -H "Content-Type: application/json" \
+  -d '{"certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n"}'
+```
+
+The client certificate CN must match the subject CN of `certificate_pem`. No `Authorization` header is required when mTLS identity is sufficient.
+
+</details>
 
 ### RBAC capability matrix
 
@@ -517,7 +542,7 @@ Missing or invalid credentials → `401`. Valid credentials without RBAC capabil
 
 
 ### POST /api/v1/certificates/issue
-> Signs a PEM-encoded CSR with the intermediate CA.
+> Signs a PEM-encoded CSR with the intermediate CA. The server never generates or returns a private key.
 
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
@@ -648,10 +673,10 @@ Missing or invalid credentials → `401`. Valid credentials without RBAC capabil
 
 ---
 ### POST /api/v1/certificates/auto
-> Generates a key pair and signs a certificate in one step (used by `arx agent enroll`).
+> Generates an ECDSA P-384 key pair and CSR internally, signs the certificate, and returns **both** the certificate and private key. Used by `arx agent enroll`.
 
-- **Authentication:** Required (Bearer JWT or X-API-Key)
-- **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
+- **Authentication:** Required (Bearer admin JWT only)
+- **Permissions:** `Admin` — requires RBAC `certificates:issue`
 
 #### Request
 <details>
@@ -690,7 +715,7 @@ Missing or invalid credentials → `401`. Valid credentials without RBAC capabil
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `certificate_pem` | string | Yes | Issued certificate PEM |
-| `private_key_pem` | string | Yes | Generated private key PEM |
+| `private_key_pem` | string | Yes | Generated ECDSA P-384 private key PEM |
 | `serial` | string | Yes | Certificate serial |
 | `not_before` | string | Yes | Validity start |
 | `not_after` | string | Yes | Validity end |
@@ -910,8 +935,25 @@ Missing or invalid credentials → `401`. Valid credentials without RBAC capabil
 ### POST /api/v1/certificates/renew
 > Re-issues a certificate with the same public key (non-ACME renewal flow).
 
-- **Authentication:** Required (Bearer JWT or X-API-Key)
-- **Permissions:** `Admin | Agent` — requires RBAC `certificates:renew`
+- **Authentication:** Required — **Admin JWT** or **mTLS client certificate** (service-account API keys are **not** accepted)
+- **Permissions:** `Admin | mTLS` — admin JWT requires RBAC `certificates:renew`; mTLS identity is bound to the certificate CN
+
+<details>
+  <summary><strong>View Authentication Options</strong></summary>
+
+**Option 1 — Admin JWT**
+
+```http
+Authorization: Bearer <jwt>
+```
+
+Requires a role with `certificates:renew` (SuperAdmin or CA-Admin). Admins may renew any certificate.
+
+**Option 2 — Mutual TLS**
+
+Present a valid client certificate issued by this CA over HTTPS (`server.tls.enabled: true`). The client certificate **CN must match** the CN of the certificate identified by `certificate_pem` or `renew_token`. Service-account API keys cannot be used on this endpoint.
+
+</details>
 
 #### Request
 <details>
@@ -962,8 +1004,8 @@ Missing or invalid credentials → `401`. Valid credentials without RBAC capabil
 </details>
 
 **Error Codes:**
-* `401 Unauthorized` — missing or invalid credentials.
-* `403 Forbidden` — insufficient RBAC permissions.
+* `401 Unauthorized` — missing or invalid credentials (JWT or mTLS).
+* `403 Forbidden` — insufficient RBAC permissions, or mTLS CN does not match the target certificate.
 * `405 Method Not Allowed` — wrong HTTP method.
 * `400 Bad Request` — missing renewal credential or parse errors.
 
@@ -971,8 +1013,15 @@ Missing or invalid credentials → `401`. Valid credentials without RBAC capabil
 ### POST /api/v1/certificates/rekey
 > Re-issues a certificate with a new key from the supplied CSR.
 
-- **Authentication:** Required (Bearer JWT or X-API-Key)
-- **Permissions:** `Admin | Agent` — requires RBAC `certificates:renew`
+- **Authentication:** Required — **Admin JWT** or **mTLS client certificate** (service-account API keys are **not** accepted)
+- **Permissions:** `Admin | mTLS` — admin JWT requires RBAC `certificates:renew`; mTLS identity is bound to the certificate CN
+
+<details>
+  <summary><strong>View Authentication Options</strong></summary>
+
+Same authentication model as `POST /api/v1/certificates/renew`: admin JWT with `certificates:renew`, or mTLS with CN binding to the certificate being rekeyed.
+
+</details>
 
 #### Request
 <details>
@@ -1025,8 +1074,8 @@ Missing or invalid credentials → `401`. Valid credentials without RBAC capabil
 </details>
 
 **Error Codes:**
-* `401 Unauthorized` — missing or invalid credentials.
-* `403 Forbidden` — insufficient RBAC permissions.
+* `401 Unauthorized` — missing or invalid credentials (JWT or mTLS).
+* `403 Forbidden` — insufficient RBAC permissions, or mTLS CN does not match the target certificate.
 * `405 Method Not Allowed` — wrong HTTP method.
 * `400 Bad Request` — missing `csr` or renewal credential.
 
