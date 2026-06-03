@@ -370,6 +370,9 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("server.log_level", d.Server.LogLevel)
 	v.SetDefault("server.read_timeout", d.Server.ReadTimeout)
 	v.SetDefault("server.write_timeout", d.Server.WriteTimeout)
+	v.SetDefault("server.tls.enabled", d.Server.TLS.Enabled)
+	v.SetDefault("server.tls.cert_file", d.Server.TLS.CertFile)
+	v.SetDefault("server.tls.key_file", d.Server.TLS.KeyFile)
 	v.SetDefault("database.driver", d.Database.Driver)
 	v.SetDefault("database.path", d.Database.Path)
 	v.SetDefault("database.host", d.Database.Host)
@@ -391,6 +394,18 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("telemetry.sdk_disabled", d.Telemetry.SDKDisabled)
 	v.SetDefault("service.run_as_user", d.Service.RunAsUser)
 	v.SetDefault("service.install_dir", d.Service.InstallDir)
+	v.SetDefault("webui.enabled", d.WebUI.Enabled)
+	v.SetDefault("webui.ui_dir", d.WebUI.UIDir)
+	v.SetDefault("webui.path_prefix", d.WebUI.PathPrefix)
+	v.SetDefault("webui.listen_address", d.WebUI.ListenAddress)
+	v.SetDefault("webui.max_body_size", d.WebUI.MaxBodySize)
+	v.SetDefault("webui.read_timeout", d.WebUI.ReadTimeout)
+	v.SetDefault("webui.write_timeout", d.WebUI.WriteTimeout)
+	v.SetDefault("webui.tls.enabled", d.WebUI.TLS.Enabled)
+	v.SetDefault("webui.tls.cert_file", d.WebUI.TLS.CertFile)
+	v.SetDefault("webui.tls.key_file", d.WebUI.TLS.KeyFile)
+	v.SetDefault("webui.cors.allowed_origins", d.WebUI.CORS.AllowedOrigins)
+	v.SetDefault("webui.cors.allowed_methods", d.WebUI.CORS.AllowedMethods)
 }
 
 func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
@@ -509,7 +524,37 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 	}
 
 	cfg.Bootstrap = normalizeBootstrap(cfg.Bootstrap)
+	cfg.WebUI = normalizeWebUI(cfg.WebUI)
 	return cfg
+}
+
+func normalizeWebUI(w WebUIConfig) WebUIConfig {
+	def := DefaultServerConfig().WebUI
+	if strings.TrimSpace(w.UIDir) == "" {
+		w.UIDir = def.UIDir
+	}
+	if strings.TrimSpace(w.PathPrefix) == "" {
+		w.PathPrefix = def.PathPrefix
+	}
+	if strings.TrimSpace(w.ListenAddress) == "" {
+		w.ListenAddress = def.ListenAddress
+	}
+	if w.MaxBodySize <= 0 {
+		w.MaxBodySize = def.MaxBodySize
+	}
+	if strings.TrimSpace(w.ReadTimeout) == "" {
+		w.ReadTimeout = def.ReadTimeout
+	}
+	if strings.TrimSpace(w.WriteTimeout) == "" {
+		w.WriteTimeout = def.WriteTimeout
+	}
+	if len(w.CORS.AllowedOrigins) == 0 {
+		w.CORS.AllowedOrigins = append([]string(nil), def.CORS.AllowedOrigins...)
+	}
+	if len(w.CORS.AllowedMethods) == 0 {
+		w.CORS.AllowedMethods = append([]string(nil), def.CORS.AllowedMethods...)
+	}
+	return w
 }
 
 func normalizeBootstrap(b Bootstrap) Bootstrap {
