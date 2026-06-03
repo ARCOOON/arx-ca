@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/your-org/arx-ca/internal/api"
+	"github.com/your-org/arx-ca/internal/auth"
 	"github.com/your-org/arx-ca/internal/ca"
 	"github.com/your-org/arx-ca/internal/models"
 )
@@ -35,6 +36,20 @@ func (h *RenewalHandler) Renew() http.Handler {
 		var req models.RenewCertificateRequest
 		if err := decodeJSONBody(w, r, &req); err != nil {
 			api.WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		if err := h.validateRenewalIdentity(r, req.CertificatePEM, req.RenewToken); err != nil {
+			if isRenewalIdentityError(err) {
+				api.WriteError(w, http.StatusForbidden, err.Error())
+				return
+			}
+			if isRenewalClientError(err) {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			status, message := ca.MapCAError(err)
+			api.WriteError(w, status, message)
 			return
 		}
 
@@ -75,6 +90,20 @@ func (h *RenewalHandler) Rekey() http.Handler {
 			return
 		}
 
+		if err := h.validateRenewalIdentity(r, req.CertificatePEM, req.RenewToken); err != nil {
+			if isRenewalIdentityError(err) {
+				api.WriteError(w, http.StatusForbidden, err.Error())
+				return
+			}
+			if isRenewalClientError(err) {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			status, message := ca.MapCAError(err)
+			api.WriteError(w, status, message)
+			return
+		}
+
 		resp, err := h.engine.RekeyCertificate(r.Context(), req.CertificatePEM, req.CSR, req.RenewToken)
 		if err != nil {
 			if isRenewalClientError(err) {
@@ -91,6 +120,39 @@ func (h *RenewalHandler) Rekey() http.Handler {
 
 		api.WriteSuccess(w, http.StatusCreated, resp)
 	})
+}
+
+func (h *RenewalHandler) validateRenewalIdentity(r *http.Request, certificatePEM, renewToken string) error {
+	mtlsCN, mtlsAuth := auth.MTLSCommonNameFromContext(r.Context())
+	if !mtlsAuth {
+		return nil
+	}
+
+	target, err := h.engine.ResolveRenewTarget(certificatePEM, renewToken)
+	if err != nil {
+		return err
+	}
+
+	targetCN := ca.CertificateCommonName(target)
+	if targetCN == "" || !strings.EqualFold(targetCN, mtlsCN) {
+		return errRenewalCNMismatch
+	}
+	return nil
+}
+
+var errRenewalCNMismatch = &renewalIdentityError{message: "renewal is not permitted for this identity"}
+
+type renewalIdentityError struct {
+	message string
+}
+
+func (e *renewalIdentityError) Error() string {
+	return e.message
+}
+
+func isRenewalIdentityError(err error) bool {
+	_, ok := err.(*renewalIdentityError)
+	return ok
 }
 
 func isRenewalClientError(err error) bool {
