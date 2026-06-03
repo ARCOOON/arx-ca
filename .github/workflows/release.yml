@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -22,62 +22,62 @@ jobs:
 
       - name: Build arx Linux amd64
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: "0"
           GOOS: linux
           GOARCH: amd64
         run: go build -trimpath -ldflags="-s -w" -o arx-linux-amd64 ./cmd/arx
 
       - name: Build arx Linux arm64
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: "0"
           GOOS: linux
           GOARCH: arm64
         run: go build -trimpath -ldflags="-s -w" -o arx-linux-arm64 ./cmd/arx
 
       - name: Build arx Windows amd64
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: "0"
           GOOS: windows
           GOARCH: amd64
         run: go build -trimpath -ldflags="-s -w" -o arx-windows-amd64.exe ./cmd/arx
 
       - name: Build arx Darwin arm64
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: "0"
           GOOS: darwin
           GOARCH: arm64
         run: go build -trimpath -ldflags="-s -w" -o arx-darwin-arm64 ./cmd/arx
 
       - name: Build arx-agent Linux amd64
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: "0"
           GOOS: linux
           GOARCH: amd64
         run: go build -trimpath -ldflags="-s -w" -o arx-agent-linux-amd64 ./cmd/arx-agent
 
       - name: Build arx-agent Linux arm64
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: "0"
           GOOS: linux
           GOARCH: arm64
         run: go build -trimpath -ldflags="-s -w" -o arx-agent-linux-arm64 ./cmd/arx-agent
 
       - name: Build arx-agent Windows amd64
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: "0"
           GOOS: windows
           GOARCH: amd64
         run: go build -trimpath -ldflags="-s -w" -o arx-agent-windows-amd64.exe ./cmd/arx-agent
 
       - name: Build arx-agent Darwin arm64
         env:
-          CGO_ENABLED: '0'
+          CGO_ENABLED: "0"
           GOOS: darwin
           GOARCH: arm64
         run: go build -trimpath -ldflags="-s -w" -o arx-agent-darwin-arm64 ./cmd/arx-agent
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: |
