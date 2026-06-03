@@ -96,7 +96,7 @@ func (e *PKIEngine) IssueCertificate(ctx context.Context, csrPEM, ttl, templateI
 	return certificateResponse(chain[0]), nil
 }
 
-// AutoCertificate generates an ECDSA P-256 key and CSR in memory, signs the CSR with the
+// AutoCertificate generates an ECDSA P-384 key and CSR in memory, signs the CSR with the
 // intermediate CA, and returns both the private key and certificate in PEM format.
 func (e *PKIEngine) AutoCertificate(ctx context.Context, req models.AutoCertificateRequest) (*models.AutoCertificateResponse, error) {
 	if e == nil || e.auth == nil {
@@ -113,7 +113,7 @@ func (e *PKIEngine) AutoCertificate(ctx context.Context, req models.AutoCertific
 		return nil, err
 	}
 
-	signer, err := keyutil.GenerateSigner("EC", "P-256", 0)
+	signer, err := keyutil.GenerateSigner("EC", "P-384", 0)
 	if err != nil {
 		return nil, fmt.Errorf("generate private key: %w", err)
 	}
