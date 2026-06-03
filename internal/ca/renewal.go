@@ -74,6 +74,12 @@ func (e *PKIEngine) RekeyCertificate(ctx context.Context, certificatePEM, csrPEM
 	return certificateResponse(chain[0]), nil
 }
 
+// ResolveRenewTarget resolves the certificate targeted by a renewal request.
+func (e *PKIEngine) ResolveRenewTarget(certificatePEM, renewToken string) (*x509.Certificate, error) {
+	cert, _, err := e.resolveRenewCertificate(certificatePEM, renewToken)
+	return cert, err
+}
+
 func (e *PKIEngine) resolveRenewCertificate(certificatePEM, renewToken string) (*x509.Certificate, string, error) {
 	renewToken = strings.TrimSpace(renewToken)
 	certificatePEM = strings.TrimSpace(certificatePEM)
