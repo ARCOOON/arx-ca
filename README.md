@@ -53,7 +53,7 @@ make build
 sudo ./bin/arx server setup
 ```
 
-From a [GitHub Release](https://github.com/your-org/arx-ca/releases):
+From a [GitHub Release](https://github.com/ARCOOON/arx-ca/releases):
 
 ```bash
 chmod +x arx-linux-amd64
