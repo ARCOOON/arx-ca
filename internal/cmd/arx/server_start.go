@@ -20,6 +20,7 @@ import (
 	"github.com/your-org/arx-ca/internal/database"
 	"github.com/your-org/arx-ca/internal/logging"
 	"github.com/your-org/arx-ca/internal/repository"
+	arxserver "github.com/your-org/arx-ca/internal/server"
 	"github.com/your-org/arx-ca/internal/telemetry"
 )
 
@@ -86,6 +87,10 @@ func runServer() error {
 		return err
 	}
 	apiKeyStore := auth.NewAPIKeyStore()
+	clientCertValidator, err := ca.NewClientCertValidator(pkiEngine)
+	if err != nil {
+		return fmt.Errorf("initialize client certificate validator: %w", err)
+	}
 	userStore := repository.NewUserStore(appDB)
 	authHandler := handlers.NewAuthHandler(jwtManager, apiKeyStore, userStore)
 	sshHandler := handlers.NewSSHHandler(pkiEngine, jwtManager, apiKeyStore)
@@ -96,6 +101,9 @@ func runServer() error {
 	}
 	certPerm := func(perm auth.Permission, h http.Handler) http.Handler {
 		return middleware.RequireServiceAccountOrAdmin(jwtManager, apiKeyStore, middleware.RequirePermission(perm, h))
+	}
+	renewPerm := func(h http.Handler) http.Handler {
+		return middleware.RequireAdminOrMTLS(jwtManager, clientCertValidator, middleware.RequirePermission(auth.PermCertificatesRenew, h))
 	}
 
 	mux := http.NewServeMux()
@@ -112,14 +120,14 @@ func runServer() error {
 
 	mux.Handle("POST /api/v1/certificates/issue", certPerm(auth.PermCertificatesIssue, certHandler.Issue()))
 	mux.Handle("POST /api/v1/certificates/issue-with-token", certPerm(auth.PermCertificatesIssue, certHandler.IssueWithToken()))
-	mux.Handle("POST /api/v1/certificates/auto", certPerm(auth.PermCertificatesIssue, certHandler.Auto()))
+	mux.Handle("POST /api/v1/certificates/auto", adminPerm(auth.PermCertificatesIssue, certHandler.Auto()))
 	mux.Handle("POST /api/v1/certificates/revoke", certPerm(auth.PermCertificatesRevoke, certHandler.Revoke()))
 	mux.Handle("POST /api/v1/certificates/lint", certPerm(auth.PermCertificatesLint, certHandler.Lint()))
 	mux.Handle("GET /api/v1/certificates", certPerm(auth.PermCertificatesRead, certHandler.List()))
 	mux.Handle("POST /api/v1/provisioners/token", certPerm(auth.PermProvisionersToken, provisionerHandler.Token()))
 	mux.Handle("GET /api/v1/k8s/status", certPerm(auth.PermEnrollmentStatus, provisionerHandler.K8sStatus()))
-	mux.Handle("POST /api/v1/certificates/renew", certPerm(auth.PermCertificatesRenew, renewalHandler.Renew()))
-	mux.Handle("POST /api/v1/certificates/rekey", certPerm(auth.PermCertificatesRenew, renewalHandler.Rekey()))
+	mux.Handle("POST /api/v1/certificates/renew", renewPerm(renewalHandler.Renew()))
+	mux.Handle("POST /api/v1/certificates/rekey", renewPerm(renewalHandler.Rekey()))
 	mux.Handle("GET /api/v1/acme/status", certPerm(auth.PermEnrollmentStatus, acmeHandler.Status()))
 	mux.Handle("POST /api/v1/acme/eab-keys", certPerm(auth.PermACMEEAB, acmeHandler.CreateEABKey()))
 	mux.Handle("GET /api/v1/scep/status", certPerm(auth.PermEnrollmentStatus, acmeHandler.SCEPStatus()))
@@ -164,8 +172,35 @@ func runServer() error {
 		},
 	}
 
+	tlsConfig, err := arxserver.BuildAPITLSConfig(pkiEngine, serverCfg.Server.TLS)
+	if err != nil {
+		return fmt.Errorf("initialize API TLS: %w", err)
+	}
+	server.TLSConfig = tlsConfig
+
+	certFile, keyFile, err := arxserver.ValidateAPITLSCredentials(serverCfg.Server)
+	if err != nil {
+		return err
+	}
+
+	var webUIServer *arxserver.WebUIServer
+	if serverCfg.WebUI.Enabled {
+		webUIServer, err = arxserver.NewWebUIServer(serverCfg.WebUI, log)
+		if err != nil {
+			return fmt.Errorf("initialize WebUI server: %w", err)
+		}
+		webUIServer.Start()
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
+		if serverCfg.Server.TLS.Enabled {
+			log.Info("arx server listening (TLS)", slog.String("address", listenAddr), slog.String("log_level", serverCfg.Server.LogLevel))
+			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errCh <- err
+			}
+			return
+		}
 		log.Info("arx server listening", slog.String("address", listenAddr), slog.String("log_level", serverCfg.Server.LogLevel))
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
@@ -182,10 +217,22 @@ func runServer() error {
 		log.Info("shutdown signal received", slog.String("signal", sig.String()))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), serverCfg.Server.WriteTimeout)
-	defer cancel()
+	if webUIServer != nil {
+		webShutdownTimeout := serverCfg.Server.WriteTimeout
+		if wt, err := serverCfg.WebUI.WriteTimeoutDuration(); err == nil {
+			webShutdownTimeout = wt
+		}
+		webCtx, webCancel := context.WithTimeout(context.Background(), webShutdownTimeout)
+		if err := webUIServer.Shutdown(webCtx); err != nil {
+			webCancel()
+			return err
+		}
+		webCancel()
+	}
 
-	if err := server.Shutdown(ctx); err != nil {
+	apiCtx, apiCancel := context.WithTimeout(context.Background(), serverCfg.Server.WriteTimeout)
+	defer apiCancel()
+	if err := server.Shutdown(apiCtx); err != nil {
 		return err
 	}
 	log.Info("server stopped")
