@@ -3,7 +3,7 @@ package arxagentcmd
 import (
 	"github.com/spf13/cobra"
 
-	arxconfig "github.com/your-org/arx-ca/internal/config"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
 )
 
 func withCLIConfig(cmd *cobra.Command) *cobra.Command {

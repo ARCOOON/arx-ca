@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/smallstep/certificates/authority/provisioner"
 
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // CreateACMEEABKey mints an ACME External Account Binding MAC key for client registration.

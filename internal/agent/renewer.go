@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/your-org/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/config"
 )
 
 // Renewer renews a managed certificate when its remaining TTL is below the threshold.

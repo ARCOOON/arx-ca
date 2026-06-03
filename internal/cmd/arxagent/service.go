@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	agentservice "github.com/your-org/arx-ca/internal/agent/service"
+	agentservice "github.com/ARCOOON/arx-ca/internal/agent/service"
 )
 
 func requireRootForService(action string) {

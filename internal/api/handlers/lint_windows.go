@@ -5,7 +5,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/your-org/arx-ca/internal/api"
+	"github.com/ARCOOON/arx-ca/internal/api"
 )
 
 // Lint handles POST /api/v1/certificates/lint.

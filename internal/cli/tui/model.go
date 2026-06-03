@@ -8,8 +8,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	cliapi "github.com/your-org/arx-ca/internal/cli/api"
-	"github.com/your-org/arx-ca/internal/models"
+	cliapi "github.com/ARCOOON/arx-ca/internal/cli/api"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 type view int

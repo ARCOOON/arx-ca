@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/your-org/arx-ca/internal/agent/state"
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/agent/state"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // Options configures a single-domain enrollment request.

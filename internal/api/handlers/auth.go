@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/your-org/arx-ca/internal/api"
-	"github.com/your-org/arx-ca/internal/auth"
-	"github.com/your-org/arx-ca/internal/logging"
-	"github.com/your-org/arx-ca/internal/models"
-	"github.com/your-org/arx-ca/internal/repository"
+	"github.com/ARCOOON/arx-ca/internal/api"
+	"github.com/ARCOOON/arx-ca/internal/auth"
+	"github.com/ARCOOON/arx-ca/internal/logging"
+	"github.com/ARCOOON/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/repository"
 )
 
 const maxAuthBodyBytes = 1 << 20 // 1 MiB

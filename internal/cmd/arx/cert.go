@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/your-org/arx-ca/internal/cli/runtime"
+	"github.com/ARCOOON/arx-ca/internal/cli/runtime"
 )
 
 func newCertCmd() *cobra.Command {

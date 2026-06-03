@@ -3,8 +3,8 @@ package arxcmd
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/your-org/arx-ca/internal/cli/runtime"
-	"github.com/your-org/arx-ca/internal/cli/tui"
+	"github.com/ARCOOON/arx-ca/internal/cli/runtime"
+	"github.com/ARCOOON/arx-ca/internal/cli/tui"
 )
 
 func newUICmd() *cobra.Command {

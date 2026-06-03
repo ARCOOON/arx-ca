@@ -22,7 +22,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/smallstep/certificates/authority/provisioner"
 
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 const templateRegistryFile = "registry.json"

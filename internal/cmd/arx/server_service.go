@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	arxconfig "github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/server/service"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/server/service"
 )
 
 func requireRootForService(action string) {

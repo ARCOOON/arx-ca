@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 const (

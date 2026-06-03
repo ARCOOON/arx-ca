@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/smallstep/truststore"
-	agentapi "github.com/your-org/arx-ca/internal/agent/api"
-	"github.com/your-org/arx-ca/internal/agent/state"
+	agentapi "github.com/ARCOOON/arx-ca/internal/agent/api"
+	"github.com/ARCOOON/arx-ca/internal/agent/state"
 )
 
 const trustPrefix = "arx-ca "

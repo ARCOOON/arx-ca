@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	cliapi "github.com/your-org/arx-ca/internal/cli/api"
-	clicfg "github.com/your-org/arx-ca/internal/cli/config"
+	cliapi "github.com/ARCOOON/arx-ca/internal/cli/api"
+	clicfg "github.com/ARCOOON/arx-ca/internal/cli/config"
 )
 
 // NewAuthenticatedClient resolves the server URL and builds an API client using the stored JWT.

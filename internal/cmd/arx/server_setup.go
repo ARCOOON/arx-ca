@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/your-org/arx-ca/internal/server/service"
+	"github.com/ARCOOON/arx-ca/internal/server/service"
 )
 
 const (

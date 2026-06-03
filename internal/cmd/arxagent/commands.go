@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	agentenroll "github.com/your-org/arx-ca/internal/agent/enroll"
-	agentlocal "github.com/your-org/arx-ca/internal/agent/local"
-	agentserver "github.com/your-org/arx-ca/internal/agent/server"
-	agenttrust "github.com/your-org/arx-ca/internal/agent/trust"
-	"github.com/your-org/arx-ca/internal/cli/runtime"
+	agentenroll "github.com/ARCOOON/arx-ca/internal/agent/enroll"
+	agentlocal "github.com/ARCOOON/arx-ca/internal/agent/local"
+	agentserver "github.com/ARCOOON/arx-ca/internal/agent/server"
+	agenttrust "github.com/ARCOOON/arx-ca/internal/agent/trust"
+	"github.com/ARCOOON/arx-ca/internal/cli/runtime"
 )
 
 func newEnrollCmd() *cobra.Command {

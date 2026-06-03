@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	arxcmd "github.com/your-org/arx-ca/internal/cmd/arx"
+	arxcmd "github.com/ARCOOON/arx-ca/internal/cmd/arx"
 )
 
 func main() {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	arxconfig "github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/logging"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/logging"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "modernc.org/sqlite"

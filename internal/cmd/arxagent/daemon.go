@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/your-org/arx-ca/internal/agent"
-	arxconfig "github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/logging"
+	"github.com/ARCOOON/arx-ca/internal/agent"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/logging"
 )
 
 func newDaemonCmd() *cobra.Command {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // prepareEnrollmentToken validates Kubernetes service account tokens when configured

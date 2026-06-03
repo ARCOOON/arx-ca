@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/your-org/arx-ca/internal/cli/runtime"
-	"github.com/your-org/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/cli/runtime"
+	"github.com/ARCOOON/arx-ca/internal/config"
 )
 
 // RunDaemon blocks and periodically checks managed certificates, renewing them

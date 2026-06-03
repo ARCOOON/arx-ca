@@ -1,4 +1,4 @@
-module github.com/your-org/arx-ca
+module github.com/ARCOOON/arx-ca
 
 go 1.25.8
 

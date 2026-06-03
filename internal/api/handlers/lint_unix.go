@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/your-org/arx-ca/internal/api"
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/api"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // Lint handles POST /api/v1/certificates/lint.

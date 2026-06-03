@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	cliapi "github.com/your-org/arx-ca/internal/cli/api"
-	"github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/models"
+	cliapi "github.com/ARCOOON/arx-ca/internal/cli/api"
+	"github.com/ARCOOON/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // APIRenewer renews certificates through the Arx CA REST API.

@@ -15,7 +15,7 @@ const (
 
 var unitTemplate = template.Must(template.New("unit").Parse(`[Unit]
 Description=ARX Certificate Renewal Agent
-Documentation=https://github.com/your-org/arx-ca
+Documentation=https://github.com/ARCOOON/arx-ca
 After=network-online.target
 Wants=network-online.target
 

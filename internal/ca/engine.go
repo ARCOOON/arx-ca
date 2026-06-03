@@ -25,8 +25,8 @@ import (
 	"github.com/smallstep/certificates/db"
 	"github.com/smallstep/certificates/pki"
 
-	"github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/models"
 
 	_ "github.com/smallstep/certificates/cas/softcas"
 )

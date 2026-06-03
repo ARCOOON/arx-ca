@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	arxconfig "github.com/your-org/arx-ca/internal/config"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
 )
 
 // Install copies the current binary to installDir, bootstraps agent.yaml, registers

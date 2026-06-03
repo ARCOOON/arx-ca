@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/viper"
 
-	agentstate "github.com/your-org/arx-ca/internal/agent/state"
-	clicfg "github.com/your-org/arx-ca/internal/cli/config"
-	arxconfig "github.com/your-org/arx-ca/internal/config"
+	agentstate "github.com/ARCOOON/arx-ca/internal/agent/state"
+	clicfg "github.com/ARCOOON/arx-ca/internal/cli/config"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
 )
 
 // ErrServerURLNotConfigured is returned when no server URL can be resolved.

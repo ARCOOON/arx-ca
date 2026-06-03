@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/your-org/arx-ca/internal/ca"
-	arxconfig "github.com/your-org/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/ca"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
 )
 
 // BuildAPITLSConfig constructs TLS settings for the API listener when TLS is enabled.

@@ -3,8 +3,8 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/your-org/arx-ca/internal/api"
-	"github.com/your-org/arx-ca/internal/auth"
+	"github.com/ARCOOON/arx-ca/internal/api"
+	"github.com/ARCOOON/arx-ca/internal/auth"
 )
 
 // RequirePermission enforces that the authenticated principal holds the given permission.

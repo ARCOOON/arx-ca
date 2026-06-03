@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/your-org/arx-ca/internal/ca"
+	"github.com/ARCOOON/arx-ca/internal/ca"
 )
 
 const maxOCSPBodyBytes = 64 << 10 // 64 KiB

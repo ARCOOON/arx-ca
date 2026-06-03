@@ -8,8 +8,8 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	agentapi "github.com/your-org/arx-ca/internal/agent/api"
-	"github.com/your-org/arx-ca/internal/models"
+	agentapi "github.com/ARCOOON/arx-ca/internal/agent/api"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // ListOptions configures a public certificate listing from arx-ca-server.

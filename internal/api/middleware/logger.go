@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/your-org/arx-ca/internal/logging"
+	"github.com/ARCOOON/arx-ca/internal/logging"
 )
 
 type responseRecorder struct {

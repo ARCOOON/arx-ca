@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/your-org/arx-ca/internal/logging"
+	"github.com/ARCOOON/arx-ca/internal/logging"
 )
 
 // User is a row from the application users table.

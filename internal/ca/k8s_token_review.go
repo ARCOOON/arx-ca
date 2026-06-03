@@ -19,7 +19,7 @@ import (
 	"go.step.sm/crypto/jose"
 	"go.step.sm/crypto/pemutil"
 
-	"github.com/your-org/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/config"
 )
 
 const k8sServiceAccountIssuer = "kubernetes/serviceaccount"

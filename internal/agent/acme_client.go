@@ -24,7 +24,7 @@ import (
 
 	"golang.org/x/crypto/acme"
 
-	"github.com/your-org/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/config"
 )
 
 const acmeUserAgent = "arx-agent/1.0"

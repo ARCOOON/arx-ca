@@ -5,7 +5,7 @@ package ca
 import (
 	"errors"
 
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // LintCertificate is not available on Windows builds.

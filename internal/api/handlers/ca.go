@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/your-org/arx-ca/internal/api"
-	"github.com/your-org/arx-ca/internal/ca"
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/api"
+	"github.com/ARCOOON/arx-ca/internal/ca"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // CAHandler serves public CA certificate endpoints.

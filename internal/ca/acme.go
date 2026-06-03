@@ -20,8 +20,8 @@ import (
 	"github.com/smallstep/certificates/db"
 	"github.com/smallstep/certificates/scep"
 
-	"github.com/your-org/arx-ca/internal/acmeprotocol"
-	"github.com/your-org/arx-ca/internal/database"
+	"github.com/ARCOOON/arx-ca/internal/acmeprotocol"
+	"github.com/ARCOOON/arx-ca/internal/database"
 )
 
 const (

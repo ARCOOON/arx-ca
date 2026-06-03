@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/your-org/arx-ca/internal/repository"
+	"github.com/ARCOOON/arx-ca/internal/repository"
 )
 
 // LoginFailureReason describes an internal auth failure point for debug logging only.

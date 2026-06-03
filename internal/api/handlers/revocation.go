@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/your-org/arx-ca/internal/ca"
+	"github.com/ARCOOON/arx-ca/internal/ca"
 )
 
 // CRL handles GET /api/v1/ca/crl and returns the current CRL in DER or PEM format.

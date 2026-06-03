@@ -12,16 +12,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/your-org/arx-ca/internal/api/handlers"
-	"github.com/your-org/arx-ca/internal/api/middleware"
-	"github.com/your-org/arx-ca/internal/auth"
-	"github.com/your-org/arx-ca/internal/ca"
-	arxconfig "github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/database"
-	"github.com/your-org/arx-ca/internal/logging"
-	"github.com/your-org/arx-ca/internal/repository"
-	arxserver "github.com/your-org/arx-ca/internal/server"
-	"github.com/your-org/arx-ca/internal/telemetry"
+	"github.com/ARCOOON/arx-ca/internal/api/handlers"
+	"github.com/ARCOOON/arx-ca/internal/api/middleware"
+	"github.com/ARCOOON/arx-ca/internal/auth"
+	"github.com/ARCOOON/arx-ca/internal/ca"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/database"
+	"github.com/ARCOOON/arx-ca/internal/logging"
+	"github.com/ARCOOON/arx-ca/internal/repository"
+	arxserver "github.com/ARCOOON/arx-ca/internal/server"
+	"github.com/ARCOOON/arx-ca/internal/telemetry"
 )
 
 func runServer() error {

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	arxconfig "github.com/your-org/arx-ca/internal/config"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
 )
 
 // WebUIServer serves static WebUI assets on a dedicated listener.

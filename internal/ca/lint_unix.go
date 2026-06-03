@@ -12,7 +12,7 @@ import (
 	"github.com/zmap/zlint/v3/lint"
 	"go.step.sm/crypto/pemutil"
 
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 var complianceLintSources = lint.SourceList{

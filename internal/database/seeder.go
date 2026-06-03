@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/your-org/arx-ca/internal/auth"
-	"github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/logging"
+	"github.com/ARCOOON/arx-ca/internal/auth"
+	"github.com/ARCOOON/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/logging"
 )
 
 // EnsureBootstrapAdmin inserts the configured bootstrap admin when no user exists with admin_email.

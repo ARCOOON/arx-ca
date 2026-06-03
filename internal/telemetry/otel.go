@@ -128,7 +128,7 @@ func Init(ctx context.Context) (func(context.Context) error, error) {
 	)
 	otel.SetMeterProvider(meterProvider)
 
-	meter = meterProvider.Meter("github.com/your-org/arx-ca/http")
+	meter = meterProvider.Meter("github.com/ARCOOON/arx-ca/http")
 	requestDuration, err = meter.Float64Histogram(
 		"http.server.duration",
 		metric.WithDescription("HTTP request duration in seconds"),

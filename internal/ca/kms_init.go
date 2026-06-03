@@ -10,7 +10,7 @@ import (
 	"github.com/smallstep/certificates/pki"
 	kmsapi "go.step.sm/crypto/kms/apiv1"
 
-	"github.com/your-org/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/config"
 
 	_ "go.step.sm/crypto/kms/pkcs11"
 )

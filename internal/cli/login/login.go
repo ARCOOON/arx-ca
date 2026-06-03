@@ -11,11 +11,11 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/your-org/arx-ca/internal/cli/api"
-	"github.com/your-org/arx-ca/internal/cli/config"
-	"github.com/your-org/arx-ca/internal/cli/runtime"
-	arxconfig "github.com/your-org/arx-ca/internal/config"
-	"github.com/your-org/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/cli/api"
+	"github.com/ARCOOON/arx-ca/internal/cli/config"
+	"github.com/ARCOOON/arx-ca/internal/cli/runtime"
+	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
+	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
 // Options configures the login flow. Non-empty Email and Password skip prompts.
