@@ -16,6 +16,8 @@ GO_WINDOWS := GOOS=windows GOARCH=amd64 CGO_ENABLED=0
 
 all: build-all
 
+build-all: build build-linux-agent build-windows-agent build-linux build-windows
+
 build:
 	@mkdir -p $(BIN_DIR)
 	go build $(LDFLAGS) -o $(BIN_DIR)/$(BINARY) $(PKG)
@@ -23,8 +25,6 @@ build:
 build-agent:
 	@mkdir -p $(BIN_DIR)
 	go build $(LDFLAGS) -o $(BIN_DIR)/$(AGENT_BINARY) $(AGENT_PKG)
-
-build-all: build build-agent
 
 build-linux:
 	@mkdir -p $(BIN_DIR)
