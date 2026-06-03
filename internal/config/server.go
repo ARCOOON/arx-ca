@@ -10,13 +10,21 @@ import (
 	"time"
 )
 
+// ServerTLSConfig holds TLS settings for the main API HTTP server.
+type ServerTLSConfig struct {
+	Enabled  bool   `mapstructure:"enabled" yaml:"enabled"`
+	CertFile string `mapstructure:"cert_file" yaml:"cert_file"`
+	KeyFile  string `mapstructure:"key_file" yaml:"key_file"`
+}
+
 // ServerSettings holds HTTP server bind and timeout options.
 type ServerSettings struct {
-	Host         string        `mapstructure:"host" yaml:"host"`
-	Port         int           `mapstructure:"port" yaml:"port"`
-	LogLevel     string        `mapstructure:"log_level" yaml:"log_level"`
-	ReadTimeout  time.Duration `mapstructure:"read_timeout" yaml:"read_timeout"`
-	WriteTimeout time.Duration `mapstructure:"write_timeout" yaml:"write_timeout"`
+	Host         string          `mapstructure:"host" yaml:"host"`
+	Port         int             `mapstructure:"port" yaml:"port"`
+	LogLevel     string          `mapstructure:"log_level" yaml:"log_level"`
+	ReadTimeout  time.Duration   `mapstructure:"read_timeout" yaml:"read_timeout"`
+	WriteTimeout time.Duration   `mapstructure:"write_timeout" yaml:"write_timeout"`
+	TLS          ServerTLSConfig `mapstructure:"tls" yaml:"tls"`
 }
 
 // DatabaseConfig holds application user-store database connection settings.
@@ -71,6 +79,32 @@ type TelemetryConfig struct {
 	SDKDisabled      bool   `mapstructure:"sdk_disabled" yaml:"sdk_disabled"`
 }
 
+// WebUITLSConfig holds TLS settings for the dedicated WebUI HTTP server.
+type WebUITLSConfig struct {
+	Enabled  bool   `mapstructure:"enabled" yaml:"enabled"`
+	CertFile string `mapstructure:"cert_file" yaml:"cert_file"`
+	KeyFile  string `mapstructure:"key_file" yaml:"key_file"`
+}
+
+// WebUICORSConfig holds CORS policy for static WebUI assets.
+type WebUICORSConfig struct {
+	AllowedOrigins []string `mapstructure:"allowed_origins" yaml:"allowed_origins"`
+	AllowedMethods []string `mapstructure:"allowed_methods" yaml:"allowed_methods"`
+}
+
+// WebUIConfig holds the isolated WebUI static file server settings.
+type WebUIConfig struct {
+	Enabled       bool            `mapstructure:"enabled" yaml:"enabled"`
+	UIDir         string          `mapstructure:"ui_dir" yaml:"ui_dir"`
+	PathPrefix    string          `mapstructure:"path_prefix" yaml:"path_prefix"`
+	ListenAddress string          `mapstructure:"listen_address" yaml:"listen_address"`
+	MaxBodySize   int64           `mapstructure:"max_body_size" yaml:"max_body_size"`
+	ReadTimeout   string          `mapstructure:"read_timeout" yaml:"read_timeout"`
+	WriteTimeout  string          `mapstructure:"write_timeout" yaml:"write_timeout"`
+	TLS           WebUITLSConfig  `mapstructure:"tls" yaml:"tls"`
+	CORS          WebUICORSConfig `mapstructure:"cors" yaml:"cors"`
+}
+
 // ServerConfig is the root configuration loaded from server.yaml.
 type ServerConfig struct {
 	Server    ServerSettings  `mapstructure:"server" yaml:"server"`
@@ -80,6 +114,7 @@ type ServerConfig struct {
 	Bootstrap Bootstrap       `mapstructure:"bootstrap" yaml:"bootstrap"`
 	Telemetry TelemetryConfig `mapstructure:"telemetry" yaml:"telemetry"`
 	Service   ServiceConfig   `mapstructure:"service" yaml:"service"`
+	WebUI     WebUIConfig     `mapstructure:"webui" yaml:"webui"`
 }
 
 // DefaultServerConfig returns the built-in defaults used when server.yaml is created.
@@ -125,6 +160,22 @@ func DefaultServerConfig() ServerConfig {
 			RunAsUser:  "arx-ca",
 			InstallDir: "/opt/arx",
 		},
+		WebUI: WebUIConfig{
+			Enabled:       false,
+			UIDir:         "/opt/arx/ui",
+			PathPrefix:    "/",
+			ListenAddress: ":8443",
+			MaxBodySize:   2 * 1024 * 1024,
+			ReadTimeout:   "10s",
+			WriteTimeout:  "10s",
+			TLS: WebUITLSConfig{
+				Enabled: true,
+			},
+			CORS: WebUICORSConfig{
+				AllowedOrigins: []string{"*"},
+				AllowedMethods: []string{"GET", "OPTIONS"},
+			},
+		},
 	}
 }
 
@@ -144,6 +195,16 @@ func (s ServerSettings) ListenAddress() string {
 		return fmt.Sprintf(":%d", port)
 	}
 	return fmt.Sprintf("%s:%d", host, port)
+}
+
+// ResolvedTLSCertFile returns the absolute TLS certificate path for the API server.
+func (s ServerSettings) ResolvedTLSCertFile() (string, error) {
+	return resolveWebUIPath(s.TLS.CertFile)
+}
+
+// ResolvedTLSKeyFile returns the absolute TLS private key path for the API server.
+func (s ServerSettings) ResolvedTLSKeyFile() (string, error) {
+	return resolveWebUIPath(s.TLS.KeyFile)
 }
 
 // ConfigPath returns the absolute or relative path to step-ca ca.json.
@@ -233,6 +294,134 @@ func (s SecurityConfig) TokenExpiration() time.Duration {
 		hours = DefaultServerConfig().Security.TokenExpirationHours
 	}
 	return time.Duration(hours) * time.Hour
+}
+
+// NormalizedPathPrefix returns the URL path prefix for WebUI routing (always starts with /).
+func (w WebUIConfig) NormalizedPathPrefix() string {
+	p := strings.TrimSpace(w.PathPrefix)
+	if p == "" || p == "/" {
+		return "/"
+	}
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	return strings.TrimSuffix(p, "/")
+}
+
+// EffectiveListenAddress returns the WebUI bind address.
+func (w WebUIConfig) EffectiveListenAddress() string {
+	addr := strings.TrimSpace(w.ListenAddress)
+	if addr == "" {
+		return DefaultServerConfig().WebUI.ListenAddress
+	}
+	return addr
+}
+
+// ReadTimeoutDuration parses the configured read timeout string.
+func (w WebUIConfig) ReadTimeoutDuration() (time.Duration, error) {
+	return parseWebUIDuration(w.ReadTimeout, DefaultServerConfig().WebUI.ReadTimeout)
+}
+
+// WriteTimeoutDuration parses the configured write timeout string.
+func (w WebUIConfig) WriteTimeoutDuration() (time.Duration, error) {
+	return parseWebUIDuration(w.WriteTimeout, DefaultServerConfig().WebUI.WriteTimeout)
+}
+
+// StartupURL returns a human-readable base URL for startup logging.
+func (w WebUIConfig) StartupURL() string {
+	scheme := "http"
+	if w.TLS.Enabled {
+		scheme = "https"
+	}
+	host := w.EffectiveListenAddress()
+	if strings.HasPrefix(host, ":") {
+		host = "0.0.0.0" + host
+	} else {
+		host = formatListenHostForDisplay(host)
+	}
+	prefix := w.NormalizedPathPrefix()
+	if prefix == "/" {
+		return fmt.Sprintf("%s://%s/", scheme, host)
+	}
+	return fmt.Sprintf("%s://%s%s", scheme, host, prefix)
+}
+
+// ResolvedUIDir returns the absolute path to static UI assets.
+func (w WebUIConfig) ResolvedUIDir() (string, error) {
+	dir := strings.TrimSpace(w.UIDir)
+	if dir == "" {
+		dir = DefaultServerConfig().WebUI.UIDir
+	}
+	if filepath.IsAbs(dir) {
+		return dir, nil
+	}
+	baseDir, err := serverConfigDirectory()
+	if err != nil {
+		return "", fmt.Errorf("resolve webui ui_dir directory: %w", err)
+	}
+	return filepath.Join(baseDir, dir), nil
+}
+
+// ResolvedTLSCertFile returns the absolute TLS certificate path when configured.
+func (w WebUIConfig) ResolvedTLSCertFile() (string, error) {
+	return resolveWebUIPath(w.TLS.CertFile)
+}
+
+// ResolvedTLSKeyFile returns the absolute TLS private key path when configured.
+func (w WebUIConfig) ResolvedTLSKeyFile() (string, error) {
+	return resolveWebUIPath(w.TLS.KeyFile)
+}
+
+func parseWebUIDuration(value, fallback string) (time.Duration, error) {
+	s := strings.TrimSpace(value)
+	if s == "" {
+		s = fallback
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("parse duration %q: %w", s, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("duration must be positive: %s", s)
+	}
+	return d, nil
+}
+
+func resolveWebUIPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+	baseDir, err := serverConfigDirectory()
+	if err != nil {
+		return "", fmt.Errorf("resolve webui path: %w", err)
+	}
+	return filepath.Join(baseDir, path), nil
+}
+
+func formatListenHostForDisplay(host string) string {
+	if host == "0.0.0.0" {
+		return host
+	}
+	if strings.HasPrefix(host, "[") {
+		if idx := strings.LastIndex(host, "]:"); idx >= 0 {
+			h := host[1:idx]
+			if h == "" || h == "::" || h == "0.0.0.0" {
+				return "0.0.0.0" + host[idx+1:]
+			}
+		}
+		return host
+	}
+	if idx := strings.LastIndex(host, ":"); idx > 0 {
+		h := host[:idx]
+		if h == "" || h == "0.0.0.0" {
+			return "0.0.0.0" + host[idx:]
+		}
+	}
+	return host
 }
 
 // GenerateJWTSecret creates a URL-safe base64 secret for HS256 signing.
