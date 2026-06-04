@@ -12,8 +12,35 @@ env:
   LDFLAGS: -X main.Version=${{ github.ref_name }} -X main.Commit=${{ github.sha }} -s -w
 
 jobs:
+  create-release:
+    name: Create release and changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        run: |
+          echo "## What's Changed" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            git log --pretty=format:"* %s ([%h](https://github.com/ARCOOON/arx-ca/commit/%H))" >> CHANGELOG.md
+          else
+            git log ${PREV_TAG}..HEAD --pretty=format:"* %s ([%h](https://github.com/ARCOOON/arx-ca/commit/%H))" >> CHANGELOG.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          body_path: CHANGELOG.md
+
   build-linux:
     name: Build Linux binaries
+    needs: create-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -56,7 +83,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
           files: |
             arx-linux-amd64
             arx-linux-arm64
@@ -65,6 +91,7 @@ jobs:
 
   build-windows:
     name: Build Windows binaries
+    needs: create-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -93,13 +120,13 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          append_body: true
           files: |
             arx-windows-amd64.exe
             arx-agent-windows-amd64.exe
 
   build-darwin:
     name: Build Darwin binaries
+    needs: create-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -142,7 +169,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          append_body: true
           files: |
             arx-darwin-amd64
             arx-darwin-arm64
@@ -151,6 +177,7 @@ jobs:
 
   build-webui:
     name: Build WebUI distribution
+    needs: create-release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -178,5 +205,4 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          append_body: true
           files: webui-dist.tar.gz
