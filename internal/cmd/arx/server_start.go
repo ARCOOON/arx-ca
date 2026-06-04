@@ -59,7 +59,7 @@ func runServer() error {
 		}
 	}()
 
-	pkiEngine, err := ca.InitCA(caConfigPath, serverCfg.CA)
+	pkiEngine, err := ca.InitCA(caConfigPath, serverCfg.CA, serverCfg.EffectiveCABootstrap())
 	if err != nil {
 		return err
 	}
@@ -110,6 +110,7 @@ func runServer() error {
 	mux := http.NewServeMux()
 	mux.Handle("GET /api/v1/health", healthHandler)
 	mux.Handle("GET /api/v1/ca/root", caHandler.RootCert())
+	mux.Handle("GET /api/v1/ca/info", certPerm(auth.PermCertificatesRead, caHandler.Info()))
 	mux.Handle("GET /api/v1/ca/crl", caHandler.CRL())
 	mux.Handle("GET /api/v1/crl", caHandler.CRL())
 	mux.Handle("GET /api/v1/public/ca/intermediate", publicHandler.IntermediateCert())
