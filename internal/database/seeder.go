@@ -13,26 +13,27 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/logging"
 )
 
-// EnsureBootstrapAdmin inserts the configured bootstrap admin when no user exists with admin_email.
-func EnsureBootstrapAdmin(db *sql.DB, cfg config.Bootstrap) error {
+// EnsureBootstrapAdmin seeds the initial administrator when the users table is empty.
+func EnsureBootstrapAdmin(db *sql.DB, cfg config.ServerConfig) error {
 	def := config.DefaultServerConfig().Bootstrap
-	email := strings.TrimSpace(cfg.AdminEmail)
+	email := strings.TrimSpace(cfg.Bootstrap.AdminEmail)
 	if email == "" {
 		email = def.AdminEmail
 	}
-	hash := strings.TrimSpace(cfg.AdminPasswordHash)
+	hash := cfg.BootstrapAdminPasswordHash()
 	if hash == "" {
 		hash = def.AdminPasswordHash
 	}
-
-	var count int
-	query := `SELECT COUNT(*) FROM users WHERE email = ` + userEmailPlaceholder(db)
-	logging.Logger().Debug("db query", "sql", query, "email", email)
-	if err := db.QueryRow(query, email).Scan(&count); err != nil {
-		return fmt.Errorf("lookup bootstrap admin user: %w", err)
+	if !config.IsBcryptPasswordHash(hash) {
+		return fmt.Errorf("bootstrap admin password hash is not a valid bcrypt hash")
 	}
-	if count > 0 {
-		logging.Logger().Debug("bootstrap admin already present", "email", email)
+
+	var userCount int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&userCount); err != nil {
+		return fmt.Errorf("count users: %w", err)
+	}
+	if userCount > 0 {
+		logging.Logger().Debug("users table not empty; skipping bootstrap admin seed", "user_count", userCount)
 		return nil
 	}
 
@@ -61,15 +62,8 @@ func EnsureBootstrapAdmin(db *sql.DB, cfg config.Bootstrap) error {
 	return nil
 }
 
-func userEmailPlaceholder(db *sql.DB) string {
-	if isPostgreSQL(db) {
-		return "$1"
-	}
-	return "?"
-}
-
 // SeedInitialAdmin is deprecated; use EnsureBootstrapAdmin.
-func SeedInitialAdmin(db *sql.DB, cfg config.Bootstrap) error {
+func SeedInitialAdmin(db *sql.DB, cfg config.ServerConfig) error {
 	return EnsureBootstrapAdmin(db, cfg)
 }
 
