@@ -157,9 +157,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ARCOOON/arx-ui
-          ref: ${{ github.ref_name }}
+          ref: main
           path: arx-ui
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Admin: create repository secret UI_REPO_PAT with read access to ARCOOON/arx-ui.
+          token: ${{ secrets.UI_REPO_PAT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
