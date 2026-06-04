@@ -38,13 +38,13 @@ onMounted(async () => {
   <div class="space-y-4">
     <div
       v-if="errorMessage"
-      class="border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-300"
+      class="ui-alert-error"
       role="alert"
     >
       {{ errorMessage }}
     </div>
 
-    <div v-if="isLoading" class="text-sm text-zinc-500">Loading SCEP configuration…</div>
+    <div v-if="isLoading" class="text-sm ui-text-muted">Loading SCEP configuration…</div>
 
     <template v-else-if="status">
       <section class="flex flex-wrap items-center gap-3">
@@ -52,30 +52,30 @@ onMounted(async () => {
           :label="status.enabled ? 'Enabled' : 'Disabled'"
           :tone="status.enabled ? 'enabled' : 'disabled'"
         />
-        <span class="text-xs text-zinc-500">
+        <span class="text-xs ui-text-muted">
           Discovery:
-          <code class="border border-zinc-800 bg-zinc-900 px-1 text-emerald-300">GET /api/v1/scep/status</code>
+          <code class="ui-code">GET /api/v1/scep/status</code>
         </span>
       </section>
 
       <FlatToggle label="SCEP enrollment" :enabled="status.enabled" readonly />
 
-      <section class="border border-zinc-800 bg-zinc-900/30">
-        <header class="border-b border-zinc-800 px-4 py-2.5">
-          <h2 class="text-sm font-semibold text-zinc-50">Endpoints</h2>
+      <section class="ui-surface-muted">
+        <header class="ui-border-b px-4 py-2.5">
+          <h2 class="text-sm font-semibold ui-text-primary">Endpoints</h2>
         </header>
-        <dl class="divide-y divide-zinc-800 text-xs">
+        <dl class="ui-divide text-xs">
           <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="text-zinc-500">Base URL</dt>
-            <dd class="break-all font-mono text-zinc-200">{{ baseUrl }}</dd>
+            <dt class="ui-text-muted">Base URL</dt>
+            <dd class="break-all font-mono ui-text-secondary">{{ baseUrl }}</dd>
           </div>
           <div v-if="status.provisioner" class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="text-zinc-500">Provisioner</dt>
-            <dd class="font-mono text-zinc-200">{{ status.provisioner }}</dd>
+            <dt class="ui-text-muted">Provisioner</dt>
+            <dd class="font-mono ui-text-secondary">{{ status.provisioner }}</dd>
           </div>
           <div v-if="status.challenge_hint" class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="text-zinc-500">Challenge</dt>
-            <dd class="text-zinc-200">{{ status.challenge_hint }}</dd>
+            <dt class="ui-text-muted">Challenge</dt>
+            <dd class="ui-text-secondary">{{ status.challenge_hint }}</dd>
           </div>
         </dl>
       </section>
