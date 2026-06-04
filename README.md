@@ -147,7 +147,7 @@ CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o bin/arx ./cmd/arx
 CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o bin/arx-agent ./cmd/arx-agent
 ```
 
-Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows/release.yml), which cross-compiles **both** `arx` and `arx-agent` for Linux (amd64/arm64), Windows (amd64), and Darwin (arm64) with `CGO_ENABLED=0`, embeds the tag and Git commit as `main.Version` and `main.Commit`, and attaches all artifacts to a GitHub Release.
+Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows/release.yml). Four jobs run in parallel: Linux binaries (amd64/arm64), Windows binaries (amd64), Darwin binaries (amd64/arm64), and a WebUI build from [ARCOOON/arx-ui](https://github.com/ARCOOON/arx-ui) packaged as `webui-dist.tar.gz`. All `arx` / `arx-agent` builds use `CGO_ENABLED=0`, embed the tag and Git commit as `main.Version` and `main.Commit`, and upload assets to the same GitHub Release via `softprops/action-gh-release`.
 
 Set local build metadata with Make: `make build VERSION=v1.2.3` (defaults to `v0.0.0-dev`; commit defaults to `git rev-parse --short HEAD` or `unknown`).
 
@@ -233,6 +233,14 @@ webui:
 ```
 
 `arx server config init` writes this block with defaults. Set `webui.tls.cert_file` and `key_file` before enabling TLS in production.
+
+**Automated WebUI install:** `arx server ui download` reads `server.yaml`, fetches the release-matching `webui-dist.tar.gz` asset from GitHub (or the latest release when the binary is `v0.0.0-dev`), extracts files into `webui.ui_dir`, and sets `webui.enabled: true`. Use `sudo` when the default path is `/opt/arx/ui`.
+
+```bash
+arx server config init
+sudo arx server ui download
+arx server start
+```
 
 Environment overrides use the `ARX_` prefix (Viper) and `ARX_AGENT_` for agent daemon settings. See [.env.example](.env.example) for Docker Compose.
 

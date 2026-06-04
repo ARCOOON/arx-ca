@@ -80,7 +80,7 @@ Interactive login (TTY) may prompt for server URL (if not fully non-interactive)
 ## Global conventions
 
 - Run `arx <command> --help` for subcommand-specific flags.
-- `arx server` accepts persistent `--config` for `server.yaml` location (except `config`, `setup`, and `service` subcommands).
+- `arx server` accepts persistent `--config` for `server.yaml` location (except `config`, `setup`, `service`, and `ui` subcommands, which load `server.yaml` on demand).
 - Examples use `bin/arx` and `bin/arx-agent` after `make build-all`.
 
 ---
@@ -157,6 +157,36 @@ Missing config:
 ```text
 No configuration file found at ... Run 'arx server config init' to generate one.
 ```
+
+### `arx server ui download`
+
+Zero-configuration WebUI deployment: detects the running `arx` binary version, downloads `webui-dist.tar.gz` from the matching [ARCOOON/arx-ca](https://github.com/ARCOOON/arx-ca) GitHub release, extracts static assets into `webui.ui_dir`, and sets `webui.enabled: true` in `server.yaml`.
+
+Development builds (`v0.0.0-dev` or an empty version) fetch the **latest** GitHub release. Release binaries use the tag that matches `main.Version` (for example `v1.0.2` → `releases/tags/v1.0.2`).
+
+```bash
+./bin/arx server config init
+sudo ./bin/arx server ui download
+./bin/arx server --config /opt/arx/server.yaml ui download
+```
+
+| Requirement | Notes |
+| ----------- | ----- |
+| Existing `server.yaml` | Run `arx server config init` first |
+| Network | Outbound HTTPS to `api.github.com` and `github.com` |
+| Filesystem | `webui.ui_dir` must be writable (use `sudo` for `/opt/arx/ui`) |
+
+Example progress output:
+
+```text
+Detecting server version...
+Using GitHub release target: latest (binary version v0.0.0-dev)
+Downloading webui-dist.tar.gz from GitHub...
+Extracting assets to /opt/arx/ui...
+WebUI successfully enabled in server.yaml!
+```
+
+After download, configure `webui.tls.cert_file` and `webui.tls.key_file` if TLS is enabled, then restart or start the server (`arx server start` or the `arx-server` systemd unit).
 
 ### `arx server service install`
 

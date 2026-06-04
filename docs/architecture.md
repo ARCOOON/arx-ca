@@ -241,12 +241,16 @@ Setting **`CGO_ENABLED=0`** for release builds yields:
 | **Cross-compilation** | `GOOS`/`GOARCH` builds from Linux CI without cross-compilers |
 | **Reproducible CI** | Same flags in `Makefile` (`build-linux`, `build-windows`) and `.github/workflows/release.yml` |
 
-The release workflow builds eight artifacts on tag push `v*`:
+On tag push `v*`, `.github/workflows/release.yml` runs four parallel jobs. Each Go job sets `CGO_ENABLED=0` and uses `go build -ldflags="-X main.Version=<tag> -X main.Commit=<sha> -s -w" -o …` for `cmd/arx` or `cmd/arx-agent`. The WebUI job checks out `ARCOOON/arx-ui` at the same tag, runs `npm ci` / `npm run build`, and publishes `webui-dist.tar.gz` (contents of `dist/`). All jobs upload to one GitHub Release; the Linux job generates release notes, and the others set `append_body: true` so concurrent uploads do not overwrite the body.
 
-- `arx-linux-amd64`, `arx-linux-arm64`, `arx-windows-amd64.exe`, `arx-darwin-arm64`
-- `arx-agent-linux-amd64`, `arx-agent-linux-arm64`, `arx-agent-windows-amd64.exe`, `arx-agent-darwin-arm64`
+| Job | Artifacts |
+| --- | --- |
+| `build-linux` | `arx-linux-amd64`, `arx-linux-arm64`, `arx-agent-linux-amd64`, `arx-agent-linux-arm64` |
+| `build-windows` | `arx-windows-amd64.exe`, `arx-agent-windows-amd64.exe` |
+| `build-darwin` | `arx-darwin-amd64`, `arx-darwin-arm64`, `arx-agent-darwin-amd64`, `arx-agent-darwin-arm64` |
+| `build-webui` | `webui-dist.tar.gz` |
 
-Each step sets `CGO_ENABLED=0` explicitly before `go build -ldflags="-X main.Version=<tag> -X main.Commit=<sha> -s -w" -o … ./cmd/arx` or `./cmd/arx-agent`.
+Extract the WebUI tarball into `webui.ui_dir` (for example `/opt/arx/ui`): `tar -xzf webui-dist.tar.gz -C /opt/arx/ui`, or run `arx server ui download` to download the matching release asset, extract, and enable `webui` in `server.yaml` automatically.
 
 PostgreSQL deployments still benefit from static binaries; only the **server** needs network access to Postgres at runtime.
 
