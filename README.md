@@ -147,7 +147,7 @@ CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o bin/arx ./cmd/arx
 CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o bin/arx-agent ./cmd/arx-agent
 ```
 
-Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows/release.yml). Four jobs run in parallel: Linux binaries (amd64/arm64), Windows binaries (amd64), Darwin binaries (amd64/arm64), and a WebUI build from [ARCOOON/arx-ui](https://github.com/ARCOOON/arx-ui) (`main` branch) packaged as `webui-dist.tar.gz`. Private UI repo checkout requires the `UI_REPO_PAT` repository secret. All `arx` / `arx-agent` builds use `CGO_ENABLED=0`, embed the tag and Git commit as `main.Version` and `main.Commit`, and upload assets to the same GitHub Release via `softprops/action-gh-release`.
+Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows/release.yml). Four jobs run in parallel: Linux binaries (amd64/arm64), Windows binaries (amd64), Darwin binaries (amd64/arm64), and a WebUI build from the monorepo `webui/` subdirectory (`npm ci`, `npm run build`) packaged as `webui-dist.tar.gz`. All `arx` / `arx-agent` builds use `CGO_ENABLED=0`, embed the tag and Git commit as `main.Version` and `main.Commit`, and upload assets to the same GitHub Release via `softprops/action-gh-release`.
 
 Set local build metadata with Make: `make build VERSION=v1.2.3` (defaults to `v0.0.0-dev`; commit defaults to `git rev-parse --short HEAD` or `unknown`).
 
