@@ -5,15 +5,28 @@ package service
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 )
 
-// Install copies the current binary to installDir, bootstraps configuration, registers
-// the arx-server systemd unit, and starts the service. It must run as root.
+// Install registers the arx systemd unit for the selected scope and starts the service.
 func Install(opts InstallOptions) error {
+	if opts.Scope.IsSystem() {
+		return installSystem(opts)
+	}
+	return installUser(opts)
+}
+
+// Uninstall stops and removes the arx systemd unit and install directory for the selected scope.
+func Uninstall(opts InstallOptions) error {
+	if opts.Scope.IsSystem() {
+		return uninstallSystem(opts)
+	}
+	return uninstallUser(opts)
+}
+
+func installSystem(opts InstallOptions) error {
 	if err := requireRoot("install"); err != nil {
 		return err
 	}
@@ -22,13 +35,74 @@ func Install(opts InstallOptions) error {
 	}
 
 	user := opts.runAsUser()
-	installDir := opts.installDir()
-	destBinary := filepath.Join(installDir, binaryName)
+	installDir, err := opts.resolvedInstallDir()
+	if err != nil {
+		return err
+	}
+	destBinary := filepath.Join(installDir, binaryFileName())
 	configPath := filepath.Join(installDir, configFileName)
 
 	if err := ensureSystemUser(user); err != nil {
 		return err
 	}
+	if err := os.MkdirAll(installDir, 0o700); err != nil {
+		return fmt.Errorf("create install directory %s: %w", installDir, err)
+	}
+
+	srcBinary, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve current executable: %w", err)
+	}
+	if err := copyBinary(srcBinary, destBinary); err != nil {
+		return err
+	}
+	if err := bootstrapConfig(installDir, destBinary); err != nil {
+		return err
+	}
+	if err := setSystemInstallPermissions(user, installDir, destBinary, configPath); err != nil {
+		return err
+	}
+
+	target, err := unitTargetForScope(InstallScopeSystem)
+	if err != nil {
+		return err
+	}
+	params := UnitParams{
+		RunAsUser:  user,
+		InstallDir: installDir,
+		ExecPath:   destBinary,
+		ConfigPath: configPath,
+	}
+	if err := writeUnitFile(target, params); err != nil {
+		return err
+	}
+	_ = os.Remove(legacySystemUnitPath())
+
+	if err := runSystemctl(false, "daemon-reload"); err != nil {
+		return err
+	}
+	if err := runSystemctl(false, "enable", unitName); err != nil {
+		return err
+	}
+	if err := runSystemctl(false, "restart", unitName); err != nil {
+		return err
+	}
+
+	printInstallSuccess("system", unitName, destBinary, configPath, target.filePath)
+	return nil
+}
+
+func installUser(opts InstallOptions) error {
+	if err := requireSystemctl(); err != nil {
+		return err
+	}
+
+	installDir, err := opts.resolvedInstallDir()
+	if err != nil {
+		return err
+	}
+	destBinary := filepath.Join(installDir, binaryFileName())
+	configPath := filepath.Join(installDir, configFileName)
 
 	if err := os.MkdirAll(installDir, 0o700); err != nil {
 		return fmt.Errorf("create install directory %s: %w", installDir, err)
@@ -41,46 +115,45 @@ func Install(opts InstallOptions) error {
 	if err := copyBinary(srcBinary, destBinary); err != nil {
 		return err
 	}
-
 	if err := bootstrapConfig(installDir, destBinary); err != nil {
 		return err
 	}
-
-	if err := setInstallPermissions(user, installDir, destBinary, configPath); err != nil {
-		return err
+	if err := os.Chmod(configPath, 0o600); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("chmod server config: %w", err)
 	}
 
+	target, err := unitTargetForScope(InstallScopeUser)
+	if err != nil {
+		return err
+	}
 	params := UnitParams{
-		RunAsUser:  user,
 		InstallDir: installDir,
 		ExecPath:   destBinary,
 		ConfigPath: configPath,
 	}
-	if err := writeUnitFile(params); err != nil {
+	if err := writeUnitFile(target, params); err != nil {
 		return err
 	}
 
-	if err := runSystemctl("daemon-reload"); err != nil {
+	_ = enableUserLinger()
+
+	if err := runSystemctl(true, "daemon-reload"); err != nil {
 		return err
 	}
-	if err := runSystemctl("enable", unitName); err != nil {
+	if err := runSystemctl(true, "enable", unitName); err != nil {
 		return err
 	}
-	if err := runSystemctl("restart", unitName); err != nil {
+	if err := runSystemctl(true, "restart", unitName); err != nil {
 		return err
 	}
 
-	fmt.Println("arx CA server installed and started.")
-	fmt.Printf("Service:  %s\n", unitName)
-	fmt.Printf("Binary:   %s\n", destBinary)
-	fmt.Printf("Config:   %s\n", configPath)
-	fmt.Println("Edit server.yaml (JWT secret, bootstrap password hash) before production use.")
+	printInstallSuccess("user", unitName, destBinary, configPath, target.filePath)
+	fmt.Println("User services run under systemd --user. Ensure lingering is enabled for headless operation:")
+	fmt.Println("  loginctl enable-linger $USER")
 	return nil
 }
 
-// Uninstall stops the arx-server unit, removes the unit file and install directory, and
-// deletes the service user. It must run as root.
-func Uninstall(opts InstallOptions) error {
+func uninstallSystem(opts InstallOptions) error {
 	if err := requireRoot("uninstall"); err != nil {
 		return err
 	}
@@ -89,34 +162,68 @@ func Uninstall(opts InstallOptions) error {
 	}
 
 	user := opts.runAsUser()
-	installDir := opts.installDir()
-
-	_ = runSystemctl("stop", unitName)
-	_ = runSystemctl("disable", unitName)
-
-	if err := os.Remove(unitFilePath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove %s: %w", unitFilePath, err)
-	}
-
-	if err := runSystemctl("daemon-reload"); err != nil {
+	installDir, err := opts.resolvedInstallDir()
+	if err != nil {
 		return err
 	}
 
+	target, err := unitTargetForScope(InstallScopeSystem)
+	if err != nil {
+		return err
+	}
+
+	_ = runSystemctl(false, "stop", unitName)
+	_ = runSystemctl(false, "disable", unitName)
+	_ = os.Remove(target.filePath)
+	_ = os.Remove(legacySystemUnitPath())
+
+	if err := runSystemctl(false, "daemon-reload"); err != nil {
+		return err
+	}
 	if err := os.RemoveAll(installDir); err != nil {
 		return fmt.Errorf("remove install directory %s: %w", installDir, err)
 	}
-
 	if err := removeSystemUser(user); err != nil {
 		return err
 	}
 
-	fmt.Println("arx CA server uninstalled.")
+	fmt.Println("arx CA server uninstalled (system scope).")
+	return nil
+}
+
+func uninstallUser(opts InstallOptions) error {
+	if err := requireSystemctl(); err != nil {
+		return err
+	}
+
+	installDir, err := opts.resolvedInstallDir()
+	if err != nil {
+		return err
+	}
+
+	target, err := unitTargetForScope(InstallScopeUser)
+	if err != nil {
+		return err
+	}
+
+	_ = runSystemctl(true, "stop", unitName)
+	_ = runSystemctl(true, "disable", unitName)
+	_ = os.Remove(target.filePath)
+
+	if err := runSystemctl(true, "daemon-reload"); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(installDir); err != nil {
+		return fmt.Errorf("remove install directory %s: %w", installDir, err)
+	}
+
+	fmt.Println("arx CA server uninstalled (user scope).")
 	return nil
 }
 
 func requireRoot(action string) error {
 	if os.Geteuid() != 0 {
-		return fmt.Errorf("service %s must be executed as root", action)
+		return fmt.Errorf("service %s with --system requires root privileges", action)
 	}
 	return nil
 }
@@ -159,57 +266,11 @@ func removeSystemUser(user string) error {
 	return nil
 }
 
-func copyBinary(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return fmt.Errorf("open source binary %s: %w", src, err)
-	}
-	defer in.Close()
-
-	if err := os.Remove(dst); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove existing binary %s: %w", dst, err)
-	}
-
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o700)
-	if err != nil {
-		return fmt.Errorf("create destination binary %s: %w", dst, err)
-	}
-	defer func() {
-		_ = out.Close()
-	}()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return fmt.Errorf("copy binary to %s: %w", dst, err)
-	}
-	if err := out.Chmod(0o700); err != nil {
-		return fmt.Errorf("chmod destination binary %s: %w", dst, err)
-	}
-	return nil
-}
-
-func bootstrapConfig(installDir, destBinary string) error {
-	configPath := filepath.Join(installDir, configFileName)
-	if _, err := os.Stat(configPath); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat config file %s: %w", configPath, err)
-	}
-
-	cmd := exec.Command(destBinary, "server", "config", "init")
-	cmd.Dir = installDir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("bootstrap server config: %w: %s", err, trimOutput(out))
-	}
-	return nil
-}
-
-func setInstallPermissions(user, installDir, destBinary, configPath string) error {
+func setSystemInstallPermissions(user, installDir, destBinary, configPath string) error {
 	chown := exec.Command("chown", "-R", user+":"+user, installDir)
 	if out, err := chown.CombinedOutput(); err != nil {
 		return fmt.Errorf("chown %s: %w: %s", installDir, err, trimOutput(out))
 	}
-
 	if err := os.Chmod(installDir, 0o700); err != nil {
 		return fmt.Errorf("chmod install directory: %w", err)
 	}
@@ -224,8 +285,12 @@ func setInstallPermissions(user, installDir, destBinary, configPath string) erro
 	return nil
 }
 
-func runSystemctl(args ...string) error {
-	cmd := exec.Command("systemctl", args...)
+func runSystemctl(userMode bool, args ...string) error {
+	cmdArgs := append([]string{}, args...)
+	if userMode {
+		cmdArgs = append([]string{"--user"}, cmdArgs...)
+	}
+	cmd := exec.Command("systemctl", cmdArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("systemctl %s: %w: %s", args[0], err, trimOutput(out))
@@ -233,11 +298,25 @@ func runSystemctl(args ...string) error {
 	return nil
 }
 
-func trimOutput(b []byte) string {
-	const maxLen = 512
-	s := string(b)
-	if len(s) > maxLen {
-		return s[:maxLen] + "..."
+func enableUserLinger() error {
+	if _, err := exec.LookPath("loginctl"); err != nil {
+		return nil
 	}
-	return s
+	u := os.Getenv("USER")
+	if u == "" {
+		return nil
+	}
+	cmd := exec.Command("loginctl", "enable-linger", u)
+	_ = cmd.Run()
+	return nil
+}
+
+func printInstallSuccess(scope, serviceName, binary, config, unitPath string) {
+	fmt.Println("arx CA server installed and started.")
+	fmt.Printf("Scope:    %s\n", scope)
+	fmt.Printf("Service:  %s\n", serviceName)
+	fmt.Printf("Unit:     %s\n", unitPath)
+	fmt.Printf("Binary:   %s\n", binary)
+	fmt.Printf("Config:   %s\n", config)
+	fmt.Println("Edit server.yaml (JWT secret, bootstrap password hash) before production use.")
 }
