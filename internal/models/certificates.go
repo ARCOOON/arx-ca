@@ -4,10 +4,17 @@ import "time"
 
 // IssueCertificateRequest carries a PEM-encoded CSR to be signed by the intermediate CA.
 type IssueCertificateRequest struct {
-	CSR        string         `json:"csr"`
-	TTL        string         `json:"ttl,omitempty"`
-	TemplateID string         `json:"template_id,omitempty"`
-	Metadata   map[string]any `json:"metadata,omitempty"`
+	CSR                string         `json:"csr"`
+	TTL                string         `json:"ttl,omitempty"`
+	TemplateID         string         `json:"template_id,omitempty"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+	Organization       string         `json:"organization,omitempty"`
+	OrganizationalUnit string         `json:"organizational_unit,omitempty"`
+	Country            string         `json:"country,omitempty"`
+	State              string         `json:"state,omitempty"`
+	Locality           string         `json:"locality,omitempty"`
+	IsServerAuth       bool           `json:"is_server_auth,omitempty"`
+	IsClientAuth       bool           `json:"is_client_auth,omitempty"`
 }
 
 // AutoCertificateRequest describes a certificate to be generated and signed in one step.
@@ -42,6 +49,27 @@ type AutoCertificateResponse struct {
 	Serial         string `json:"serial"`
 	NotBefore      string `json:"not_before"`
 	NotAfter       string `json:"not_after"`
+}
+
+// GenerateCertificateRequest describes a native key generation and issuance request.
+type GenerateCertificateRequest struct {
+	CommonName         string   `json:"common_name"`
+	SANs               []string `json:"sans,omitempty"`
+	TTL                string   `json:"ttl,omitempty"`
+	KeyAlgo            string   `json:"key_algo"`
+	Organization       string   `json:"organization,omitempty"`
+	OrganizationalUnit string   `json:"organizational_unit,omitempty"`
+	Country            string   `json:"country,omitempty"`
+	State              string   `json:"state,omitempty"`
+	Locality           string   `json:"locality,omitempty"`
+	IsServerAuth       bool     `json:"is_server_auth,omitempty"`
+	IsClientAuth       bool     `json:"is_client_auth,omitempty"`
+}
+
+// GenerateCertificateResponse returns PEM-encoded certificate and private key material.
+type GenerateCertificateResponse struct {
+	CertificatePEM string `json:"certificate_pem"`
+	PrivateKeyPEM  string `json:"private_key_pem"`
 }
 
 // RevokeCertificateResponse confirms passive revocation in the step-ca database.
