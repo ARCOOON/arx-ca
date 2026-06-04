@@ -35,5 +35,15 @@ func NewRootCmd(version, commit string) *cobra.Command {
 		updatecli.NewCmd(updater.ComponentArxAgent),
 	)
 
+	applyCobraErrorSilence(root)
 	return withCLIConfig(root)
+}
+
+// applyCobraErrorSilence sets SilenceUsage and SilenceErrors on cmd and all descendants.
+func applyCobraErrorSilence(cmd *cobra.Command) {
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	for _, sub := range cmd.Commands() {
+		applyCobraErrorSilence(sub)
+	}
 }
