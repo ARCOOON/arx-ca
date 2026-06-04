@@ -76,41 +76,17 @@ func HealServerConfig(configPath string, cfg *ServerConfig) error {
 }
 
 func healAdminPasswords(cfg *ServerConfig) (healed bool, err error) {
-	var primaryHash string
-
-	initial := strings.TrimSpace(cfg.Security.InitialAdminPassword)
-	if initial != "" && !IsBcryptPasswordHash(initial) {
-		hashed, hashErr := bcrypt.GenerateFromPassword([]byte(initial), bcryptWorkFactor)
-		if hashErr != nil {
-			return false, fmt.Errorf("hash initial admin password: %w", hashErr)
-		}
-		primaryHash = string(hashed)
-		cfg.Security.InitialAdminPassword = primaryHash
-		healed = true
-	} else if IsBcryptPasswordHash(initial) {
-		primaryHash = initial
+	password := strings.TrimSpace(cfg.Bootstrap.AdminPassword)
+	if password == "" || IsBcryptPasswordHash(password) {
+		return false, nil
 	}
 
-	bootstrap := strings.TrimSpace(cfg.Bootstrap.AdminPasswordHash)
-	switch {
-	case bootstrap != "" && !IsBcryptPasswordHash(bootstrap):
-		if primaryHash != "" {
-			cfg.Bootstrap.AdminPasswordHash = primaryHash
-		} else {
-			hashed, hashErr := bcrypt.GenerateFromPassword([]byte(bootstrap), bcryptWorkFactor)
-			if hashErr != nil {
-				return healed, fmt.Errorf("hash bootstrap admin password: %w", hashErr)
-			}
-			primaryHash = string(hashed)
-			cfg.Bootstrap.AdminPasswordHash = primaryHash
-		}
-		healed = true
-	case bootstrap == "" && primaryHash != "":
-		cfg.Bootstrap.AdminPasswordHash = primaryHash
-		healed = true
+	hashed, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcryptWorkFactor)
+	if hashErr != nil {
+		return false, fmt.Errorf("hash bootstrap admin password: %w", hashErr)
 	}
-
-	return healed, nil
+	cfg.Bootstrap.AdminPassword = string(hashed)
+	return true, nil
 }
 
 // healWebUICORS normalizes wildcard CORS lists and reports whether the configuration changed.
