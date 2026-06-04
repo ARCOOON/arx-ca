@@ -5,10 +5,8 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -18,11 +16,8 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/pkg/errors"
 	"go.step.sm/crypto/pemutil"
 
-	authconfig "github.com/smallstep/certificates/authority/config"
-	"github.com/smallstep/certificates/authority/provisioner"
 	scepAPI "github.com/smallstep/certificates/scep/api"
 )
 
@@ -87,79 +82,6 @@ const (
 	scepDecrypterCertRel = "certs/scep_decrypter.crt"
 	scepDecrypterKeyRel  = "secrets/scep_decrypter.key"
 )
-
-// ensureSCEPProvisioner adds the default SCEP provisioner to ca.json when enabled.
-func ensureSCEPProvisioner(configPath, basePath string, password []byte) error {
-	if strings.EqualFold(os.Getenv("CA_API_SCEP_DISABLED"), "true") {
-		return nil
-	}
-
-	cfg, err := authconfig.LoadConfiguration(configPath)
-	if err != nil {
-		return fmt.Errorf("load configuration for SCEP provisioner: %w", err)
-	}
-	if cfg.AuthorityConfig == nil {
-		return errors.New("authority configuration is missing")
-	}
-
-	for _, p := range cfg.AuthorityConfig.Provisioners {
-		if p.GetName() == scepProvisionerName && p.GetType() == provisioner.TypeSCEP {
-			return nil
-		}
-	}
-
-	challenge := strings.TrimSpace(os.Getenv("CA_API_SCEP_CHALLENGE"))
-	if challenge == "" {
-		pass, err := generateRandomPassword(24)
-		if err != nil {
-			return fmt.Errorf("generate SCEP challenge password: %w", err)
-		}
-		challenge = string(pass)
-		log.Printf("SCEP: generated challenge password; set CA_API_SCEP_CHALLENGE to pin it across restarts")
-	}
-
-	decrypterCert, decrypterKey, err := loadOrCreateSCEPDecrypter(basePath, password)
-	if err != nil {
-		return fmt.Errorf("configure SCEP decrypter: %w", err)
-	}
-
-	scepProv := &provisioner.SCEP{
-		Type:                   "SCEP",
-		Name:                   scepProvisionerName,
-		ChallengePassword:      challenge,
-		MinimumPublicKeyLength: 2048,
-		DecrypterCertificate:   decrypterCert,
-		DecrypterKeyPEM:        decrypterKey,
-		DecrypterKeyPassword:   string(password),
-		Capabilities: []string{
-			"SCEPStandard",
-			"POSTPKIOperation",
-			"SHA-256",
-			"AES",
-			"DES3",
-		},
-	}
-	if minLen := strings.TrimSpace(os.Getenv("CA_API_SCEP_MIN_KEY_LENGTH")); minLen != "" {
-		var n int
-		if _, err := fmt.Sscanf(minLen, "%d", &n); err == nil && n > 0 {
-			scepProv.MinimumPublicKeyLength = n
-		}
-	}
-
-	cfg.AuthorityConfig.Provisioners = append(cfg.AuthorityConfig.Provisioners, scepProv)
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal updated CA configuration: %w", err)
-	}
-	data = append(data, '\n')
-
-	if err := os.WriteFile(configPath, data, 0o600); err != nil {
-		return fmt.Errorf("write updated CA configuration: %w", err)
-	}
-
-	return nil
-}
 
 func loadOrCreateSCEPDecrypter(basePath string, password []byte) (certPEM, keyPEM []byte, err error) {
 	certPath := filepath.Join(basePath, scepDecrypterCertRel)
