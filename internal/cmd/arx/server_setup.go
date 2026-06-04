@@ -24,7 +24,7 @@ func newServerSetupCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "setup",
 		Short: "Interactive wizard to install the Arx CA server as a systemd service",
-		Long: `Guided installation of the arx binary, server.yaml, and arx-server systemd unit.
+		Long: `Guided installation of the arx binary, server.yaml, and arx systemd unit (system scope).
 Requires root on Linux. Declining the systemd prompt exits without changes.`,
 		Run: func(_ *cobra.Command, _ []string) {
 			requireRootForService("server setup")
@@ -35,7 +35,7 @@ Requires root on Linux. Declining the systemd prompt exits without changes.`,
 			if opts == nil {
 				return
 			}
-			runServerServiceInstall(*opts)
+			runServerServiceInstall(opts.Scope, *opts)
 		},
 	}
 }
@@ -63,6 +63,7 @@ func runInteractiveSetup(in io.Reader, out, errOut io.Writer) (*service.InstallO
 	}
 
 	opts := service.InstallOptions{
+		Scope:      service.InstallScopeSystem,
 		RunAsUser:  runAsUser,
 		InstallDir: installDir,
 	}
