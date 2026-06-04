@@ -87,10 +87,11 @@ type WebUITLSConfig struct {
 	KeyFile  string `mapstructure:"key_file" yaml:"key_file"`
 }
 
-// WebUICORSConfig holds CORS policy for static WebUI assets.
+// WebUICORSConfig holds CORS policy for the WebUI listener and API cross-origin access.
 type WebUICORSConfig struct {
 	AllowedOrigins []string `mapstructure:"allowed_origins" yaml:"allowed_origins"`
 	AllowedMethods []string `mapstructure:"allowed_methods" yaml:"allowed_methods"`
+	AllowedHeaders []string `mapstructure:"allowed_headers" yaml:"allowed_headers"`
 }
 
 // WebUIConfig holds the isolated WebUI static file server settings.
@@ -99,6 +100,7 @@ type WebUIConfig struct {
 	UIDir         string          `mapstructure:"ui_dir" yaml:"ui_dir"`
 	PathPrefix    string          `mapstructure:"path_prefix" yaml:"path_prefix"`
 	ListenAddress string          `mapstructure:"listen_address" yaml:"listen_address"`
+	ProxyAPI      *bool           `mapstructure:"proxy_api" yaml:"proxy_api"`
 	MaxBodySize   int64           `mapstructure:"max_body_size" yaml:"max_body_size"`
 	ReadTimeout   string          `mapstructure:"read_timeout" yaml:"read_timeout"`
 	WriteTimeout  string          `mapstructure:"write_timeout" yaml:"write_timeout"`
@@ -174,7 +176,8 @@ func DefaultServerConfig() ServerConfig {
 			},
 			CORS: WebUICORSConfig{
 				AllowedOrigins: []string{"*"},
-				AllowedMethods: []string{"GET", "OPTIONS"},
+				AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+				AllowedHeaders: []string{"Authorization", "Content-Type", "Accept", "X-API-Key", "*"},
 			},
 		},
 	}
@@ -295,6 +298,14 @@ func (s SecurityConfig) TokenExpiration() time.Duration {
 		hours = DefaultServerConfig().Security.TokenExpirationHours
 	}
 	return time.Duration(hours) * time.Hour
+}
+
+// ProxyAPIEnabled reports whether the WebUI listener should reverse-proxy API routes.
+func (w WebUIConfig) ProxyAPIEnabled() bool {
+	if w.ProxyAPI != nil {
+		return *w.ProxyAPI
+	}
+	return true
 }
 
 // NormalizedPathPrefix returns the URL path prefix for WebUI routing (always starts with /).
@@ -425,7 +436,7 @@ func formatListenHostForDisplay(host string) string {
 	return host
 }
 
-// GenerateJWTSecret creates a URL-safe base64 secret for HS256 signing.
+// GenerateJWTSecret creates a standard base64-encoded secret from n random bytes for HS256 signing.
 func GenerateJWTSecret(n int) (string, error) {
 	if n <= 0 {
 		n = 32
@@ -434,5 +445,5 @@ func GenerateJWTSecret(n int) (string, error) {
 	if _, err := rand.Read(buf); err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(buf), nil
+	return base64.StdEncoding.EncodeToString(buf), nil
 }
