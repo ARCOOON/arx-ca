@@ -186,7 +186,7 @@ Extracting assets to /opt/arx/ui...
 WebUI successfully enabled in server.yaml!
 ```
 
-After download, configure `webui.tls.cert_file` and `webui.tls.key_file` if TLS is enabled, then restart or start the server (`arx server start` or the `arx-server` systemd unit).
+After download, optionally set `webui.tls.cert_file` and `webui.tls.key_file` for production TLS. When paths are empty or files are missing, the server auto-generates an ephemeral certificate with SANs for local use. Restart or start the server (`arx server start` or the `arx-server` systemd unit).
 
 ### `arx server service install`
 

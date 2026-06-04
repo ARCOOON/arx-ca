@@ -148,16 +148,21 @@ arx server start [--config path]
 When `webui.enabled` is `true`, the CA API process also runs an **isolated** `net/http` server for static frontend assets. It does not share the API listener (`server.host` / `server.port`); operators bind it separately (default `:8443`) and can enable TLS with dedicated certificate paths.
 
 ```
-                    ┌─────────────────────────────────────┐
-  Browser / CDN ──► │  WebUI listener (webui.listen_address) │
-                    │  PathPrefix + static UIDir           │
-                    └─────────────────────────────────────┘
-
+                    ┌──────────────────────────────────────────────┐
+  Browser / CDN ──► │  WebUI listener (webui.listen_address)        │
+                    │  /api/* proxy (optional) + PathPrefix + UIDir │
+                    └──────────────────────────────────────────────┘
+                                        │ loopback proxy (proxy_api)
+                                        ▼
                     ┌─────────────────────────────────────┐
   Clients / CLI ──► │  API listener (server.host:port)     │
                     │  /api/v1/*, /acme/, /ocsp, …         │
                     └─────────────────────────────────────┘
 ```
+
+When `webui.proxy_api` is `true` (default), the WebUI listener reverse-proxies `/api/`, `/ocsp`, `/acme/`, `/scep/`, and `/certsrv/` to the API process on loopback. The Vue app then uses same-origin `/api/v1` without cross-origin calls. Set `webui.proxy_api: false` only when a separate ingress terminates API and UI on one host without the built-in proxy.
+
+The SPA (`webui/`) mounts authenticated routes inside `AppShell` (collapsible sidebar, top bar with roles and logout): `/dashboard` (health and inventory summary), `/certificates` (list + CSR issue modal), `/acme` and `/scep` (read-only status from `GET /api/v1/acme/status` and `GET /api/v1/scep/status`), and `/settings` (session and API client metadata). Axios attaches the admin JWT from Pinia on every protected call; `401` responses trigger logout except for `POST /auth/login`.
 
 | Setting | Default | Role |
 | ------- | ------- | ---- |
@@ -168,10 +173,12 @@ When `webui.enabled` is `true`, the CA API process also runs an **isolated** `ne
 | `webui.max_body_size` | `2097152` (2 MiB) | Request body cap via `http.MaxBytesReader` |
 | `webui.read_timeout` | `10s` | `http.Server.ReadTimeout` |
 | `webui.write_timeout` | `10s` | `http.Server.WriteTimeout` |
-| `webui.tls.enabled` | `true` | Use `ListenAndServeTLS` when cert/key paths are set |
-| `webui.tls.cert_file` / `key_file` | (empty) | TLS material (required when TLS is enabled) |
-| `webui.cors.allowed_origins` | `["*"]` | CORS `Access-Control-Allow-Origin` on the WebUI static listener **and** on the API listener when `webui.enabled` is `true` |
-| `webui.cors.allowed_methods` | `["GET", "OPTIONS"]` | CORS allowed methods for static assets only; the API listener always allows `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS` when WebUI is enabled |
+| `webui.tls.enabled` | `true` | HTTPS on the WebUI listener (`tls.Listen` with optional client certs) |
+| `webui.tls.cert_file` / `key_file` | (empty) | TLS material; when missing, ephemeral ECDSA P-256 with SANs (`DNS:localhost`, `IP:127.0.0.1`, `IP:::1`, host interface addresses) |
+| `webui.cors.allowed_origins` | `["*"]` | CORS `Access-Control-Allow-Origin` on the WebUI listener **and** on the API listener when `webui.enabled` is `true` |
+| `webui.cors.allowed_methods` | REST verbs + `OPTIONS` | Allowed methods; entry `*` expands to the full REST set |
+| `webui.cors.allowed_headers` | `Authorization`, `Content-Type`, … | Allowed headers; entry `*` mirrors preflight `Access-Control-Request-Headers` |
+| `webui.proxy_api` | `true` | Loopback reverse proxy for API paths on the WebUI listener (drop-in same-origin UI) |
 
 **Path prefix and deployment architecture**
 
@@ -187,11 +194,13 @@ Use a non-root prefix when the same host also terminates other paths (reverse pr
 
 Requests that do not match a file under `ui_dir` receive **SPA fallback** (`index.html`) so deep links work. Middleware applies configured CORS and `max_body_size` before the file handler.
 
-When the WebUI is enabled, the **API listener** also applies CORS using `webui.cors.allowed_origins` so browser clients on the separate WebUI origin can call `/api/v1/*` (for example `http://localhost:8444` → `https://localhost:8443`). Preflight `OPTIONS` requests receive `Access-Control-Allow-Headers: Authorization, Content-Type, Accept, X-API-Key`.
+When the WebUI is enabled, the **API listener** applies the same `webui.cors` policy for direct cross-origin API access (for example UI on `https://ui.example` and API on `https://ca.example:8080` with `webui.proxy_api: false`). Preflight `OPTIONS` requests return `200 OK` with configured `Access-Control-Allow-*` headers. With `proxy_api` enabled (default), the browser uses same-origin `/api/v1` on the WebUI port and CORS is not required for routine dashboard traffic.
 
 Startup logs include the effective URL, for example: `WebUI server starting url=https://0.0.0.0:8443/ui` when `path_prefix` is `/ui` and TLS is enabled.
 
 Relative `ui_dir` and TLS paths resolve against the directory containing `server.yaml`, consistent with `database.path`.
+
+**mTLS through the WebUI proxy:** The WebUI TLS stack uses `tls.RequestClientCert` (optional client certificates). When a client presents a certificate during the WebUI TLS handshake, the reverse proxy encodes the leaf PEM in `X-Forwarded-Client-Cert` (Envoy `Cert=` URL-encoded form) on the loopback request to the API. The API `ClientCertValidator` accepts this header only from `127.0.0.1` / `::1`, validating the certificate the same way as a direct mTLS connection to the API listener.
 
 ## Systemd self-healing (`ExecStartPre`)
 
@@ -241,10 +250,11 @@ Setting **`CGO_ENABLED=0`** for release builds yields:
 | **Cross-compilation** | `GOOS`/`GOARCH` builds from Linux CI without cross-compilers |
 | **Reproducible CI** | Same flags in `Makefile` (`build-linux`, `build-windows`) and `.github/workflows/release.yml` |
 
-On tag push `v*`, `.github/workflows/release.yml` runs four parallel jobs. Each Go job sets `CGO_ENABLED=0` and uses `go build -ldflags="-X main.Version=<tag> -X main.Commit=<sha> -s -w" -o …` for `cmd/arx` or `cmd/arx-agent`. The WebUI job uses the same repository checkout as the Go jobs, runs `npm ci` and `npm run build` in `webui/`, and publishes `webui-dist.tar.gz` (contents of `webui/dist/`). All jobs upload to one GitHub Release; the Linux job generates release notes, and the others set `append_body: true` so concurrent uploads do not overwrite the body.
+On tag push `v*`, `.github/workflows/release.yml` runs a `create-release` job first, then four parallel build jobs. `create-release` checks out full history (`fetch-depth: 0`), resolves the previous tag with `git describe --tags --abbrev=0 HEAD^`, writes `CHANGELOG.md` with a `## What's Changed` header and bullet lines formatted as `* <subject> ([<short>](https://github.com/ARCOOON/arx-ca/commit/<full>))` for commits since that tag (or all commits when no prior tag exists), and creates the GitHub Release with `body_path: CHANGELOG.md` without `generate_release_notes`. Each Go build job sets `CGO_ENABLED=0` and uses `go build -ldflags="-X main.Version=<tag> -X main.Commit=<sha> -s -w" -o …` for `cmd/arx` or `cmd/arx-agent`. The WebUI job runs `npm ci` and `npm run build` in `webui/` and publishes `webui-dist.tar.gz` (contents of `webui/dist/`). Build jobs depend on `create-release` and upload assets only (`tag_name` + `files`); they do not set `generate_release_notes` or `append_body`, avoiding race conditions on the release body.
 
-| Job | Artifacts |
+| Job | Role |
 | --- | --- |
+| `create-release` | `## What's Changed` changelog with commit hyperlinks; creates release body once |
 | `build-linux` | `arx-linux-amd64`, `arx-linux-arm64`, `arx-agent-linux-amd64`, `arx-agent-linux-arm64` |
 | `build-windows` | `arx-windows-amd64.exe`, `arx-agent-windows-amd64.exe` |
 | `build-darwin` | `arx-darwin-amd64`, `arx-darwin-arm64`, `arx-agent-darwin-amd64`, `arx-agent-darwin-arm64` |
@@ -333,7 +343,19 @@ Challenge validation (**HTTP-01**, **DNS-01**, **TLS-ALPN-01**) runs in `interna
 | Agent state | `~/.arx-cert-service/` (trust + enroll artifacts) |
 | Secrets on disk | `password_file`, `provisioner_password_file`, `database.password_file` via `ResolveSecret` |
 
-JWT signing uses `security.jwt_secret` or `CA_API_JWT_SECRET`. An empty secret triggers one-time generation in development; production deployments should set it explicitly.
+### Auto-securing startup (`HealServerConfig`)
+
+Immediately after `server.yaml` is parsed, `InitServerConfig` runs config auto-healing before the API binds:
+
+| Check | Action |
+| ----- | ------ |
+| Empty `security.jwt_secret` | Generate 32 random bytes, base64-encode, persist to `server.yaml` |
+| Plaintext admin password | Detect values in `security.initial_admin_password` or `bootstrap.admin_password_hash` that lack a `$2a$` / `$2b$` / `$2y$` prefix; bcrypt-hash at cost 12 and persist |
+| Database credentials | **Not modified** — connection strings remain clear-text for SQL drivers; use `ARX_DATABASE_PASSWORD` or `CA_API_DB_DATA_SOURCE` env overrides in production |
+
+When any field is secured, the updated struct is marshalled back to YAML and written with mode `0600`. Inline YAML comments may be lost on rewrite. Runtime env overrides (`CA_API_JWT_SECRET`, `ARX_SECURITY_JWT_SECRET`) apply after the file is loaded and are not written back to disk.
+
+JWT signing uses `security.jwt_secret` or `CA_API_JWT_SECRET`. Production deployments should still set secrets explicitly or rely on the one-time auto-generation during first boot.
 
 ## HTTP routing
 

@@ -84,7 +84,7 @@ The wizard (server):
 After CA install:
 
 ```bash
-sudo nano /opt/arx/server.yaml   # JWT secret, bootstrap password hash
+sudo nano /opt/arx/server.yaml   # optional: JWT secret and bootstrap password (auto-secured on first start)
 sudo systemctl status arx-server
 journalctl -u arx-server -f
 ```
@@ -147,7 +147,7 @@ CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o bin/arx ./cmd/arx
 CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o bin/arx-agent ./cmd/arx-agent
 ```
 
-Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows/release.yml). Four jobs run in parallel: Linux binaries (amd64/arm64), Windows binaries (amd64), Darwin binaries (amd64/arm64), and a WebUI build from the monorepo `webui/` subdirectory (`npm ci`, `npm run build`) packaged as `webui-dist.tar.gz`. All `arx` / `arx-agent` builds use `CGO_ENABLED=0`, embed the tag and Git commit as `main.Version` and `main.Commit`, and upload assets to the same GitHub Release via `softprops/action-gh-release`.
+Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows/release.yml). A `create-release` job runs first: it writes a `## What's Changed` section to `CHANGELOG.md` with bullet lines linking each commit subject to `https://github.com/ARCOOON/arx-ca/commit/<full-sha>` (commits since the previous tag, or all commits on the first release), then creates the GitHub Release with `body_path: CHANGELOG.md` (no `generate_release_notes`). Four build jobs then run in parallel—Linux binaries (amd64/arm64), Windows binaries (amd64), Darwin binaries (amd64/arm64), and a WebUI build from the monorepo `webui/` subdirectory (`npm ci`, `npm run build`) packaged as `webui-dist.tar.gz`. All `arx` / `arx-agent` builds use `CGO_ENABLED=0`, embed the tag and Git commit as `main.Version` and `main.Commit`, and upload assets to the same release via `softprops/action-gh-release` without modifying the release body.
 
 Set local build metadata with Make: `make build VERSION=v1.2.3` (defaults to `v0.0.0-dev`; commit defaults to `git rev-parse --short HEAD` or `unknown`).
 
@@ -203,9 +203,11 @@ The REST API and the browser UI run on **separate listeners**. Enable the WebUI 
 | `webui.max_body_size` | `2097152` | Max request body size (bytes) |
 | `webui.read_timeout` / `write_timeout` | `10s` | Server timeouts |
 | `webui.tls.enabled` | `true` | HTTPS for the WebUI listener |
-| `webui.tls.cert_file` / `key_file` | (empty) | TLS certificate and key (required when TLS is on) |
+| `webui.tls.cert_file` / `key_file` | (empty) | TLS certificate and key; when omitted or missing, an ephemeral ECDSA cert is generated with SANs (`localhost`, `127.0.0.1`, `::1`, and detected host IPs) |
 | `webui.cors.allowed_origins` | `["*"]` | CORS origins for static assets and for API cross-origin calls when WebUI is enabled |
-| `webui.cors.allowed_methods` | `["GET", "OPTIONS"]` | CORS methods for static assets (API allows full REST methods when WebUI is enabled) |
+| `webui.cors.allowed_methods` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` | Allowed methods; `*` expands to the full REST set |
+| `webui.cors.allowed_headers` | `Authorization`, `Content-Type`, `Accept`, `X-API-Key`, `*` | Allowed request headers; `*` mirrors preflight `Access-Control-Request-Headers` |
+| `webui.proxy_api` | `true` | Reverse-proxy `/api/`, `/ocsp`, `/acme/`, `/scep/`, `/certsrv/` on the WebUI listener to the API process (same-origin drop-in UI) |
 
 **`path_prefix` and deployment:** A prefix of `/` serves the SPA at the WebUI listener root. A prefix of `/ui` strips `/ui` before looking up files under `ui_dir`, so operators can colocate the API behind one hostname (port 8080) and the console on another port or path without mixing handlers. Configure your frontend build `base` to match `path_prefix`. Unmatched paths under the prefix fall back to `index.html` for client-side routing.
 
@@ -229,10 +231,33 @@ webui:
       - "*"
     allowed_methods:
       - GET
+      - POST
+      - PUT
+      - PATCH
+      - DELETE
       - OPTIONS
+    allowed_headers:
+      - Authorization
+      - Content-Type
+      - Accept
+      - X-API-Key
+      - "*"
+  proxy_api: true
 ```
 
-`arx server config init` writes this block with defaults. Set `webui.tls.cert_file` and `key_file` before enabling TLS in production.
+`arx server config init` writes this block with defaults. For production, set `webui.tls.cert_file` and `key_file` to operator-managed certificates. For local drop-in use, leave paths empty to auto-generate a SAN-bearing ephemeral server certificate. With `proxy_api: true`, the Vue app can call same-origin `/api/v1` on the WebUI port without CORS or a compile-time `VITE_API_BASE_URL`. Client certificates presented to the WebUI HTTPS listener are forwarded to the API on loopback via `X-Forwarded-Client-Cert`, so mTLS endpoints such as `POST /api/v1/certificates/renew` work through the WebUI port.
+
+The Vue 3 management console (`webui/`) uses client-side routing under the authenticated shell:
+
+| Route | Purpose |
+| ----- | ------- |
+| `/dashboard` | Health metrics, uptime, and CA backend status |
+| `/certificates` | Issued certificate inventory and CSR signing |
+| `/acme` | ACME directory URL and enrollment policy |
+| `/scep` | SCEP base URL and provisioner status |
+| `/settings` | Session, API base URL, and UI preferences |
+
+Develop locally with `cd webui && npm ci && npm run dev`, or ship assets via `npm run build` and `arx server ui download`.
 
 **Automated WebUI install:** `arx server ui download` reads `server.yaml`, fetches the release-matching `webui-dist.tar.gz` asset from GitHub (or the latest release when the binary is `v0.0.0-dev`), extracts files into `webui.ui_dir`, and sets `webui.enabled: true`. Use `sudo` when the default path is `/opt/arx/ui`.
 
@@ -242,7 +267,7 @@ sudo arx server ui download
 arx server start
 ```
 
-Environment overrides use the `ARX_` prefix (Viper) and `ARX_AGENT_` for agent daemon settings. See [.env.example](.env.example) for Docker Compose.
+Environment overrides use the `ARX_` prefix (Viper) and `ARX_AGENT_` for agent daemon settings. For PostgreSQL, prefer `ARX_DATABASE_PASSWORD` or `CA_API_DB_DATA_SOURCE` over storing credentials in `server.yaml`. See [.env.example](.env.example) for Docker Compose.
 
 ### PostgreSQL (optional)
 
@@ -304,7 +329,13 @@ Full table: [docs/api_reference.md](docs/api_reference.md). JSON envelope: `{ "d
 | Email | `admin@arx.local` |
 | Password | `ArxRootCA-Bootstrap-Admin-2026!` |
 
-**Production:** set `bootstrap.admin_password_hash` with `arx hash` before first boot, set `security.jwt_secret`, rotate credentials after initial access.
+**Production:** set `bootstrap.admin_password_hash` with `arx hash` before first boot, or supply a plaintext value once — the server auto-bcrypts it and rewrites `server.yaml` on startup. An empty `security.jwt_secret` is also auto-generated and persisted. Rotate credentials after initial access.
+
+**Zero-touch startup:** On first `arx server start`, the server inspects `server.yaml` and automatically:
+- Generates and persists a 256-bit `security.jwt_secret` when empty.
+- Bcrypt-hashes plaintext values in `security.initial_admin_password` or `bootstrap.admin_password_hash` (cost 12) and rewrites the file with mode `0600`.
+
+YAML comments in `server.yaml` may be lost when the file is rewritten (standard `yaml.v3` marshalling). Database passwords in `server.yaml` are **not** encrypted — SQL drivers require clear-text DSN components. Override PostgreSQL credentials via `ARX_DATABASE_PASSWORD` or the full DSN through `CA_API_DB_DATA_SOURCE` / `ARX_DATABASE_*` environment variables instead of storing secrets on disk.
 
 ## Documentation
 

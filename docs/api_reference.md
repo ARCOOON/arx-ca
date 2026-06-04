@@ -87,11 +87,12 @@ Missing or invalid credentials → `401`. Valid credentials without RBAC capabil
 
 ### Mutual TLS (mTLS) client authentication
 
-When the API server is configured with TLS (`server.tls.enabled: true`), selected endpoints accept **mutual TLS** as an alternative to admin JWT. The client must present a **valid, non-revoked certificate** issued by this CA over the TLS connection.
+Selected endpoints accept **mutual TLS** as an alternative to admin JWT. The client must present a **valid, non-revoked certificate** issued by this CA.
 
 | Requirement | Detail |
 | ----------- | ------ |
-| Transport | HTTPS with a client certificate (`server.tls.enabled: true`) |
+| Direct API TLS | HTTPS with a client certificate when `server.tls.enabled: true` |
+| WebUI proxy | HTTPS to `webui.listen_address` with `--cert` / `--key`; the WebUI forwards the leaf cert via `X-Forwarded-Client-Cert` to the API on loopback |
 | Certificate | Issued by this CA, not expired, not revoked |
 | Identity binding | On `/renew` and `/rekey`, the client certificate **Common Name (CN)** must match the CN of the certificate being renewed |
 
