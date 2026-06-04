@@ -119,6 +119,7 @@ func runServer() error {
 	mux.Handle("GET /api/v1/health", healthHandler)
 	mux.Handle("GET /api/v1/ca/root", caHandler.RootCert())
 	mux.Handle("GET /api/v1/ca/info", certPerm(auth.PermCertificatesRead, caHandler.Info()))
+	mux.Handle("GET /api/v1/ca/provisioners", certPerm(auth.PermCertificatesRead, caHandler.Provisioners()))
 	mux.Handle("GET /api/v1/ca/crl", caHandler.CRL())
 	mux.Handle("GET /api/v1/crl", caHandler.CRL())
 	mux.Handle("GET /api/v1/public/ca/intermediate", publicHandler.IntermediateCert())
