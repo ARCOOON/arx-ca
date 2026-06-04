@@ -284,6 +284,29 @@ Generate a bcrypt hash for `bootstrap.admin_password_hash` in `server.yaml`.
 arx util hash 'MySecureAdminPassword!'
 ```
 
+### `arx util update`
+
+Download and atomically replace the running `arx` binary when a newer semantic version is published on [ARCOOON/arx-ca](https://github.com/ARCOOON/arx-ca/releases).
+
+```bash
+arx util update
+sudo arx util update    # when arx is installed system-wide (e.g. /opt/arx/arx)
+```
+
+| Requirement | Details |
+| ----------- | ------- |
+| Network | Outbound HTTPS to `api.github.com` (release metadata) and `github.com` (release asset download) |
+| Version | Build-time `-X main.Version=…` and `-X main.Commit=…` via the Makefile or release workflow (defaults to `v0.0.0-dev` / `unknown` when unset) |
+| Platform asset | Matches `arx-<goos>-<goarch>` (e.g. `arx-linux-amd64`, `arx-windows-amd64.exe`) |
+
+Lifecycle output:
+
+1. `Checking for updates...`
+2. If up to date: `You are already running the latest version ([version])` (exit `0`)
+3. If newer: `New version [vX.Y.Z] found. Downloading...` then `Successfully updated to [vX.Y.Z]! Please restart the service.`
+
+Exit codes: `0` success or already current; `2` network; `3` GitHub rate limit; `4` permission denied replacing the executable; `1` other errors.
+
 ---
 
 ## `arx hash`
@@ -299,6 +322,19 @@ arx hash 'MySecureAdminPassword!'
 # arx-agent (data plane)
 
 The **`arx-agent`** binary handles local certificate operations and renewal. It does not embed the CA API, database, or ACME server. **Does not download private keys from the server** except via `enroll`, which calls `POST /api/v1/certificates/auto` with the admin JWT and stores key material under `~/.arx-cert-service/enrolled/`.
+
+## `arx-agent update`
+
+Self-update the running `arx-agent` binary from the latest GitHub release (same mechanics as `arx util update`, artifact name `arx-agent-<goos>-<goarch>`).
+
+```bash
+arx-agent update
+sudo arx-agent update    # when installed via arx-agent service install
+```
+
+Requires outbound HTTPS to GitHub. Restart the renewal daemon or service after a successful update.
+
+---
 
 ## `arx-agent enroll`
 
@@ -495,7 +531,8 @@ arx
 │   ├── list [--url]
 │   └── revoke <serial> [--url] [--reason]
 ├── util
-│   └── hash <password>
+│   ├── hash <password>
+│   └── update
 └── hash <password>
 ```
 
@@ -503,6 +540,7 @@ arx
 
 ```text
 arx-agent
+├── update
 ├── config
 │   └── init [--config] [--force]
 ├── daemon [--config]

@@ -127,9 +127,9 @@ Generate a bcrypt hash for `bootstrap.admin_password_hash`:
 ## Build
 
 ```bash
-make build            # bin/arx (control plane)
-make build-agent      # bin/arx-agent (data plane)
-make build-all        # both binaries
+make build            # bin/arx and bin/arx-agent (control + data plane)
+make build-agent      # bin/arx-agent only
+make build-all        # local + cross-platform binaries
 make build-linux      # Linux amd64 arx, CGO_ENABLED=0
 make build-linux-agent
 make test
@@ -140,11 +140,27 @@ Without Make:
 
 ```bash
 mkdir -p bin
-CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/arx ./cmd/arx
-CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o bin/arx-agent ./cmd/arx-agent
+VERSION=v1.2.3
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+LDFLAGS="-X main.Version=${VERSION} -X main.Commit=${COMMIT} -s -w"
+CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o bin/arx ./cmd/arx
+CGO_ENABLED=0 go build -ldflags="${LDFLAGS}" -o bin/arx-agent ./cmd/arx-agent
 ```
 
-Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows/release.yml), which cross-compiles **both** `arx` and `arx-agent` for Linux (amd64/arm64), Windows (amd64), and Darwin (arm64) with `CGO_ENABLED=0` and attaches all artifacts to a GitHub Release.
+Tagged releases (`v*`) trigger [.github/workflows/release.yml](.github/workflows/release.yml), which cross-compiles **both** `arx` and `arx-agent` for Linux (amd64/arm64), Windows (amd64), and Darwin (arm64) with `CGO_ENABLED=0`, embeds the tag and Git commit as `main.Version` and `main.Commit`, and attaches all artifacts to a GitHub Release.
+
+Set local build metadata with Make: `make build VERSION=v1.2.3` (defaults to `v0.0.0-dev`; commit defaults to `git rev-parse --short HEAD` or `unknown`).
+
+### Self-update
+
+Both binaries can replace themselves in place from the latest GitHub release (SemVer comparison, atomic swap via `minio/selfupdate`):
+
+```bash
+arx util update
+arx-agent update
+```
+
+Requires outbound HTTPS to `api.github.com` and `github.com`. Use `sudo` when the binary lives in a protected path (e.g. `/opt/arx/` or `/opt/arx-agent/`). Restart the CA server or `arx-agent` service after updating. See [docs/cli_reference.md](docs/cli_reference.md).
 
 ## Configuration
 

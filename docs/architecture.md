@@ -244,7 +244,7 @@ The release workflow builds eight artifacts on tag push `v*`:
 - `arx-linux-amd64`, `arx-linux-arm64`, `arx-windows-amd64.exe`, `arx-darwin-arm64`
 - `arx-agent-linux-amd64`, `arx-agent-linux-arm64`, `arx-agent-windows-amd64.exe`, `arx-agent-darwin-arm64`
 
-Each step sets `CGO_ENABLED=0` explicitly before `go build -trimpath -ldflags="-s -w" -o … ./cmd/arx` or `./cmd/arx-agent`.
+Each step sets `CGO_ENABLED=0` explicitly before `go build -ldflags="-X main.Version=<tag> -X main.Commit=<sha> -s -w" -o … ./cmd/arx` or `./cmd/arx-agent`.
 
 PostgreSQL deployments still benefit from static binaries; only the **server** needs network access to Postgres at runtime.
 
