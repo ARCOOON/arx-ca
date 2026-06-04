@@ -142,6 +142,7 @@ func InitServerConfig() error {
 	}
 
 	migrateLegacyAdminPassword(v, &loaded)
+	migrateLegacyCABootstrap(v, &loaded)
 
 	if err := HealServerConfig(configPath, &loaded); err != nil {
 		return err
@@ -179,6 +180,33 @@ func migrateLegacyAdminPassword(v *viper.Viper, cfg *ServerConfig) {
 	if legacy := strings.TrimSpace(v.GetString("bootstrap.admin_password_hash")); legacy != "" {
 		cfg.Bootstrap.AdminPassword = legacy
 	}
+}
+
+// migrateLegacyCABootstrap loads CABootstrap when server.yaml uses the legacy "CABootstrap" key
+// instead of the canonical "ca_bootstrap" field expected by Viper/mapstructure.
+func migrateLegacyCABootstrap(v *viper.Viper, cfg *ServerConfig) {
+	if cfg == nil || v == nil || !cabootstrapConfigEmpty(cfg.CABootstrap) {
+		return
+	}
+	for _, key := range []string{"CABootstrap", "cabootstrap"} {
+		var legacy CABootstrapConfig
+		if err := v.UnmarshalKey(key, &legacy); err != nil {
+			continue
+		}
+		if cabootstrapConfigEmpty(legacy) {
+			continue
+		}
+		cfg.CABootstrap = legacy
+		return
+	}
+}
+
+func cabootstrapConfigEmpty(b CABootstrapConfig) bool {
+	return strings.TrimSpace(b.RootCN) == "" &&
+		strings.TrimSpace(b.IntermediateCN) == "" &&
+		strings.TrimSpace(b.Organization) == "" &&
+		strings.TrimSpace(b.Country) == "" &&
+		b.KeySize <= 0
 }
 
 // InitCLIConfig loads or creates ~/.arx/cli.yaml and binds it to Viper.
