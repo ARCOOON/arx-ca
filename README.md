@@ -121,14 +121,14 @@ The wizard (server):
 
 1. Confirms installation as a systemd service (decline to exit without changes).
 2. Prompts for service user (default `arx-ca`) and install directory (default `/opt/arx`).
-3. Copies the running executable to `<install-dir>/arx`, runs `server config init` if needed, writes `arx-server.service`, and starts the unit.
+3. Copies the running executable to `<install-dir>/arx`, runs `server config init` if needed, writes `arx.service`, and starts the unit.
 
 After CA install:
 
 ```bash
 sudo nano /opt/arx/server.yaml   # optional: JWT secret and bootstrap password (auto-secured on first start)
-sudo systemctl status arx-server
-journalctl -u arx-server -f
+sudo systemctl status arx
+journalctl -u arx -f
 ```
 
 ```bash
@@ -136,7 +136,7 @@ arx login --url https://ca.example.com
 arx ui
 ```
 
-Non-interactive CA install (IaC): set `service.run_as_user` and `service.install_dir` in `server.yaml`, then `sudo arx server service install`. See [Production install](#production-install-linux-systemd).
+Non-interactive CA install (IaC): set `service.run_as_user` and `service.install_dir` in `server.yaml`, then `sudo arx server service install --system`. User-scoped installs use `arx server service install --user`. See [Production install](#production-install-linux-systemd).
 
 ## Quick Start (development)
 
@@ -240,7 +240,7 @@ The `ca.max_ttl` field (default `8760h`, one year) caps certificate lifetimes fo
 
 ### Dedicated WebUI server
 
-The REST API and the browser UI run on **separate listeners**. Enable the WebUI with `webui.enabled: true` and place built static assets in `webui.ui_dir` (default `/opt/arx/ui`, must contain `index.html`).
+The REST API and the browser UI run on **separate listeners**. Enable the WebUI with `webui.enabled: true` and place built static assets in `webui.ui_dir` (absolute path; `arx server config init` sets it to `<executable-dir>/ui`, must contain `index.html`).
 
 | Parameter | Default | Description |
 | --------- | ------- | ----------- |
@@ -328,11 +328,12 @@ Set `database.driver` to `postgres` (or `postgresql`) and provide host, credenti
 
 | Command | Description |
 | ------- | ----------- |
-| `sudo arx server setup` | Interactive wizard (recommended) |
-| `sudo arx server service install` | Non-interactive self-install → `arx-server.service` |
-| `sudo arx server service uninstall` | Remove unit, install tree, and service user |
+| `sudo arx server setup` | Interactive wizard (recommended, system scope) |
+| `sudo arx server service install --system` | System unit at `/etc/systemd/system/arx.service`, binary `/opt/arx/arx` |
+| `arx server service install --user` | User unit at `~/.config/systemd/user/arx.service`, binary `~/.arx/arx` |
+| `arx server service uninstall --user` / `sudo ... --system` | Remove unit and install tree for the selected scope |
 
-Defaults: user `arx-ca`, install dir `/opt/arx`. CLI flags `--run-as-user` and `--install-dir` override `server.yaml` when set.
+System defaults: user `arx-ca`, install dir `/opt/arx`. User defaults: install dir `~/.arx`. Flags `--run-as-user` and `--install-dir` override `server.yaml` when set. On Windows, `--system` registers a Windows Service; `--user` creates a logon scheduled task under `%LOCALAPPDATA%\arx`.
 
 ### Renewal agent (`arx-agent`)
 
@@ -345,7 +346,7 @@ Defaults: user `arx-agent`, install dir `/opt/arx-agent`. The unit runs `arx-age
 
 For **API** renewal entries, run `arx login` on the agent host (or copy credentials). For **ACME** entries, configure `acme_directory_url`, `acme_email`, and HTTP-01 `webroot` or `challenge_listen_port` — no JWT required. Run `arx-agent config init` for a commented template.
 
-Non-Linux platforms return an error from `service install` on both binaries.
+`arx server service install` is supported on Linux and Windows. Other platforms return an error. Set the step-ca symmetric key at runtime with `ARX_CA_PASSWORD` (never bcrypt-hashed in `server.yaml`).
 
 ## Docker Compose
 
@@ -410,7 +411,7 @@ YAML comments in `server.yaml` may be lost when the file is rewritten (standard 
 | `internal/ca` | PKI engine (step-ca), ACME/SCEP/NDES |
 | `internal/database` | SQLite/PostgreSQL application store |
 | `internal/agent` | Local stores, trust, renewal daemon |
-| `internal/server/service` | `arx-server` systemd self-install |
+| `internal/server/service` | Dual-scope daemon self-install (Linux/Windows) |
 | `internal/agent/service` | `arx-agent` systemd self-install |
 
 ## License

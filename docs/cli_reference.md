@@ -144,7 +144,7 @@ Persistent flag (all subcommands except those that skip config init):
 
 ### `arx server config init`
 
-Writes a default `server.yaml` beside the executable (or next to the path given by `--config`).
+Writes a default `server.yaml` beside the executable (or next to the path given by `--config`). Sets `webui.ui_dir` to the absolute path `<executable-dir>/ui`.
 
 ```bash
 ./bin/arx server config init
@@ -163,7 +163,7 @@ Configuration successfully generated at /path/to/bin/server.yaml. Please edit it
 
 ### `arx server setup`
 
-Linux only. **Must run as root** (`sudo`). Interactive wizard for the **self-installing binary** pattern: copies the running executable, bootstraps `server.yaml`, registers `arx-server`, and starts the service. Declining the first prompt exits without changes.
+Linux only. **Must run as root** (`sudo`). Interactive wizard for the **self-installing binary** pattern: copies the running executable, bootstraps `server.yaml`, registers `arx.service` (system scope), and starts the service. Declining the first prompt exits without changes.
 
 ```bash
 sudo ./bin/arx server setup
@@ -248,39 +248,53 @@ Extracting assets to /opt/arx/ui...
 WebUI successfully enabled in server.yaml!
 ```
 
-After download, optionally set `webui.tls.cert_file` and `webui.tls.key_file` for production TLS. When paths are empty or files are missing, the server auto-generates an ephemeral certificate with SANs for local use. Restart or start the server (`arx server start` or the `arx-server` systemd unit).
+After download, optionally set `webui.tls.cert_file` and `webui.tls.key_file` for production TLS. When paths are empty or files are missing, the server auto-generates an ephemeral certificate with SANs for local use. Restart or start the server (`arx server start` or the `arx` systemd unit).
 
 ### `arx server service install`
 
-Linux only. **Must run as root** (`sudo`). Non-interactive self-install: copies the running `arx` executable to `<install-dir>/arx`, bootstraps configuration, applies ownership, writes a hardened `arx-server` systemd unit (with `ExecStartPre` permission self-heal), and starts the service.
+Linux and Windows. Registers a daemon for the selected scope:
+
+| Scope | Linux | Windows |
+| ----- | ----- | ------- |
+| `--system` | `/etc/systemd/system/arx.service`, binary `/opt/arx/arx` (requires root) | Windows Service, binary `C:\Program Files\arx\arx.exe` (requires Administrator) |
+| `--user` | `~/.config/systemd/user/arx.service`, binary `~/.arx/arx` | Logon scheduled task, binary `%LOCALAPPDATA%\arx\arx.exe` |
+
+When neither `--user` nor `--system` is set, **user** scope is used unless the process is root (Linux) or elevated (Windows), in which case **system** scope is selected.
 
 ```bash
-sudo ./bin/arx server service install
-sudo ./bin/arx server service install --run-as-user arx-ca --install-dir /opt/arx
+sudo ./bin/arx server service install --system
+./bin/arx server service install --user
+sudo ./bin/arx server service install --system --run-as-user arx-ca --install-dir /opt/arx
 ```
 
 | Flag | Description |
 | ---- | ----------- |
-| `--run-as-user` | Overrides `service.run_as_user` in `server.yaml` when set |
+| `--user` | User-scoped install (`~/.arx` on Linux, `%LOCALAPPDATA%\arx` on Windows) |
+| `--system` | System-scoped install (`/opt/arx` or Program Files) |
+| `--run-as-user` | Linux `--system` only: overrides `service.run_as_user` in `server.yaml` |
 | `--install-dir` | Overrides `service.install_dir` in `server.yaml` when set |
 
-Resolution when a flag is omitted: `server.yaml` `service` block, then `arx-ca` / `/opt/arx`.
+`arx server config init` writes `webui.ui_dir` as an absolute path to `<executable-dir>/ui`.
 
-Install steps:
+Environment: `ARX_CA_PASSWORD` overrides `ca.password` in memory at startup (not persisted by auto-healing). CORS lists containing `*` are normalized to `["*"]` only.
+
+System install steps (Linux):
 
 1. Ensure the service account exists (`id`, else `useradd --system --no-create-home`).
 2. Create install directory mode `0700`.
 3. Copy current binary to `<install-dir>/arx` mode `0700`.
 4. Run `<install-dir>/arx server config init` when `server.yaml` is absent.
 5. `chown -R` install tree to the service user; `server.yaml` mode `0600`.
-6. Write `/etc/systemd/system/arx-server.service`.
-7. `systemctl daemon-reload`, `enable arx-server`, `restart arx-server`.
+6. Write `/etc/systemd/system/arx.service` (removes legacy `arx-server.service` if present).
+7. `systemctl daemon-reload`, `enable arx`, `restart arx`.
 
 Example success output:
 
 ```text
 arx CA server installed and started.
-Service:  arx-server
+Scope:    system
+Service:  arx
+Unit:     /etc/systemd/system/arx.service
 Binary:   /opt/arx/arx
 Config:   /opt/arx/server.yaml
 Edit server.yaml (JWT secret, bootstrap password hash) before production use.
@@ -288,11 +302,11 @@ Edit server.yaml (JWT secret, bootstrap password hash) before production use.
 
 ### `arx server service uninstall`
 
-Linux only. **Must run as root.** Stops and disables `arx-server`, removes the unit file, deletes the install directory, and runs `userdel` for the service user.
+Stops and removes the unit for the selected scope (`--user` or `--system`, same default rules as install). System scope on Linux also runs `userdel` for the service user when applicable.
 
 ```bash
-sudo ./bin/arx server service uninstall
-sudo ./bin/arx server service uninstall --install-dir /opt/arx --run-as-user arx-ca
+sudo ./bin/arx server service uninstall --system
+./bin/arx server service uninstall --user
 ```
 
 Example success output:

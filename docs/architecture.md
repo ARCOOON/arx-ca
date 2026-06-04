@@ -17,7 +17,7 @@ Control plane and data plane compile from separate entrypoints but share librari
 ```
 cmd/arx/main.go
     └── internal/cmd/arx.NewRootCmd()
-            ├── server   (API process, config, setup, arx-server systemd)
+            ├── server   (API process, config, setup, arx systemd/service)
             ├── login    (admin auth → ~/.arx/)
             ├── ui       (admin TUI)
             ├── cert     (certificate admin API)
@@ -51,8 +51,8 @@ Operator runs:  sudo ./arx server setup
         │                           │
         └─────────────┬─────────────┘
                       ▼
-        Write /etc/systemd/system/arx-server.service
-        systemctl enable --now arx-server
+        Write /etc/systemd/system/arx.service
+        systemctl enable --now arx
                       │
                       ▼
         ExecStart=/opt/arx/arx server start --config /opt/arx/server.yaml
@@ -139,7 +139,7 @@ arx server start [--config path]
 | Filesystem | Create `<install-dir>` (default `/opt/arx`), copy running binary to `<install-dir>/arx` | `os.RemoveAll(installDir)` |
 | Config | Run `<install-dir>/arx server config init` if `server.yaml` missing | — |
 | Identity | `useradd --system` for service user (default `arx-ca`) | `userdel` |
-| systemd | Write `arx-server.service`, `daemon-reload`, `enable`, `restart` | stop, disable, remove unit |
+| systemd | Write `arx.service` (system or user scope), `daemon-reload`, `enable`, `restart` | stop, disable, remove unit |
 
 `server start` registers routes in `internal/cmd/arx/server_start.go`, mounts ACME at `/acme/` when the ACME provisioner is active, optionally starts the dedicated WebUI server (`internal/server/webui.go`), and handles graceful shutdown on `SIGINT`/`SIGTERM` for both listeners.
 
@@ -248,7 +248,7 @@ Setting **`CGO_ENABLED=0`** for release builds yields:
 | ------- | ------------- |
 | **Static binaries** | No libc/sqlite `.so` linkage; simpler copying to minimal containers and air-gapped hosts |
 | **Cross-compilation** | `GOOS`/`GOARCH` builds from Linux CI without cross-compilers |
-| **Reproducible CI** | Same flags in `Makefile` (`build-linux`, `build-windows`) and `.github/workflows/release.yml` |
+| **Reproducible CI** | Same flags and output names in root `Makefile` (`build-arx-*`, `build-arx-agent-*`, `webui`) and `.github/workflows/release.yml` |
 
 On tag push `v*`, `.github/workflows/release.yml` runs a `create-release` job first, then four parallel build jobs. `create-release` checks out full history (`fetch-depth: 0`), resolves the previous tag with `git describe --tags --abbrev=0 HEAD^`, writes `CHANGELOG.md` with a `## What's Changed` header and bullet lines formatted as `* <subject> ([<short>](https://github.com/ARCOOON/arx-ca/commit/<full>))` for commits since that tag (or all commits when no prior tag exists), and creates the GitHub Release with `body_path: CHANGELOG.md` without `generate_release_notes`. Each Go build job sets `CGO_ENABLED=0` and uses `go build -ldflags="-X main.Version=<tag> -X main.Commit=<sha> -s -w" -o …` for `cmd/arx` or `cmd/arx-agent`. The WebUI job runs `npm ci` and `npm run build` in `webui/` and publishes `webui-dist.tar.gz` (contents of `webui/dist/`). Build jobs depend on `create-release` and upload assets only (`tag_name` + `files`); they do not set `generate_release_notes` or `append_body`, avoiding race conditions on the release body.
 
@@ -260,13 +260,17 @@ On tag push `v*`, `.github/workflows/release.yml` runs a `create-release` job fi
 | `build-darwin` | `arx-darwin-amd64`, `arx-darwin-arm64`, `arx-agent-darwin-amd64`, `arx-agent-darwin-arm64` |
 | `build-webui` | `webui-dist.tar.gz` |
 
-Extract the WebUI tarball into `webui.ui_dir` (for example `/opt/arx/ui`): `tar -xzf webui-dist.tar.gz -C /opt/arx/ui`, or run `arx server ui download` to download the matching release asset, extract, and enable `webui` in `server.yaml` automatically.
+Extract the WebUI tarball into `webui.ui_dir` (for example `/opt/arx/ui`): `tar -xzf webui-dist.tar.gz -C /opt/arx/ui`, or run `arx server ui download` (optionally `arx server ui download --version <tag>`) to fetch a GitHub release asset, extract, and enable `webui` in `server.yaml` automatically.
+
+The **`scripts/`** directory contains **`install.sh`**, **`uninstall.sh`**, **`install.ps1`**, and **`uninstall.ps1`**, which automate the same layout for user and system scopes (see [CLI reference — Install scripts](cli_reference.md#install-and-uninstall-scripts)).
 
 PostgreSQL deployments still benefit from static binaries; only the **server** needs network access to Postgres at runtime.
 
 ### PKI / certificate database (step-ca Badger)
 
 Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). step-ca persists issued certificates in embedded **BadgerDB** under the PKI data directory. On corruption, `internal/ca` can truncate and reopen the Badger value log (`badger_heal.go`).
+
+`ca.max_ttl` in `server.yaml` (default `8760h`) is validated before signing and synchronized into step-ca authority/provisioner `maxTLSCertDuration` claims at startup, replacing the step-ca default 24-hour TLS cap.
 
 **Do not confuse** `arx.db` (application SQL) with Badger paths under `.pki/` (PKI engine).
 
@@ -320,7 +324,7 @@ Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). ste
 | `internal/agent` | OS certificate stores, trust installation, renewal daemon |
 | `internal/cmd/arxagent` | Cobra surface for the `arx-agent` binary |
 | `internal/server` | Dedicated WebUI static server (`webui.go`) |
-| `internal/server/service` | `arx-server` systemd unit render, binary copy, install/uninstall |
+| `internal/server/service` | Dual-scope daemon install (Linux systemd, Windows Service / schtasks) |
 | `internal/agent/service` | `arx-agent` systemd unit render, binary copy, install/uninstall |
 
 ## ACME integration (summary)

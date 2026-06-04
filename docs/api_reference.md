@@ -394,6 +394,7 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 - **Authentication:** Not required
 - **Permissions:** `None`
+- **Alias:** `GET /api/v1/crl` (identical handler and response)
 - **Query Parameters:** `pem` (flag) — if present, response is PEM; otherwise DER (`application/pkix-crl`)
 
 #### Response
@@ -557,9 +558,16 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `csr` | string | Yes | PEM-encoded certificate signing request |
-| `ttl` | string | No | Certificate lifetime (e.g. `720h`, `24h`) |
+| `ttl` | string | No | Certificate lifetime (e.g. `720h`, `24h`). Must not exceed `ca.max_ttl` in `server.yaml` (default `8760h`). |
 | `template_id` | string | No | Issuance template identifier |
 | `metadata` | object | No | Arbitrary string-keyed metadata map |
+| `organization` | string | No | X.509 subject organization (`O`) |
+| `organizational_unit` | string | No | X.509 subject organizational unit (`OU`) |
+| `country` | string | No | X.509 subject country (`C`) |
+| `state` | string | No | X.509 subject state or province (`ST`) |
+| `locality` | string | No | X.509 subject locality (`L`) |
+| `is_server_auth` | boolean | No | When `true`, adds `ExtKeyUsageServerAuth` |
+| `is_client_auth` | boolean | No | When `true`, adds `ExtKeyUsageClientAuth` |
 
 **Example JSON:**
 ```json
@@ -567,6 +575,12 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
   "csr": "-----BEGIN CERTIFICATE REQUEST-----\nMIIC...\n-----END CERTIFICATE REQUEST-----\n",
   "ttl": "720h",
   "template_id": "web-server",
+  "organization": "Example Corp",
+  "organizational_unit": "Platform",
+  "country": "US",
+  "state": "CA",
+  "locality": "San Francisco",
+  "is_server_auth": true,
   "metadata": {
     "owner": "platform-team",
     "environment": "production"
@@ -605,8 +619,82 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 * `401 Unauthorized` — missing or invalid credentials.
 * `403 Forbidden` — insufficient RBAC permissions.
 * `405 Method Not Allowed` — wrong HTTP method.
-* `400 Bad Request` — missing or invalid CSR.
+* `400 Bad Request` — missing or invalid CSR, invalid `ttl`, or `ttl` greater than configured `ca.max_ttl`.
 * `500 Internal Server Error` — signing failure.
+
+---
+### POST /api/v1/certificates/generate
+> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key is never stored on the server.
+
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
+
+#### Request
+<details>
+  <summary><strong>View Request Schema & JSON</strong></summary>
+
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `common_name` | string | Yes | Primary common name |
+| `sans` | string[] | No | Additional DNS names or IP addresses |
+| `ttl` | string | No | Certificate lifetime (e.g. `720h`, `30d`). Must not exceed `ca.max_ttl` in `server.yaml` (default `8760h`). |
+| `key_algo` | string | Yes | `RSA2048` or `ECDSA256` |
+| `organization` | string | No | X.509 subject organization (`O`) |
+| `organizational_unit` | string | No | X.509 subject organizational unit (`OU`) |
+| `country` | string | No | X.509 subject country (`C`) |
+| `state` | string | No | X.509 subject state or province (`ST`) |
+| `locality` | string | No | X.509 subject locality (`L`) |
+| `is_server_auth` | boolean | No | When `true`, adds `ExtKeyUsageServerAuth` |
+| `is_client_auth` | boolean | No | When `true`, adds `ExtKeyUsageClientAuth` |
+
+**Example JSON:**
+```json
+{
+  "common_name": "www.example.com",
+  "sans": ["www.example.com", "api.example.com", "203.0.113.10"],
+  "ttl": "720h",
+  "key_algo": "ECDSA256",
+  "organization": "Example Corp",
+  "organizational_unit": "Engineering",
+  "country": "US",
+  "state": "CA",
+  "locality": "San Francisco",
+  "is_server_auth": true,
+  "is_client_auth": true
+}
+```
+
+</details>
+
+#### Response
+<details>
+  <summary><strong>View Response (201 Created)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate_pem` | string | Yes | Issued certificate PEM |
+| `private_key_pem` | string | Yes | Generated private key PEM (PKCS#8) |
+
+**Example JSON (`data`):**
+```json
+{
+  "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
+  "private_key_pem": "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
+}
+```
+
+</details>
+
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `400 Bad Request` — missing `common_name`, invalid `key_algo`, invalid `sans`, invalid `ttl`, or `ttl` greater than configured `ca.max_ttl`.
+* `500 Internal Server Error` — generation or signing failure.
 
 ---
 ### POST /api/v1/certificates/issue-with-token
