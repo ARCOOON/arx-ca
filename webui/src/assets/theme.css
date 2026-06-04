@@ -1,4 +1,9 @@
 :root {
+  /* Border radius scale (controls vs surfaces vs pill toggles) */
+  --radius-control: 6px;
+  --radius-surface: 8px;
+  --radius-pill: 9999px;
+
   --bg-base: #fafafa;
   --bg-surface: #f4f4f5;
   --bg-elevated: #ffffff;
