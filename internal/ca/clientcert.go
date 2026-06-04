@@ -92,13 +92,25 @@ func (v *ClientCertValidator) Validate(cert *x509.Certificate) error {
 	return nil
 }
 
-// ClientCertificateFromRequest extracts and validates the leaf client certificate from an mTLS connection.
+// ClientCertificateFromRequest extracts and validates the leaf client certificate from an mTLS
+// connection or from X-Forwarded-Client-Cert when the request was proxied over loopback.
 func (v *ClientCertValidator) ClientCertificateFromRequest(r *http.Request) (*x509.Certificate, error) {
-	if r == nil || r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
+	if r == nil {
 		return nil, ErrNoClientCertificate
 	}
 
-	cert := r.TLS.PeerCertificates[0]
+	var cert *x509.Certificate
+	var err error
+
+	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
+		cert = r.TLS.PeerCertificates[0]
+	} else {
+		cert, err = forwardedClientCertFromRequest(r)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if err := v.Validate(cert); err != nil {
 		return nil, err
 	}
