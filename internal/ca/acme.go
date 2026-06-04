@@ -3,8 +3,6 @@ package ca
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -12,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
 	"github.com/smallstep/certificates/acme"
 	"github.com/smallstep/certificates/authority"
 	authconfig "github.com/smallstep/certificates/authority/config"
@@ -93,6 +90,9 @@ func (e *PKIEngine) SetApplicationDatabase(db *sql.DB) {
 // InitACMEServer configures the RFC 8555 ACME endpoint backed by the application database.
 func (e *PKIEngine) InitACMEServer() error {
 	if e == nil || e.auth == nil || e.config == nil {
+		return nil
+	}
+	if !e.provisioners.ACMEEnabled() {
 		return nil
 	}
 	if strings.EqualFold(os.Getenv("CA_API_ACME_DISABLED"), "true") {
@@ -208,6 +208,10 @@ func deviceAttestEnabled() bool {
 	return strings.EqualFold(os.Getenv("CA_API_ACME_DEVICE_ATTEST"), "true")
 }
 
+func defaultACMEAttestationFormats() []provisioner.ACMEAttestationFormat {
+	return resolveACMEAttestationFormats()
+}
+
 func resolveACMEAttestationFormats() []provisioner.ACMEAttestationFormat {
 	raw := strings.TrimSpace(os.Getenv("CA_API_ACME_ATTESTATION_FORMATS"))
 	if raw == "" {
@@ -247,61 +251,4 @@ func loadACMEAttestationRoots() ([]byte, error) {
 		return nil, nil
 	}
 	return os.ReadFile(path)
-}
-
-// ensureACMEProvisioner adds the default ACME provisioner to ca.json when missing.
-func ensureACMEProvisioner(configPath string) error {
-	if strings.EqualFold(os.Getenv("CA_API_ACME_DISABLED"), "true") {
-		return nil
-	}
-
-	cfg, err := authconfig.LoadConfiguration(configPath)
-	if err != nil {
-		return fmt.Errorf("load configuration for ACME provisioner: %w", err)
-	}
-	if cfg.AuthorityConfig == nil {
-		return errors.New("authority configuration is missing")
-	}
-
-	for _, p := range cfg.AuthorityConfig.Provisioners {
-		if p.GetName() == acmeProvisionerName && p.GetType() == provisioner.TypeACME {
-			return nil
-		}
-	}
-
-	acmeProv := &provisioner.ACME{
-		Type: "ACME",
-		Name: acmeProvisionerName,
-		Challenges: []provisioner.ACMEChallenge{
-			provisioner.HTTP_01,
-			provisioner.DNS_01,
-			provisioner.TLS_ALPN_01,
-		},
-	}
-	if deviceAttestEnabled() {
-		acmeProv.Challenges = append(acmeProv.Challenges, provisioner.DEVICE_ATTEST_01)
-		acmeProv.AttestationFormats = resolveACMEAttestationFormats()
-		if roots, err := loadACMEAttestationRoots(); err != nil {
-			return fmt.Errorf("load ACME attestation roots: %w", err)
-		} else if len(roots) > 0 {
-			acmeProv.AttestationRoots = roots
-		}
-	}
-	if strings.EqualFold(os.Getenv("CA_API_ACME_REQUIRE_EAB"), "true") {
-		acmeProv.RequireEAB = true
-	}
-
-	cfg.AuthorityConfig.Provisioners = append(cfg.AuthorityConfig.Provisioners, acmeProv)
-
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal updated CA configuration: %w", err)
-	}
-	data = append(data, '\n')
-
-	if err := os.WriteFile(configPath, data, 0o600); err != nil {
-		return fmt.Errorf("write updated CA configuration: %w", err)
-	}
-
-	return nil
 }
