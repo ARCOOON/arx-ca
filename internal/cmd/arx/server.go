@@ -48,6 +48,7 @@ func newServerCmd() *cobra.Command {
 		newServerConfigCmd(),
 		newServerSetupCmd(),
 		newServerServiceCmd(),
+		newServerUICmd(),
 	)
 
 	return server
@@ -142,7 +143,7 @@ register a hardened arx-server systemd unit, and start the CA API. Requires root
 func skipsServerConfigInit(cmd *cobra.Command) bool {
 	for c := cmd; c != nil; c = c.Parent() {
 		switch c.Name() {
-		case "service", "config", "setup":
+		case "service", "config", "setup", "ui":
 			return true
 		}
 	}
