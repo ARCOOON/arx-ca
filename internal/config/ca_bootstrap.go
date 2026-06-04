@@ -20,7 +20,7 @@ func DefaultCABootstrapConfig() CABootstrapConfig {
 		IntermediateCN: "Arx CA Intermediate CA",
 		Organization:   "Arx CA",
 		Country:        "",
-		KeySize:        256,
+		KeySize:        4096,
 	}
 }
 
