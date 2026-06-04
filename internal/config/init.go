@@ -185,20 +185,39 @@ func migrateLegacyAdminPassword(v *viper.Viper, cfg *ServerConfig) {
 // migrateLegacyCABootstrap loads CABootstrap when server.yaml uses the legacy "CABootstrap" key
 // instead of the canonical "ca_bootstrap" field expected by Viper/mapstructure.
 func migrateLegacyCABootstrap(v *viper.Viper, cfg *ServerConfig) {
-	if cfg == nil || v == nil || !cabootstrapConfigEmpty(cfg.CABootstrap) {
+	if cfg == nil || v == nil {
 		return
 	}
 	for _, key := range []string{"CABootstrap", "cabootstrap"} {
+		if !v.InConfig(key) {
+			continue
+		}
 		var legacy CABootstrapConfig
 		if err := v.UnmarshalKey(key, &legacy); err != nil {
 			continue
 		}
-		if cabootstrapConfigEmpty(legacy) {
-			continue
-		}
-		cfg.CABootstrap = legacy
+		cfg.CABootstrap = mergeCABootstrap(cfg.CABootstrap, legacy)
 		return
 	}
+}
+
+func mergeCABootstrap(current, overlay CABootstrapConfig) CABootstrapConfig {
+	if strings.TrimSpace(overlay.RootCN) != "" {
+		current.RootCN = overlay.RootCN
+	}
+	if strings.TrimSpace(overlay.IntermediateCN) != "" {
+		current.IntermediateCN = overlay.IntermediateCN
+	}
+	if strings.TrimSpace(overlay.Organization) != "" {
+		current.Organization = overlay.Organization
+	}
+	if strings.TrimSpace(overlay.Country) != "" {
+		current.Country = overlay.Country
+	}
+	if overlay.KeySize > 0 {
+		current.KeySize = overlay.KeySize
+	}
+	return current
 }
 
 func cabootstrapConfigEmpty(b CABootstrapConfig) bool {
@@ -343,6 +362,7 @@ func ApplyServerRuntimeFromViper() {
 		caPassword = ResolveSecret("", cfg.CA.ProvisionerPasswordFile)
 	}
 	setEnvIfEmpty("CA_API_CA_PASSWORD", caPassword)
+	applyProvisionerRuntimeEnv(cfg.CA.Provisioners)
 	setEnvIfEmpty("OTEL_SERVICE_NAME", cfg.Telemetry.ServiceName)
 	setEnvIfEmpty("OTEL_EXPORTER_OTLP_ENDPOINT", cfg.Telemetry.ExporterEndpoint)
 	if cfg.Telemetry.ExporterInsecure {
@@ -459,11 +479,6 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("ca.intermediate_path", d.CA.IntermediatePath)
 	v.SetDefault("ca.provisioner_name", d.CA.ProvisionerName)
 	v.SetDefault("ca.max_ttl", d.CA.MaxTTL)
-	v.SetDefault("ca_bootstrap.root_cn", d.CABootstrap.RootCN)
-	v.SetDefault("ca_bootstrap.intermediate_cn", d.CABootstrap.IntermediateCN)
-	v.SetDefault("ca_bootstrap.organization", d.CABootstrap.Organization)
-	v.SetDefault("ca_bootstrap.country", d.CABootstrap.Country)
-	v.SetDefault("ca_bootstrap.key_size", d.CABootstrap.KeySize)
 	v.SetDefault("security.token_expiration_hours", d.Security.TokenExpirationHours)
 	v.SetDefault("bootstrap.admin_email", d.Bootstrap.AdminEmail)
 	v.SetDefault("bootstrap.admin_password", d.Bootstrap.AdminPassword)
@@ -603,6 +618,7 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 
 	cfg.Bootstrap = normalizeBootstrap(cfg.Bootstrap)
 	cfg.CABootstrap = cfg.EffectiveCABootstrap()
+	cfg.CA.Provisioners = cfg.CA.EffectiveProvisioners()
 	cfg.WebUI = normalizeWebUI(cfg.WebUI)
 	return cfg
 }
