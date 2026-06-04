@@ -204,8 +204,8 @@ The REST API and the browser UI run on **separate listeners**. Enable the WebUI 
 | `webui.read_timeout` / `write_timeout` | `10s` | Server timeouts |
 | `webui.tls.enabled` | `true` | HTTPS for the WebUI listener |
 | `webui.tls.cert_file` / `key_file` | (empty) | TLS certificate and key (required when TLS is on) |
-| `webui.cors.allowed_origins` | `["*"]` | CORS origins for static assets |
-| `webui.cors.allowed_methods` | `["GET", "OPTIONS"]` | CORS methods |
+| `webui.cors.allowed_origins` | `["*"]` | CORS origins for static assets and for API cross-origin calls when WebUI is enabled |
+| `webui.cors.allowed_methods` | `["GET", "OPTIONS"]` | CORS methods for static assets (API allows full REST methods when WebUI is enabled) |
 
 **`path_prefix` and deployment:** A prefix of `/` serves the SPA at the WebUI listener root. A prefix of `/ui` strips `/ui` before looking up files under `ui_dir`, so operators can colocate the API behind one hostname (port 8080) and the console on another port or path without mixing handlers. Configure your frontend build `base` to match `path_prefix`. Unmatched paths under the prefix fall back to `index.html` for client-side routing.
 

@@ -170,8 +170,8 @@ When `webui.enabled` is `true`, the CA API process also runs an **isolated** `ne
 | `webui.write_timeout` | `10s` | `http.Server.WriteTimeout` |
 | `webui.tls.enabled` | `true` | Use `ListenAndServeTLS` when cert/key paths are set |
 | `webui.tls.cert_file` / `key_file` | (empty) | TLS material (required when TLS is enabled) |
-| `webui.cors.allowed_origins` | `["*"]` | CORS `Access-Control-Allow-Origin` |
-| `webui.cors.allowed_methods` | `["GET", "OPTIONS"]` | CORS allowed methods |
+| `webui.cors.allowed_origins` | `["*"]` | CORS `Access-Control-Allow-Origin` on the WebUI static listener **and** on the API listener when `webui.enabled` is `true` |
+| `webui.cors.allowed_methods` | `["GET", "OPTIONS"]` | CORS allowed methods for static assets only; the API listener always allows `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `OPTIONS` when WebUI is enabled |
 
 **Path prefix and deployment architecture**
 
@@ -186,6 +186,8 @@ When `webui.enabled` is `true`, the CA API process also runs an **isolated** `ne
 Use a non-root prefix when the same host also terminates other paths (reverse proxy, shared ingress) or when operators want the API on `/` and the console under `/ui`. The frontend build must set its router `base` / `homepage` to match `path_prefix` so client-side routes resolve correctly.
 
 Requests that do not match a file under `ui_dir` receive **SPA fallback** (`index.html`) so deep links work. Middleware applies configured CORS and `max_body_size` before the file handler.
+
+When the WebUI is enabled, the **API listener** also applies CORS using `webui.cors.allowed_origins` so browser clients on the separate WebUI origin can call `/api/v1/*` (for example `http://localhost:8444` → `https://localhost:8443`). Preflight `OPTIONS` requests receive `Access-Control-Allow-Headers: Authorization, Content-Type, Accept, X-API-Key`.
 
 Startup logs include the effective URL, for example: `WebUI server starting url=https://0.0.0.0:8443/ui` when `path_prefix` is `/ui` and TLS is enabled.
 
