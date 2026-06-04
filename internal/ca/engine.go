@@ -35,8 +35,6 @@ import (
 const (
 	engineName         = "step-ca"
 	defaultConfigRel   = "config/ca.json"
-	defaultPKIName     = "Arx CA"
-	defaultOrg         = "Arx CA"
 	defaultResource    = "arx-ca"
 	defaultCAAddress   = "127.0.0.1:9443"
 	defaultCADNS       = "localhost"
@@ -70,8 +68,8 @@ type PKIEngine struct {
 
 // InitCA initializes or loads a local Root CA and Intermediate CA using the step-ca SDK.
 // configPath must point to ca.json or to the PKI base directory containing config/ca.json.
-// If the PKI artifacts do not exist, they are generated with ECDSA P-256 keys automatically.
-func InitCA(configPath string, caCfg config.CAConfig) (*PKIEngine, error) {
+// If the PKI artifacts do not exist, they are generated using CABootstrap settings from server.yaml.
+func InitCA(configPath string, caCfg config.CAConfig, caBootstrap config.CABootstrapConfig) (*PKIEngine, error) {
 	maxCertTTL, err := caCfg.MaxTTLDuration()
 	if err != nil {
 		return nil, err
@@ -97,7 +95,7 @@ func InitCA(configPath string, caCfg config.CAConfig) (*PKIEngine, error) {
 	}
 
 	if !pkiExists(resolvedConfig, basePath) {
-		if err := bootstrapPKI(resolvedConfig, basePath, password, appCfg); err != nil {
+		if err := bootstrapPKI(resolvedConfig, basePath, password, appCfg, caBootstrap); err != nil {
 			return nil, fmt.Errorf("bootstrap PKI: %w", err)
 		}
 	}
@@ -349,7 +347,7 @@ func pkiExists(configPath, basePath string) bool {
 	return true
 }
 
-func bootstrapPKI(configPath, basePath string, password []byte, appCfg config.Config) error {
+func bootstrapPKI(configPath, basePath string, password []byte, appCfg config.Config, boot config.CABootstrapConfig) error {
 	for _, dir := range []string{
 		filepath.Join(basePath, "config"),
 		filepath.Join(basePath, "certs"),
@@ -384,12 +382,17 @@ func bootstrapPKI(configPath, basePath string, password []byte, appCfg config.Co
 		return fmt.Errorf("generate provisioner keys: %w", err)
 	}
 
-	root, err := p.GenerateRootCertificate(defaultPKIName, defaultOrg, defaultResource, password)
+	creator, err := bootstrapCACreator()
+	if err != nil {
+		return err
+	}
+
+	root, err := generateBootstrapRoot(p, creator, boot, defaultResource, password)
 	if err != nil {
 		return fmt.Errorf("generate root certificate: %w", err)
 	}
 
-	if err := p.GenerateIntermediateCertificate(defaultPKIName, defaultOrg, defaultResource, root, password); err != nil {
+	if err := generateBootstrapIntermediate(p, creator, boot, defaultResource, root, password); err != nil {
 		return fmt.Errorf("generate intermediate certificate: %w", err)
 	}
 
