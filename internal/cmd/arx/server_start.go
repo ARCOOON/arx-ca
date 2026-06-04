@@ -154,7 +154,11 @@ func runServer() error {
 		ca.LogNDESConnectors(pkiEngine.NDESRegistryRef())
 	}
 
-	handler := telemetry.HTTPMiddleware(middleware.Logger(mux))
+	handler := middleware.Logger(mux)
+	if serverCfg.WebUI.Enabled {
+		handler = middleware.CORS(serverCfg.WebUI.CORS.AllowedOrigins, nil, handler)
+	}
+	handler = telemetry.HTTPMiddleware(handler)
 
 	idleTimeout := serverCfg.Server.ReadTimeout + serverCfg.Server.WriteTimeout
 	if idleTimeout <= 0 {
