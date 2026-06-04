@@ -37,13 +37,14 @@ type gitHubAsset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
-// DownloadAndBootstrapWebUI fetches the release-matching webui-dist.tar.gz asset from GitHub,
+// DownloadAndBootstrapWebUI fetches webui-dist.tar.gz from GitHub for the given release tag,
 // extracts it into the configured webui.ui_dir, and enables the WebUI block in server.yaml.
-func DownloadAndBootstrapWebUI(configPath string) error {
-	return downloadAndBootstrap(context.Background(), nil, os.Stdout, configPath)
+// When requestedVersion is empty, the release tag is derived from the running arx binary version.
+func DownloadAndBootstrapWebUI(configPath, requestedVersion string) error {
+	return downloadAndBootstrap(context.Background(), nil, os.Stdout, configPath, requestedVersion)
 }
 
-func downloadAndBootstrap(ctx context.Context, client *http.Client, out io.Writer, configPath string) error {
+func downloadAndBootstrap(ctx context.Context, client *http.Client, out io.Writer, configPath, requestedVersion string) error {
 	if out == nil {
 		out = os.Stdout
 	}
@@ -73,9 +74,18 @@ func downloadAndBootstrap(ctx context.Context, client *http.Client, out io.Write
 		return fmt.Errorf("resolve webui ui_dir %q: %w", uiDir, err)
 	}
 
-	fmt.Fprintln(out, "Detecting server version...")
-	releaseTarget, displayVersion := resolveReleaseTarget(version.Current())
-	fmt.Fprintf(out, "Using GitHub release target: %s (binary version %s)\n", releaseTarget, displayVersion)
+	requestedVersion = strings.TrimSpace(requestedVersion)
+	var releaseTarget, displayVersion string
+	if requestedVersion != "" {
+		releaseTarget, displayVersion = resolveReleaseTarget(requestedVersion)
+		fmt.Fprintf(out, "Using requested WebUI version: %s\n", displayVersion)
+		fmt.Fprintf(out, "Using GitHub release target: %s (requested version %s)\n", releaseTarget, displayVersion)
+	} else {
+		fmt.Fprintln(out, "Detecting server version...")
+		binaryVersion := version.Current()
+		releaseTarget, displayVersion = resolveReleaseTarget(binaryVersion)
+		fmt.Fprintf(out, "Using GitHub release target: %s (binary version %s)\n", releaseTarget, displayVersion)
+	}
 
 	fmt.Fprintln(out, "Downloading webui-dist.tar.gz from GitHub...")
 	release, err := fetchRelease(ctx, client, releaseTarget)
