@@ -42,8 +42,14 @@ func (h *CertificateHandler) Issue() http.Handler {
 			return
 		}
 
-		resp, err := h.engine.IssueCertificate(r.Context(), csrPEM, req.TTL, req.TemplateID, req.Metadata)
+		resp, err := h.engine.IssueCertificate(r.Context(), req)
 		if err != nil {
+			if strings.Contains(err.Error(), "invalid ttl") ||
+				strings.Contains(err.Error(), "exceeds configured maximum") ||
+				strings.Contains(err.Error(), "csr is required") {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			status, message := ca.MapCAError(err)
 			if status >= http.StatusInternalServerError {
 				log.Printf("certificates: issue: %v", err)
@@ -153,6 +159,43 @@ func (h *CertificateHandler) IssueWithToken() http.Handler {
 			status, message := ca.MapCAError(err)
 			if status >= http.StatusInternalServerError {
 				log.Printf("certificates: issue-with-token: %v", err)
+			}
+			api.WriteError(w, status, message)
+			return
+		}
+
+		api.WriteSuccess(w, http.StatusCreated, resp)
+	})
+}
+
+// Generate handles POST /api/v1/certificates/generate.
+func (h *CertificateHandler) Generate() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		var req models.GenerateCertificateRequest
+		if err := decodeJSONBody(w, r, &req); err != nil {
+			api.WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		resp, err := h.engine.GenerateCertificate(r.Context(), req)
+		if err != nil {
+			if strings.Contains(err.Error(), "common_name") ||
+				strings.Contains(err.Error(), "key_algo") ||
+				strings.Contains(err.Error(), "invalid sans") ||
+				strings.Contains(err.Error(), "unsupported key_algo") ||
+				strings.Contains(err.Error(), "invalid ttl") ||
+				strings.Contains(err.Error(), "exceeds configured maximum") {
+				api.WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			status, message := ca.MapCAError(err)
+			if status >= http.StatusInternalServerError {
+				log.Printf("certificates: generate: %v", err)
 			}
 			api.WriteError(w, status, message)
 			return
