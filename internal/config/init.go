@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,14 +138,10 @@ func InitServerConfig() error {
 		return fmt.Errorf("unmarshal server config: %w", err)
 	}
 
-	initialMigrated, err := HashPlaintextPasswords(configPath, &loaded)
-	if err != nil {
+	if err := HealServerConfig(configPath, &loaded); err != nil {
 		return err
 	}
-	syncServerPasswordFieldsInViper(v, loaded)
-	if initialMigrated {
-		log.Println("Plaintext initial admin password detected, successfully hashed and updated in server.yaml")
-	}
+	syncServerSecurityFieldsInViper(v, loaded)
 
 	activeServerConfig = normalizeServerConfig(loaded)
 	return nil
@@ -157,7 +152,8 @@ func ServerConfigPath() (string, error) {
 	return serverConfigFilePath()
 }
 
-func syncServerPasswordFieldsInViper(v *viper.Viper, cfg ServerConfig) {
+func syncServerSecurityFieldsInViper(v *viper.Viper, cfg ServerConfig) {
+	v.Set("security.jwt_secret", cfg.Security.JWTSecret)
 	v.Set("security.initial_admin_password", cfg.Security.InitialAdminPassword)
 	v.Set("bootstrap.admin_password_hash", cfg.Bootstrap.AdminPasswordHash)
 }
@@ -433,6 +429,7 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("webui.tls.key_file", d.WebUI.TLS.KeyFile)
 	v.SetDefault("webui.cors.allowed_origins", d.WebUI.CORS.AllowedOrigins)
 	v.SetDefault("webui.cors.allowed_methods", d.WebUI.CORS.AllowedMethods)
+	v.SetDefault("webui.cors.allowed_headers", d.WebUI.CORS.AllowedHeaders)
 }
 
 func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
@@ -535,11 +532,6 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 			cfg.Security.JWTSecret = v
 		} else if v := strings.TrimSpace(os.Getenv("ARX_SECURITY_JWT_SECRET")); v != "" {
 			cfg.Security.JWTSecret = v
-		} else {
-			secret, err := GenerateJWTSecret(32)
-			if err == nil {
-				cfg.Security.JWTSecret = secret
-			}
 		}
 	}
 
@@ -580,6 +572,9 @@ func normalizeWebUI(w WebUIConfig) WebUIConfig {
 	}
 	if len(w.CORS.AllowedMethods) == 0 {
 		w.CORS.AllowedMethods = append([]string(nil), def.CORS.AllowedMethods...)
+	}
+	if len(w.CORS.AllowedHeaders) == 0 {
+		w.CORS.AllowedHeaders = append([]string(nil), def.CORS.AllowedHeaders...)
 	}
 	return w
 }
