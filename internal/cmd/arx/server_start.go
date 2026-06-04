@@ -59,7 +59,7 @@ func runServer() error {
 		}
 	}()
 
-	pkiEngine, err := ca.InitCA(caConfigPath)
+	pkiEngine, err := ca.InitCA(caConfigPath, serverCfg.CA)
 	if err != nil {
 		return err
 	}
@@ -111,6 +111,7 @@ func runServer() error {
 	mux.Handle("GET /api/v1/health", healthHandler)
 	mux.Handle("GET /api/v1/ca/root", caHandler.RootCert())
 	mux.Handle("GET /api/v1/ca/crl", caHandler.CRL())
+	mux.Handle("GET /api/v1/crl", caHandler.CRL())
 	mux.Handle("GET /api/v1/public/ca/intermediate", publicHandler.IntermediateCert())
 	mux.Handle("GET /api/v1/public/certificates", publicHandler.ListCertificates())
 	mux.Handle("GET /api/v1/public/certificates/{serial}", publicHandler.GetCertificate())
@@ -120,6 +121,7 @@ func runServer() error {
 	mux.Handle("POST /api/v1/auth/service-accounts", adminPerm(auth.PermServiceAccounts, authHandler.CreateServiceAccount()))
 
 	mux.Handle("POST /api/v1/certificates/issue", certPerm(auth.PermCertificatesIssue, certHandler.Issue()))
+	mux.Handle("POST /api/v1/certificates/generate", certPerm(auth.PermCertificatesIssue, certHandler.Generate()))
 	mux.Handle("POST /api/v1/certificates/issue-with-token", certPerm(auth.PermCertificatesIssue, certHandler.IssueWithToken()))
 	mux.Handle("POST /api/v1/certificates/auto", adminPerm(auth.PermCertificatesIssue, certHandler.Auto()))
 	mux.Handle("POST /api/v1/certificates/revoke", certPerm(auth.PermCertificatesRevoke, certHandler.Revoke()))
