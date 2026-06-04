@@ -97,41 +97,60 @@ func newServerConfigCmd() *cobra.Command {
 
 func newServerServiceCmd() *cobra.Command {
 	var runAsUser, installDir string
+	var flagUser, flagSystem bool
 
 	svc := &cobra.Command{
 		Use:   "service",
-		Short: "Install or remove the systemd unit for the Arx CA server",
-		Long: `Self-install the arx binary under /opt/arx (by default), bootstrap server.yaml,
-register a hardened arx-server systemd unit, and start the CA API. Requires root on Linux.`,
+		Short: "Install or remove the Arx CA server daemon",
+		Long: `Self-install the arx binary, bootstrap server.yaml, and register a daemon.
+
+Linux: --system writes /etc/systemd/system/arx.service (/opt/arx by default).
+       --user writes ~/.config/systemd/user/arx.service ($HOME/.arx by default).
+
+Windows: --system registers a Windows Service under Program Files.
+         --user creates a logon scheduled task under %LOCALAPPDATA%\\arx.
+
+When neither --user nor --system is set, user scope is used unless the process is root
+(Linux) or Administrator (Windows), in which case system scope is selected.`,
 	}
 
 	addServiceFlags := func(cmd *cobra.Command) {
-		cmd.Flags().StringVar(&runAsUser, "run-as-user", "", "POSIX account that runs the arx-server service (overrides server.yaml service.run_as_user)")
-		cmd.Flags().StringVar(&installDir, "install-dir", "", "Install root for the binary and server.yaml (overrides server.yaml service.install_dir)")
+		cmd.Flags().BoolVar(&flagUser, "user", false, "Install for the current user (default when non-privileged)")
+		cmd.Flags().BoolVar(&flagSystem, "system", false, "Install system-wide (requires root on Linux or Administrator on Windows)")
+		cmd.Flags().StringVar(&runAsUser, "run-as-user", "", "POSIX account for --system on Linux (overrides server.yaml service.run_as_user)")
+		cmd.Flags().StringVar(&installDir, "install-dir", "", "Install root for binary and server.yaml (overrides server.yaml service.install_dir)")
 	}
 
 	install := &cobra.Command{
 		Use:   "install",
-		Short: "Install the arx binary, configuration, and arx-server systemd unit",
+		Short: "Install the arx binary, configuration, and service unit",
 		Run: func(cmd *cobra.Command, _ []string) {
+			scope, err := resolveInstallScope(cmd, flagUser, flagSystem)
+			if err != nil {
+				log.Fatal(err)
+			}
 			opts, err := resolveServiceInstallOptions(cmd, runAsUser, installDir)
 			if err != nil {
 				log.Fatal(err)
 			}
-			runServerServiceInstall(opts)
+			runServerServiceInstall(scope, opts)
 		},
 	}
 	addServiceFlags(install)
 
 	uninstall := &cobra.Command{
 		Use:   "uninstall",
-		Short: "Stop the arx-server unit and remove the install directory",
+		Short: "Stop the service unit and remove the install directory",
 		Run: func(cmd *cobra.Command, _ []string) {
+			scope, err := resolveInstallScope(cmd, flagUser, flagSystem)
+			if err != nil {
+				log.Fatal(err)
+			}
 			opts, err := resolveServiceInstallOptions(cmd, runAsUser, installDir)
 			if err != nil {
 				log.Fatal(err)
 			}
-			runServerServiceUninstall(opts)
+			runServerServiceUninstall(scope, opts)
 		},
 	}
 	addServiceFlags(uninstall)
