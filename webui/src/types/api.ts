@@ -119,8 +119,25 @@ export interface CACertificateInfo {
   issuer: CASubjectInfo
   not_before: string
   not_after: string
+  serial_number: string
+  signature_algorithm: string
+  key_usages?: string[]
+  ext_key_usages?: string[]
   fingerprint: string
   pem: string
+}
+
+export interface CAProvisionerDetail {
+  name: string
+  type: string
+  require_eab?: boolean
+  challenges?: string[]
+  challenge?: string
+}
+
+export interface CAProvisionersResponse {
+  provisioners: CAProvisionerDetail[]
+  total: number
 }
 
 export interface CAInfoResponse {
