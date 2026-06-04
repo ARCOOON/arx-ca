@@ -25,12 +25,16 @@ type CASubjectInfo struct {
 
 // CACertificateInfo carries parsed X.509 metadata and the PEM-encoded certificate.
 type CACertificateInfo struct {
-	Subject     CASubjectInfo `json:"subject"`
-	Issuer      CASubjectInfo `json:"issuer"`
-	NotBefore   string        `json:"not_before"`
-	NotAfter    string        `json:"not_after"`
-	Fingerprint string        `json:"fingerprint"`
-	PEM         string        `json:"pem"`
+	Subject            CASubjectInfo `json:"subject"`
+	Issuer             CASubjectInfo `json:"issuer"`
+	NotBefore          string        `json:"not_before"`
+	NotAfter           string        `json:"not_after"`
+	SerialNumber       string        `json:"serial_number"`
+	SignatureAlgorithm string        `json:"signature_algorithm"`
+	KeyUsages          []string      `json:"key_usages,omitempty"`
+	ExtKeyUsages       []string      `json:"ext_key_usages,omitempty"`
+	Fingerprint        string        `json:"fingerprint"`
+	PEM                string        `json:"pem"`
 }
 
 // CAInfoResponse returns Root and Intermediate CA certificate metadata.

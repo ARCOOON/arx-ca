@@ -30,3 +30,18 @@ type ListProvisionersResponse struct {
 	Provisioners []ProvisionerSummary `json:"provisioners"`
 	Total        int                  `json:"total"`
 }
+
+// CAProvisionerDetail describes a sanitized provisioner entry from ca.json.
+type CAProvisionerDetail struct {
+	Name       string   `json:"name"`
+	Type       string   `json:"type"`
+	RequireEAB *bool    `json:"require_eab,omitempty"`
+	Challenges []string `json:"challenges,omitempty"`
+	Challenge  string   `json:"challenge,omitempty"`
+}
+
+// CAProvisionersResponse returns active provisioners parsed from ca.json.
+type CAProvisionersResponse struct {
+	Provisioners []CAProvisionerDetail `json:"provisioners"`
+	Total        int                   `json:"total"`
+}
