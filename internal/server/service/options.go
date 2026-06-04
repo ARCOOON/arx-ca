@@ -1,16 +1,14 @@
 package service
 
-// InstallOptions configures self-install and uninstall of the arx CA server systemd unit.
+// InstallOptions configures self-install and uninstall of the arx CA server daemon.
 type InstallOptions struct {
+	Scope      InstallScope
 	RunAsUser  string
 	InstallDir string
 }
 
 const (
-	defaultRunAsUser  = "arx-ca"
-	defaultInstallDir = "/opt/arx"
-	binaryName        = "arx"
-	configFileName    = "server.yaml"
+	defaultRunAsUser = "arx-ca"
 )
 
 func (o InstallOptions) runAsUser() string {
@@ -18,11 +16,4 @@ func (o InstallOptions) runAsUser() string {
 		return o.RunAsUser
 	}
 	return defaultRunAsUser
-}
-
-func (o InstallOptions) installDir() string {
-	if o.InstallDir != "" {
-		return o.InstallDir
-	}
-	return defaultInstallDir
 }
