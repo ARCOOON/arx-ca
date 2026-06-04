@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/smallstep/cli-utils/step"
@@ -64,12 +65,18 @@ type PKIEngine struct {
 
 	appConfig   config.Config
 	k8sReviewer *K8sTokenReviewer
+	maxCertTTL  time.Duration
 }
 
 // InitCA initializes or loads a local Root CA and Intermediate CA using the step-ca SDK.
 // configPath must point to ca.json or to the PKI base directory containing config/ca.json.
 // If the PKI artifacts do not exist, they are generated with ECDSA P-256 keys automatically.
-func InitCA(configPath string) (*PKIEngine, error) {
+func InitCA(configPath string, caCfg config.CAConfig) (*PKIEngine, error) {
+	maxCertTTL, err := caCfg.MaxTTLDuration()
+	if err != nil {
+		return nil, err
+	}
+
 	appCfg := config.LoadFromEnv()
 	if err := appCfg.KMS.Validate(); err != nil {
 		return nil, fmt.Errorf("kms configuration: %w", err)
@@ -127,6 +134,10 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		return nil, fmt.Errorf("heal PKI config paths: %w", err)
 	}
 
+	if err := syncCAConfigMaxTTL(resolvedConfig, maxCertTTL); err != nil {
+		return nil, fmt.Errorf("sync CA max TTL: %w", err)
+	}
+
 	cfg, err := authority.LoadConfiguration(resolvedConfig)
 	if err != nil {
 		return nil, fmt.Errorf("load CA configuration: %w", err)
@@ -179,6 +190,7 @@ func InitCA(configPath string) (*PKIEngine, error) {
 		templates:   templateStore,
 		appConfig:   appCfg,
 		k8sReviewer: k8sReviewer,
+		maxCertTTL:  maxCertTTL,
 	}
 
 	if err := engine.initSCEP(); err != nil {
