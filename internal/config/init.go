@@ -94,7 +94,10 @@ func WriteDefaultServerConfig(path string, force bool) error {
 		return fmt.Errorf("create config directory %s: %w", dir, err)
 	}
 
-	defaults := DefaultServerConfig()
+	defaults, err := DefaultServerConfigForExecutable()
+	if err != nil {
+		return fmt.Errorf("build default config: %w", err)
+	}
 	raw, err := marshalYAMLConfig(defaults)
 	if err != nil {
 		return fmt.Errorf("marshal default config: %w", err)
@@ -141,6 +144,12 @@ func InitServerConfig() error {
 	if err := HealServerConfig(configPath, &loaded); err != nil {
 		return err
 	}
+
+	applyCAPasswordEnvOverride(&loaded)
+	if _, ok := os.LookupEnv(caPasswordEnvVar); ok {
+		v.Set("ca.password", loaded.CA.Password)
+	}
+
 	syncServerSecurityFieldsInViper(v, loaded)
 
 	activeServerConfig = normalizeServerConfig(loaded)
@@ -407,6 +416,7 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("ca.root_path", d.CA.RootPath)
 	v.SetDefault("ca.intermediate_path", d.CA.IntermediatePath)
 	v.SetDefault("ca.provisioner_name", d.CA.ProvisionerName)
+	v.SetDefault("ca.max_ttl", d.CA.MaxTTL)
 	v.SetDefault("security.token_expiration_hours", d.Security.TokenExpirationHours)
 	v.SetDefault("security.initial_admin_password", d.Security.InitialAdminPassword)
 	v.SetDefault("bootstrap.admin_email", d.Bootstrap.AdminEmail)
@@ -523,6 +533,9 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 	if cfg.CA.IntermediatePath == "" {
 		cfg.CA.IntermediatePath = def.CA.IntermediatePath
 	}
+	if strings.TrimSpace(cfg.CA.MaxTTL) == "" {
+		cfg.CA.MaxTTL = def.CA.MaxTTL
+	}
 
 	if cfg.Security.TokenExpirationHours <= 0 {
 		cfg.Security.TokenExpirationHours = def.Security.TokenExpirationHours
@@ -576,6 +589,7 @@ func normalizeWebUI(w WebUIConfig) WebUIConfig {
 	if len(w.CORS.AllowedHeaders) == 0 {
 		w.CORS.AllowedHeaders = append([]string(nil), def.CORS.AllowedHeaders...)
 	}
+	normalizeWebUICORS(&w.CORS)
 	return w
 }
 
