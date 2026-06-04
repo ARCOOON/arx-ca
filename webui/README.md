@@ -1,5 +1,42 @@
-# Vue 3 + TypeScript + Vite
+# Arx CA WebUI
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Vue 3 management console for the Arx Certificate Authority API. Built with Vite, TypeScript, Pinia, Vue Router, Tailwind CSS v4, and Axios.
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## Development
+
+```bash
+npm ci
+npm run dev
+```
+
+Optional: set `VITE_API_BASE_URL` (see `.env.example`) when the API is not proxied on the same origin. By default the browser uses `{origin}/api/v1`.
+
+## Production build
+
+```bash
+npm run build
+```
+
+Output is written to `dist/`. Package with the release workflow or copy into `webui.ui_dir` on the server.
+
+## Routes
+
+| Path | View | API usage |
+| ---- | ---- | --------- |
+| `/login` | Login | `POST /auth/login` |
+| `/dashboard` | Dashboard | `GET /health`, `GET /certificates` (count) |
+| `/certificates` | Certificates | `GET /certificates`, `POST /certificates/issue` |
+| `/acme` | ACME | `GET /acme/status` |
+| `/scep` | SCEP | `GET /scep/status` |
+| `/settings` | Settings | `GET /health`, session metadata |
+
+Authenticated routes render inside `src/components/layout/AppShell.vue` with a collapsible sidebar and top bar.
+
+## Structure
+
+- `src/api/` — Axios client and endpoint helpers
+- `src/components/layout/` — App shell, navigation, top bar
+- `src/components/ui/` — Shared flat UI primitives
+- `src/router/` — Route table and auth guard
+- `src/store/auth.ts` — JWT and roles in `localStorage`
+- `src/views/` — Page components
