@@ -55,3 +55,21 @@ func (h *CAHandler) Info() http.Handler {
 		api.WriteSuccess(w, http.StatusOK, info)
 	})
 }
+
+// Provisioners handles GET /api/v1/ca/provisioners and returns sanitized provisioners from ca.json.
+func (h *CAHandler) Provisioners() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		resp, err := h.engine.CAProvisioners()
+		if err != nil {
+			api.WriteError(w, http.StatusInternalServerError, "CA provisioner configuration is unavailable")
+			return
+		}
+
+		api.WriteSuccess(w, http.StatusOK, resp)
+	})
+}
