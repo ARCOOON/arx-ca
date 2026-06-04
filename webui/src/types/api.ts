@@ -36,6 +36,13 @@ export interface IssueCertificateRequest {
   csr: string
   ttl?: string
   template_id?: string
+  organization?: string
+  organizational_unit?: string
+  country?: string
+  state?: string
+  locality?: string
+  is_server_auth?: boolean
+  is_client_auth?: boolean
 }
 
 export interface IssueCertificateResponse {
@@ -43,6 +50,27 @@ export interface IssueCertificateResponse {
   serial: string
   not_before: string
   not_after: string
+}
+
+export type KeyAlgorithm = 'RSA2048' | 'ECDSA256'
+
+export interface GenerateCertificateRequest {
+  common_name: string
+  sans?: string[]
+  ttl?: string
+  key_algo: KeyAlgorithm
+  organization?: string
+  organizational_unit?: string
+  country?: string
+  state?: string
+  locality?: string
+  is_server_auth?: boolean
+  is_client_auth?: boolean
+}
+
+export interface GenerateCertificateResponse {
+  certificate_pem: string
+  private_key_pem: string
 }
 
 export interface HealthReport {
