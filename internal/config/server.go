@@ -48,9 +48,26 @@ type CAConfig struct {
 	RootPath                string `mapstructure:"root_path" yaml:"root_path"`
 	IntermediatePath        string `mapstructure:"intermediate_path" yaml:"intermediate_path"`
 	ProvisionerName         string `mapstructure:"provisioner_name" yaml:"provisioner_name"`
+	MaxTTL                  string `mapstructure:"max_ttl" yaml:"max_ttl"`
 	Password                string `mapstructure:"password" yaml:"password"`
 	PasswordFile            string `mapstructure:"password_file" yaml:"password_file"`
 	ProvisionerPasswordFile string `mapstructure:"provisioner_password_file" yaml:"provisioner_password_file"`
+}
+
+// MaxTTLDuration parses the configured maximum X.509 certificate lifetime.
+func (c CAConfig) MaxTTLDuration() (time.Duration, error) {
+	raw := strings.TrimSpace(c.MaxTTL)
+	if raw == "" {
+		raw = DefaultServerConfig().CA.MaxTTL
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("parse ca.max_ttl %q: %w", raw, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("ca.max_ttl must be positive: %s", raw)
+	}
+	return d, nil
 }
 
 // SecurityConfig holds authentication and token policy for the API.
@@ -120,6 +137,26 @@ type ServerConfig struct {
 	WebUI     WebUIConfig     `mapstructure:"webui" yaml:"webui"`
 }
 
+// DefaultServerConfigForExecutable returns defaults with webui.ui_dir beside the current binary.
+func DefaultServerConfigForExecutable() (ServerConfig, error) {
+	cfg := DefaultServerConfig()
+	uiDir, err := webUIDirBesideExecutable()
+	if err != nil {
+		return ServerConfig{}, err
+	}
+	cfg.WebUI.UIDir = uiDir
+	return cfg, nil
+}
+
+// webUIDirBesideExecutable returns the absolute path to the ui directory next to the executable.
+func webUIDirBesideExecutable() (string, error) {
+	exe, err := ExecutablePath()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(filepath.Dir(exe), "ui"), nil
+}
+
 // DefaultServerConfig returns the built-in defaults used when server.yaml is created.
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
@@ -145,6 +182,7 @@ func DefaultServerConfig() ServerConfig {
 			RootPath:         ".pki/certs/root_ca.crt",
 			IntermediatePath: ".pki/certs/intermediate_ca.crt",
 			ProvisionerName:  "ca-admin",
+			MaxTTL:           "8760h",
 		},
 		Security: SecurityConfig{
 			TokenExpirationHours: 24,
