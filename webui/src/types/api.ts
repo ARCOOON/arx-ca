@@ -102,6 +102,32 @@ export interface HealthReport {
   }
 }
 
+export interface CASubjectInfo {
+  common_name: string
+  organization?: string[]
+  organizational_unit?: string[]
+  country?: string[]
+  province?: string[]
+  locality?: string[]
+  street_address?: string[]
+  postal_code?: string[]
+  serial_number?: string
+}
+
+export interface CACertificateInfo {
+  subject: CASubjectInfo
+  issuer: CASubjectInfo
+  not_before: string
+  not_after: string
+  fingerprint: string
+  pem: string
+}
+
+export interface CAInfoResponse {
+  root: CACertificateInfo
+  intermediate: CACertificateInfo
+}
+
 export interface AcmeStatus {
   enabled: boolean
   directory_url?: string

@@ -88,10 +88,16 @@ function persistSidebarPreference(): void {
           <p class="ui-text-secondary">Collapsed sidebar by default</p>
           <p class="mt-0.5 ui-text-muted">Stored in local storage; reload applies the layout.</p>
         </div>
-        <label class="inline-flex items-center gap-2 ui-text-muted">
-          <input v-model="sidebarCollapsed" type="checkbox" />
-          Collapsed
-        </label>
+        <button
+          type="button"
+          class="ui-theme-toggle shrink-0"
+          :data-active="sidebarCollapsed"
+          :aria-pressed="sidebarCollapsed"
+          aria-label="Collapsed sidebar by default"
+          @click="sidebarCollapsed = !sidebarCollapsed"
+        >
+          <span class="ui-theme-toggle-thumb" />
+        </button>
       </div>
       <div class="ui-border-t px-4 py-3">
         <button type="button" class="ui-btn-secondary" @click="persistSidebarPreference">

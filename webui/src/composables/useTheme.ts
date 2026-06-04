@@ -4,7 +4,7 @@ const STORAGE_KEY = 'arx_theme'
 
 export function resolveInitialTheme(): ThemeMode {
   if (typeof window === 'undefined') {
-    return 'dark'
+    return 'light'
   }
 
   const stored = localStorage.getItem(STORAGE_KEY)
@@ -12,11 +12,7 @@ export function resolveInitialTheme(): ThemeMode {
     return stored
   }
 
-  if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-    return 'light'
-  }
-
-  return 'dark'
+  return 'light'
 }
 
 export function applyTheme(theme: ThemeMode): void {

@@ -75,15 +75,15 @@ function setDarkTheme(): void {
         </button>
       </div>
 
-      <div class="hidden items-center gap-2 ui-inset px-3 py-1.5 sm:flex">
-        <UserRound class="h-3.5 w-3.5 ui-text-muted" aria-hidden="true" />
-        <div class="text-right">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">Signed in</p>
-          <p class="max-w-[12rem] truncate text-xs ui-text-secondary">{{ roleLabel }}</p>
+      <div class="ui-topbar-control hidden sm:flex">
+        <UserRound class="h-3.5 w-3.5 shrink-0 ui-text-muted" aria-hidden="true" />
+        <div class="min-w-0 text-right">
+          <p class="text-[10px] uppercase leading-none tracking-wide ui-text-muted">Signed in</p>
+          <p class="mt-0.5 max-w-[12rem] truncate text-xs leading-none ui-text-secondary">{{ roleLabel }}</p>
         </div>
       </div>
 
-      <button type="button" class="ui-btn-secondary inline-flex items-center gap-1.5" @click="emit('logout')">
+      <button type="button" class="ui-topbar-control ui-btn-secondary inline-flex items-center gap-1.5" @click="emit('logout')">
         <LogOut class="h-3.5 w-3.5" aria-hidden="true" />
         Logout
       </button>
