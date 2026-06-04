@@ -414,6 +414,10 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 | `issuer` | object | Yes | Parsed certificate issuer DN |
 | `not_before` | string | Yes | Validity start (RFC3339 UTC) |
 | `not_after` | string | Yes | Validity end (RFC3339 UTC) |
+| `serial_number` | string | Yes | Certificate serial number (decimal string) |
+| `signature_algorithm` | string | Yes | Signature algorithm (e.g. `SHA256-RSA`) |
+| `key_usages` | string[] | No | PKIX key usage flags (e.g. `certSign`, `crlSign`) |
+| `ext_key_usages` | string[] | No | Extended key usage OIDs (e.g. `serverAuth`) |
 | `fingerprint` | string | Yes | SHA-256 fingerprint (lowercase hex) |
 | `pem` | string | Yes | PEM-encoded certificate |
 
@@ -447,6 +451,10 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
     },
     "not_before": "2026-06-04T12:00:00Z",
     "not_after": "2036-06-02T12:00:00Z",
+    "serial_number": "123456789",
+    "signature_algorithm": "SHA256-RSA",
+    "key_usages": ["certSign", "crlSign"],
+    "ext_key_usages": [],
     "fingerprint": "a1b2c3d4e5f6…",
     "pem": "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----\n"
   },
@@ -463,6 +471,10 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
     },
     "not_before": "2026-06-04T12:00:00Z",
     "not_after": "2036-06-02T12:00:00Z",
+    "serial_number": "987654321",
+    "signature_algorithm": "SHA256-RSA",
+    "key_usages": ["certSign", "crlSign"],
+    "ext_key_usages": [],
     "fingerprint": "f6e5d4c3b2a1…",
     "pem": "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----\n"
   }
@@ -476,6 +488,66 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 * `403 Forbidden` — caller lacks `certificates:read`.
 * `405 Method Not Allowed` — non-GET request.
 * `500 Internal Server Error` — CA certificates unavailable.
+
+---
+### GET /api/v1/ca/provisioners
+> Returns a sanitized list of active provisioners from `.pki/config/ca.json` (`authority.provisioners`).
+
+- **Authentication:** Required (JWT or service account API key)
+- **Permissions:** `certificates:read`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `provisioners` | array | Yes | Sanitized provisioner entries |
+| `total` | integer | Yes | Number of provisioners |
+
+**`provisioners[]` object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Provisioner name |
+| `type` | string | Yes | Provisioner type (`JWK`, `ACME`, `SCEP`, `OIDC`, …) |
+| `require_eab` | boolean | No | ACME: External Account Binding required |
+| `challenges` | string[] | No | ACME: enabled challenge types |
+| `challenge` | string | No | SCEP: `configured` when a challenge password is set (value never exposed) |
+
+**Example JSON (`data`):**
+```json
+{
+  "provisioners": [
+    {
+      "name": "ca-admin",
+      "type": "JWK"
+    },
+    {
+      "name": "acme",
+      "type": "ACME",
+      "require_eab": false,
+      "challenges": ["http-01", "dns-01", "tls-alpn-01"]
+    },
+    {
+      "name": "scep",
+      "type": "SCEP",
+      "challenge": "configured"
+    }
+  ],
+  "total": 3
+}
+```
+
+</details>
+
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — caller lacks `certificates:read`.
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — `ca.json` unreadable or invalid.
 
 ---
 ### GET /api/v1/ca/crl

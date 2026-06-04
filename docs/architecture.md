@@ -164,6 +164,8 @@ When `webui.proxy_api` is `true` (default), the WebUI listener reverse-proxies `
 
 The SPA (`webui/`) mounts authenticated routes inside `AppShell` (collapsible sidebar, top bar with roles and logout): `/dashboard` (health and inventory summary), `/certificates` (list + CSR issue modal), `/acme` and `/scep` (read-only status from `GET /api/v1/acme/status` and `GET /api/v1/scep/status`), and `/settings` (session and API client metadata). Axios attaches the admin JWT from Pinia on every protected call; `401` responses trigger logout except for `POST /auth/login`.
 
+**Visual design system:** Shared tokens live in `webui/src/assets/theme.css` (`--radius-control` 6px, `--radius-surface` 8px, `--radius-pill` for toggles). Component classes in `webui/src/style.css` apply them to surfaces, buttons, inputs, badges, tables, and modals. The sidebar and top bar stay flush to the viewport edges; only in-bar controls and main-content panels are rounded.
+
 | Setting | Default | Role |
 | ------- | ------- | ---- |
 | `webui.enabled` | `false` | Turn on the dedicated WebUI server |
@@ -272,7 +274,7 @@ Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). ste
 
 `ca.max_ttl` in `server.yaml` (default `8760h`) is validated before signing and synchronized into step-ca authority/provisioner `maxTLSCertDuration` claims at startup, replacing the step-ca default 24-hour TLS cap.
 
-When the `.pki` tree is absent, `ca_bootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation (legacy `CABootstrap` is still accepted on load):
+When the `.pki` tree is absent, `ca_bootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation (legacy top-level `CABootstrap` is still accepted on load). Values from `server.yaml` are passed directly into PKI bootstrap (`internal/ca/init.go`); Viper defaults no longer overwrite an explicit `CABootstrap` block before merge.
 
 | Field | Default (when omitted) | Description |
 | ----- | ---------------------- | ----------- |
@@ -281,6 +283,17 @@ When the `.pki` tree is absent, `ca_bootstrap` in `server.yaml` controls Root an
 | `organization` | `Arx CA` | Organization (O) on both CAs |
 | `country` | *(empty)* | Country (C) on both CAs |
 | `key_size` | `4096` | `4096`/`2048` selects RSA; otherwise ECDSA P-256 |
+
+### Enrollment provisioners (`ca.provisioners`)
+
+On every `arx server start`, `syncCAProvisioners` reconciles `ca.provisioners` from `server.yaml` into `.pki/config/ca.json`:
+
+| Block | Fields | Behavior |
+| ----- | ------ | -------- |
+| `ACME` | `Enabled`, `RequireEAB`, `Challenges`, `DeviceAttestation` | When `Enabled: false`, the `acme` provisioner is removed. When `RequireEAB: true`, the ACME provisioner is updated with `requireEAB`. |
+| `SCEP` | `Enabled`, `ChallengePassword`, `DeviceAttestation` | When `Enabled: false`, the `scep` provisioner is removed. When enabled, challenge password comes from `ChallengePassword` or is generated once. |
+
+Defaults: ACME enabled with `http-01`, `dns-01`, and `tls-alpn-01`; SCEP disabled. Unset `ca.provisioners` fields inherit these defaults. `ApplyServerRuntimeFromViper` mirrors the block into legacy `CA_API_ACME_*` / `CA_API_SCEP_*` variables when those environment variables are not already set (except `ARX_CA_PASSWORD`, which remains environment-only).
 
 `arx server start` changes the process working directory to the directory containing `server.yaml` so relative paths such as `.pki/` and `arx.db` resolve beside the install layout (matching the systemd unit `WorkingDirectory`).
 

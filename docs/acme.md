@@ -123,7 +123,28 @@ Clients trigger validation by posting to the challenge URL (RFC 8555). arx does 
 
 ACME accounts, orders, authorizations, challenges, and nonces are stored in the **application database** (SQLite `arx.db` by default), not in Badger. Schema is created in `internal/database/migrate.go` (`acme_*` tables). `internal/database/acme_store.go` implements the step-ca `acme.DB` interface.
 
+## server.yaml (`ca.provisioners.ACME`)
+
+Preferred configuration (synced into `ca.json` on startup):
+
+```yaml
+ca:
+  provisioners:
+    ACME:
+      Enabled: true
+      RequireEAB: false
+      Challenges:
+        - http-01
+        - dns-01
+        - tls-alpn-01
+      DeviceAttestation: false
+```
+
+When `Enabled` is `false`, the ACME provisioner is removed from `ca.json` and the HTTP handler is not registered. When `RequireEAB` is `true`, new ACME accounts must present a valid External Account Binding key.
+
 ## Environment variables
+
+Legacy variables are still honored when set in the environment. `arx server start` exports them from `server.yaml` when unset.
 
 | Variable | Effect |
 | -------- | ------ |

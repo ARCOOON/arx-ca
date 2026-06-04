@@ -295,7 +295,7 @@ webui:
 
 `arx server config init` writes this block with defaults. For production, set `webui.tls.cert_file` and `key_file` to operator-managed certificates. For local drop-in use, leave paths empty to auto-generate a SAN-bearing ephemeral server certificate. With `proxy_api: true`, the Vue app can call same-origin `/api/v1` on the WebUI port without CORS or a compile-time `VITE_API_BASE_URL`. Client certificates presented to the WebUI HTTPS listener are forwarded to the API on loopback via `X-Forwarded-Client-Cert`, so mTLS endpoints such as `POST /api/v1/certificates/renew` work through the WebUI port.
 
-The Vue 3 management console (`webui/`) uses client-side routing under the authenticated shell:
+The Vue 3 management console (`webui/`) uses a flat dark/light theme with consistent corner radii (6px controls, 8px panels; pill-shaped toggle tracks). Tokens are defined in `webui/src/assets/theme.css` and applied via `ui-*` classes in `webui/src/style.css`. Client-side routing runs under the authenticated shell:
 
 | Route | Purpose |
 | ----- | ------- |
