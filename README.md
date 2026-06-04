@@ -44,6 +44,48 @@ Works with standard ACME clients and reverse proxies (**Traefik**, **Caddy**, **
 
 Deeper design: [docs/architecture.md](docs/architecture.md). Operator commands: [docs/cli_reference.md](docs/cli_reference.md).
 
+## One-line install
+
+Scripts in [`scripts/`](scripts/) download the latest [GitHub Release](https://github.com/ARCOOON/arx-ca/releases) (`arx-<os>-<arch>` and `webui-dist.tar.gz`), install the binary and WebUI assets, and expose `arx` on your PATH. Existing `server.yaml` and `.pki/` in the install directory are preserved on upgrade.
+
+| Scope | Linux / macOS | Windows |
+| ----- | ------------- | ------- |
+| **User** (default) | `$HOME/.arx`, symlink `$HOME/.local/bin/arx` | `%LOCALAPPDATA%\arx`, User PATH |
+| **System** (elevated) | `/opt/arx`, symlink `/usr/local/bin/arx` | `%ProgramFiles%\arx`, Machine PATH |
+
+**Linux / macOS:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ARCOOON/arx-ca/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ARCOOON/arx-ca/main/scripts/install.sh | bash -s -- --system   # requires sudo
+curl -fsSL https://raw.githubusercontent.com/ARCOOON/arx-ca/main/scripts/uninstall.sh | bash
+```
+
+Or from a checkout: `./scripts/install.sh`, `./scripts/install.sh --system`, `./scripts/uninstall.sh`.
+
+**Windows (PowerShell):**
+
+```powershell
+# Recommended when execution policy is unknown (typical on locked-down hosts)
+powershell -ExecutionPolicy Bypass -NoProfile -Command "irm https://raw.githubusercontent.com/ARCOOON/arx-ca/main/scripts/install.ps1 | iex"
+
+# When RemoteSigned or Unrestricted already allows scripts
+irm https://raw.githubusercontent.com/ARCOOON/arx-ca/main/scripts/install.ps1 | iex
+
+.\scripts\install.ps1 -System   # Run as Administrator
+.\scripts\uninstall.ps1
+```
+
+After install, initialize and start the CA (adjust `--config` for your scope):
+
+```bash
+arx server config init --config ~/.arx/server.yaml    # user scope
+sudo arx server config init --config /opt/arx/server.yaml
+arx server start --config ~/.arx/server.yaml
+```
+
+For systemd production deployment, use `arx server setup` or `arx server service install` after installing the binary. See [Production install](#production-install-linux-systemd).
+
 ## Quick Start (production, Linux + systemd)
 
 **CA server:** build or download `arx`, then run the interactive installer as root.
@@ -126,15 +168,19 @@ Generate a bcrypt hash for `bootstrap.admin_password_hash`:
 
 ## Build
 
+Run `make` or `make help` for a self-documented list of targets.
+
 ```bash
-make build            # bin/arx and bin/arx-agent (control + data plane)
-make build-agent      # bin/arx-agent only
-make build-all        # local + cross-platform binaries
-make build-linux      # Linux amd64 arx, CGO_ENABLED=0
-make build-linux-agent
+make build                 # bin/arx and bin/arx-agent (native host)
+make build-agent           # bin/arx-agent only
+make build-all             # build/* cross binaries + webui-dist.tar.gz
+make webui                 # npm install/build + webui-dist.tar.gz
+make build-arx-linux-amd64 # single platform under build/
 make test
 make clean
 ```
+
+Cross-compiled release binaries use the same names as GitHub releases (for example `build/arx-linux-amd64`, `build/arx-windows-amd64.exe`). The WebUI tarball is `webui-dist.tar.gz` at the repository root.
 
 Without Make:
 
@@ -189,6 +235,8 @@ service:
   run_as_user: arx-ca
   install_dir: /opt/arx
 ```
+
+The `ca.max_ttl` field (default `8760h`, one year) caps certificate lifetimes for `POST /api/v1/certificates/issue` and `POST /api/v1/certificates/generate`. On startup, arx-ca synchronizes this limit into step-ca `ca.json` claims so the embedded PKI honors the same maximum.
 
 ### Dedicated WebUI server
 
@@ -259,11 +307,12 @@ The Vue 3 management console (`webui/`) uses client-side routing under the authe
 
 Develop locally with `cd webui && npm ci && npm run dev`, or ship assets via `npm run build` and `arx server ui download`.
 
-**Automated WebUI install:** `arx server ui download` reads `server.yaml`, fetches the release-matching `webui-dist.tar.gz` asset from GitHub (or the latest release when the binary is `v0.0.0-dev`), extracts files into `webui.ui_dir`, and sets `webui.enabled: true`. Use `sudo` when the default path is `/opt/arx/ui`.
+**Automated WebUI install:** `arx server ui download` reads `server.yaml`, fetches `webui-dist.tar.gz` from GitHub (matching the `arx` binary version, or the latest release when the binary is `v0.0.0-dev`), extracts files into `webui.ui_dir`, and sets `webui.enabled: true`. Pass `--version v1.0.2` to download a specific release tag instead. Use `sudo` when the default path is `/opt/arx/ui`.
 
 ```bash
 arx server config init
 sudo arx server ui download
+arx server ui download --version v1.0.1
 arx server start
 ```
 
@@ -316,7 +365,9 @@ The container runs `arx server start` on **8080**; PKI data is mounted at `./dat
 | `GET` | `/api/v1/ca/root` | — | Root CA PEM |
 | `POST` | `/api/v1/auth/login` | — | Admin JWT (`email` + `password`) |
 | `POST` | `/api/v1/certificates/issue` | Service / Admin | Sign CSR (certificate only) |
+| `POST` | `/api/v1/certificates/generate` | Service / Admin | Native key generation + sign (returns key PEM) |
 | `POST` | `/api/v1/certificates/auto` | Admin | Generate ECDSA P-384 key + sign |
+| `GET` | `/api/v1/crl` | — | CRL (DER or PEM; alias of `/api/v1/ca/crl`) |
 | `POST` | `/api/v1/certificates/renew` | Admin / mTLS | Renew existing certificate |
 | `GET` | `/acme/directory` | ACME JWS | ACME directory (when enabled) |
 
