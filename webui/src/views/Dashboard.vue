@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { fetchCAInfo } from '../api/ca'
+import { fetchCAInfo, fetchCAProvisioners } from '../api/ca'
 import { fetchHealth } from '../api/health'
 import { listCertificates } from '../api/certificates'
-import type { CAInfoResponse, HealthReport } from '../types/api'
+import type { CAInfoResponse, CAProvisionerDetail, HealthReport } from '../types/api'
 import { extractApiError } from '../utils/errors'
 import { formatBytes } from '../utils/format'
 import {
   downloadCertificate,
   formatCertDate,
+  formatUsageList,
   parseBackendDetails,
   shortenFingerprint,
 } from '../utils/ca'
@@ -16,6 +17,7 @@ import StatusBadge from '../components/ui/StatusBadge.vue'
 
 const health = ref<HealthReport | null>(null)
 const caInfo = ref<CAInfoResponse | null>(null)
+const caProvisioners = ref<CAProvisionerDetail[]>([])
 const certificateTotal = ref<number | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref('')
@@ -27,14 +29,16 @@ onMounted(async () => {
   errorMessage.value = ''
 
   try {
-    const [healthReport, certificateList, caInfoReport] = await Promise.all([
+    const [healthReport, certificateList, caInfoReport, provisionersReport] = await Promise.all([
       fetchHealth(),
       listCertificates(),
       fetchCAInfo(),
+      fetchCAProvisioners(),
     ])
     health.value = healthReport
     certificateTotal.value = certificateList.total
     caInfo.value = caInfoReport
+    caProvisioners.value = provisionersReport.provisioners
   } catch (error) {
     errorMessage.value = extractApiError(error, 'Failed to load dashboard metrics')
   } finally {
@@ -168,6 +172,30 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
                 <dd class="ui-text-secondary">{{ formatCertDate(entry.cert.not_after) }}</dd>
               </div>
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
+                <dt class="ui-text-muted">Serial</dt>
+                <dd
+                  class="truncate font-mono ui-text-secondary"
+                  :title="entry.cert.serial_number"
+                >
+                  {{ entry.cert.serial_number || '—' }}
+                </dd>
+              </div>
+              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
+                <dt class="ui-text-muted">Signature</dt>
+                <dd class="ui-text-secondary">{{ entry.cert.signature_algorithm || '—' }}</dd>
+              </div>
+              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
+                <dt class="ui-text-muted">Key usage</dt>
+                <dd class="ui-text-secondary">{{ formatUsageList(entry.cert.key_usages) }}</dd>
+              </div>
+              <div
+                v-if="entry.cert.ext_key_usages && entry.cert.ext_key_usages.length > 0"
+                class="grid grid-cols-[5.5rem_1fr] gap-2"
+              >
+                <dt class="ui-text-muted">Ext key usage</dt>
+                <dd class="ui-text-secondary">{{ formatUsageList(entry.cert.ext_key_usages) }}</dd>
+              </div>
+              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
                 <dt class="ui-text-muted">Fingerprint</dt>
                 <dd
                   class="truncate font-mono ui-text-secondary"
@@ -175,6 +203,59 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
                 >
                   {{ shortenFingerprint(entry.cert.fingerprint) }}
                 </dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section class="ui-surface-muted">
+        <header class="ui-border-b px-4 py-2.5">
+          <h2 class="text-sm font-semibold ui-text-primary">Active Provisioners</h2>
+        </header>
+        <div
+          v-if="caProvisioners.length === 0"
+          class="px-4 py-3 text-xs ui-text-muted"
+        >
+          No provisioners configured in ca.json.
+        </div>
+        <div
+          v-else
+          class="grid gap-px sm:grid-cols-2 xl:grid-cols-3"
+          style="background-color: var(--border-subtle)"
+        >
+          <article
+            v-for="prov in caProvisioners"
+            :key="`${prov.type}-${prov.name}`"
+            class="px-4 py-3"
+            style="background-color: var(--bg-inset)"
+          >
+            <div class="flex items-center gap-2">
+              <StatusBadge :label="prov.type" tone="neutral" />
+              <p class="truncate text-sm font-medium ui-text-primary" :title="prov.name">
+                {{ prov.name }}
+              </p>
+            </div>
+            <dl
+              v-if="prov.type === 'ACME'"
+              class="mt-3 space-y-1.5 text-xs"
+            >
+              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
+                <dt class="ui-text-muted">EAB required</dt>
+                <dd class="ui-text-secondary">{{ prov.require_eab ? 'Yes' : 'No' }}</dd>
+              </div>
+              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
+                <dt class="ui-text-muted">Challenges</dt>
+                <dd class="ui-text-secondary">{{ formatUsageList(prov.challenges) }}</dd>
+              </div>
+            </dl>
+            <dl
+              v-else-if="prov.type === 'SCEP'"
+              class="mt-3 space-y-1.5 text-xs"
+            >
+              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
+                <dt class="ui-text-muted">Challenge</dt>
+                <dd class="ui-text-secondary">{{ prov.challenge || 'not configured' }}</dd>
               </div>
             </dl>
           </article>

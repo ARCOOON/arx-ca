@@ -52,17 +52,14 @@ async function handleSubmit(): Promise<void> {
   <div class="ui-shell flex min-h-screen items-center justify-center px-4 py-12">
     <div class="w-full max-w-md">
       <div class="mb-8 text-center">
-        <div
-          class="mx-auto mb-4 flex h-14 w-14 items-center justify-center border"
-          style="border-color: var(--border-color); background-color: var(--bg-elevated)"
-        >
+        <div class="ui-brand-icon mx-auto mb-4 flex h-14 w-14 items-center justify-center bg-[var(--bg-elevated)]">
           <ShieldCheck class="h-7 w-7" style="color: var(--accent-color)" aria-hidden="true" />
         </div>
         <h1 class="text-2xl font-semibold tracking-tight ui-text-primary">Arx Certificate Authority</h1>
         <p class="mt-2 text-sm ui-text-muted">Sign in with your administrator credentials</p>
       </div>
 
-      <form class="ui-elevated p-6" @submit.prevent="handleSubmit">
+      <form class="ui-elevated ui-dialog p-6" @submit.prevent="handleSubmit">
         <div v-if="errorMessage" class="mb-4 ui-alert-error text-sm" role="alert">
           {{ errorMessage }}
         </div>
