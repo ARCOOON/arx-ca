@@ -153,33 +153,26 @@ jobs:
     name: Build WebUI distribution
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout WebUI repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          repository: ARCOOON/arx-ui
-          ref: main
-          path: arx-ui
-          # Admin: create repository secret UI_REPO_PAT with read access to ARCOOON/arx-ui.
-          token: ${{ secrets.UI_REPO_PAT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: arx-ui/package-lock.json
+          cache-dependency-path: webui/package-lock.json
 
       - name: Install dependencies
-        working-directory: arx-ui
+        working-directory: webui
         run: npm ci
 
       - name: Build WebUI
-        working-directory: arx-ui
+        working-directory: webui
         run: npm run build
 
       - name: Package WebUI distribution tarball
-        working-directory: arx-ui
-        run: tar -czf ../webui-dist.tar.gz -C dist .
+        run: tar -czf webui-dist.tar.gz -C webui/dist .
 
       - name: Upload WebUI release asset
         uses: softprops/action-gh-release@v3
