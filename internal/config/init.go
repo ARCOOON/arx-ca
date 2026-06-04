@@ -141,6 +141,8 @@ func InitServerConfig() error {
 		return fmt.Errorf("unmarshal server config: %w", err)
 	}
 
+	migrateLegacyAdminPassword(v, &loaded)
+
 	if err := HealServerConfig(configPath, &loaded); err != nil {
 		return err
 	}
@@ -163,8 +165,20 @@ func ServerConfigPath() (string, error) {
 
 func syncServerSecurityFieldsInViper(v *viper.Viper, cfg ServerConfig) {
 	v.Set("security.jwt_secret", cfg.Security.JWTSecret)
-	v.Set("security.initial_admin_password", cfg.Security.InitialAdminPassword)
-	v.Set("bootstrap.admin_password_hash", cfg.Bootstrap.AdminPasswordHash)
+	v.Set("bootstrap.admin_password", cfg.Bootstrap.AdminPassword)
+}
+
+func migrateLegacyAdminPassword(v *viper.Viper, cfg *ServerConfig) {
+	if cfg == nil || strings.TrimSpace(cfg.Bootstrap.AdminPassword) != "" {
+		return
+	}
+	if legacy := strings.TrimSpace(v.GetString("security.initial_admin_password")); legacy != "" {
+		cfg.Bootstrap.AdminPassword = legacy
+		return
+	}
+	if legacy := strings.TrimSpace(v.GetString("bootstrap.admin_password_hash")); legacy != "" {
+		cfg.Bootstrap.AdminPassword = legacy
+	}
 }
 
 // InitCLIConfig loads or creates ~/.arx/cli.yaml and binds it to Viper.
@@ -283,7 +297,7 @@ func ApplyServerRuntimeFromViper() {
 	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_EMAIL", cfg.Bootstrap.AdminEmail)
 	hash := cfg.BootstrapAdminPasswordHash()
 	if hash == "" {
-		hash = cfg.Bootstrap.AdminPasswordHash
+		hash = strings.TrimSpace(cfg.Bootstrap.AdminPassword)
 	}
 	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_PASSWORD_HASH", hash)
 	if secret := strings.TrimSpace(cfg.Security.JWTSecret); secret != "" {
@@ -417,10 +431,14 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("ca.intermediate_path", d.CA.IntermediatePath)
 	v.SetDefault("ca.provisioner_name", d.CA.ProvisionerName)
 	v.SetDefault("ca.max_ttl", d.CA.MaxTTL)
+	v.SetDefault("ca_bootstrap.root_cn", d.CABootstrap.RootCN)
+	v.SetDefault("ca_bootstrap.intermediate_cn", d.CABootstrap.IntermediateCN)
+	v.SetDefault("ca_bootstrap.organization", d.CABootstrap.Organization)
+	v.SetDefault("ca_bootstrap.country", d.CABootstrap.Country)
+	v.SetDefault("ca_bootstrap.key_size", d.CABootstrap.KeySize)
 	v.SetDefault("security.token_expiration_hours", d.Security.TokenExpirationHours)
-	v.SetDefault("security.initial_admin_password", d.Security.InitialAdminPassword)
 	v.SetDefault("bootstrap.admin_email", d.Bootstrap.AdminEmail)
-	v.SetDefault("bootstrap.admin_password_hash", d.Bootstrap.AdminPasswordHash)
+	v.SetDefault("bootstrap.admin_password", d.Bootstrap.AdminPassword)
 	v.SetDefault("telemetry.service_name", d.Telemetry.ServiceName)
 	v.SetDefault("telemetry.exporter_endpoint", d.Telemetry.ExporterEndpoint)
 	v.SetDefault("telemetry.exporter_insecure", d.Telemetry.ExporterInsecure)
@@ -555,7 +573,8 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 		cfg.Telemetry.ExporterEndpoint = def.Telemetry.ExporterEndpoint
 	}
 
-	cfg.Bootstrap = normalizeBootstrap(cfg.Bootstrap, cfg.Security)
+	cfg.Bootstrap = normalizeBootstrap(cfg.Bootstrap)
+	cfg.CABootstrap = cfg.EffectiveCABootstrap()
 	cfg.WebUI = normalizeWebUI(cfg.WebUI)
 	return cfg
 }
@@ -593,29 +612,31 @@ func normalizeWebUI(w WebUIConfig) WebUIConfig {
 	return w
 }
 
-func normalizeBootstrap(b Bootstrap, sec SecurityConfig) Bootstrap {
+func normalizeBootstrap(b Bootstrap) Bootstrap {
 	def := DefaultServerConfig().Bootstrap
 	if b.AdminEmail == "" {
 		b.AdminEmail = def.AdminEmail
 	}
-	if h := strings.TrimSpace(sec.InitialAdminPassword); IsBcryptPasswordHash(h) {
-		if strings.TrimSpace(b.AdminPasswordHash) == "" || !IsBcryptPasswordHash(b.AdminPasswordHash) {
-			b.AdminPasswordHash = h
-		}
-	} else if b.AdminPasswordHash == "" {
-		b.AdminPasswordHash = def.AdminPasswordHash
+	if b.AdminPassword == "" {
+		b.AdminPassword = def.AdminPassword
 	}
 	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_EMAIL")); v != "" {
 		b.AdminEmail = v
 	}
 	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_PASSWORD_HASH")); v != "" {
-		b.AdminPasswordHash = v
+		b.AdminPassword = v
 	}
 	if v := strings.TrimSpace(os.Getenv("ARX_BOOTSTRAP_ADMIN_EMAIL")); v != "" {
 		b.AdminEmail = v
 	}
 	if v := strings.TrimSpace(os.Getenv("ARX_BOOTSTRAP_ADMIN_PASSWORD_HASH")); v != "" {
-		b.AdminPasswordHash = v
+		b.AdminPassword = v
+	}
+	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_PASSWORD")); v != "" && !IsBcryptPasswordHash(b.AdminPassword) {
+		b.AdminPassword = v
+	}
+	if v := strings.TrimSpace(os.Getenv("ARX_BOOTSTRAP_ADMIN_PASSWORD")); v != "" && !IsBcryptPasswordHash(b.AdminPassword) {
+		b.AdminPassword = v
 	}
 	return b
 }
