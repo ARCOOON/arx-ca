@@ -37,3 +37,21 @@ func (h *CAHandler) RootCert() http.Handler {
 		})
 	})
 }
+
+// Info handles GET /api/v1/ca/info and returns parsed Root and Intermediate CA metadata.
+func (h *CAHandler) Info() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		info, err := h.engine.CAInfo()
+		if err != nil {
+			api.WriteError(w, http.StatusInternalServerError, "CA certificate information is unavailable")
+			return
+		}
+
+		api.WriteSuccess(w, http.StatusOK, info)
+	})
+}
