@@ -29,5 +29,16 @@ func NewRootCmd(version, commit string) *cobra.Command {
 		utilHashCmd(),
 	)
 
+	applyCobraErrorSilence(root)
 	return root
+}
+
+// applyCobraErrorSilence sets SilenceUsage and SilenceErrors on cmd and all descendants.
+// Usage is shown only for explicit help or invalid arguments; errors are printed once in main.
+func applyCobraErrorSilence(cmd *cobra.Command) {
+	cmd.SilenceUsage = true
+	cmd.SilenceErrors = true
+	for _, sub := range cmd.Commands() {
+		applyCobraErrorSilence(sub)
+	}
 }
