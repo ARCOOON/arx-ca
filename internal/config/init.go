@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -133,11 +134,32 @@ func InitServerConfig() error {
 	if err := v.ReadInConfig(); err != nil {
 		return fmt.Errorf("read server config %s: %w", configPath, err)
 	}
-	if err := unmarshalServerConfig(v, &activeServerConfig); err != nil {
+	var loaded ServerConfig
+	if err := unmarshalServerConfig(v, &loaded); err != nil {
 		return fmt.Errorf("unmarshal server config: %w", err)
 	}
-	activeServerConfig = normalizeServerConfig(activeServerConfig)
+
+	initialMigrated, err := HashPlaintextPasswords(configPath, &loaded)
+	if err != nil {
+		return err
+	}
+	syncServerPasswordFieldsInViper(v, loaded)
+	if initialMigrated {
+		log.Println("Plaintext initial admin password detected, successfully hashed and updated in server.yaml")
+	}
+
+	activeServerConfig = normalizeServerConfig(loaded)
 	return nil
+}
+
+// ServerConfigPath returns the absolute path to the active server.yaml file.
+func ServerConfigPath() (string, error) {
+	return serverConfigFilePath()
+}
+
+func syncServerPasswordFieldsInViper(v *viper.Viper, cfg ServerConfig) {
+	v.Set("security.initial_admin_password", cfg.Security.InitialAdminPassword)
+	v.Set("bootstrap.admin_password_hash", cfg.Bootstrap.AdminPasswordHash)
 }
 
 // InitCLIConfig loads or creates ~/.arx/cli.yaml and binds it to Viper.
@@ -254,7 +276,11 @@ func ApplyServerRuntimeFromViper() {
 		setEnvIfEmpty("CA_API_DB_DATA_SOURCE", cfg.Database.DSN())
 	}
 	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_EMAIL", cfg.Bootstrap.AdminEmail)
-	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_PASSWORD_HASH", cfg.Bootstrap.AdminPasswordHash)
+	hash := cfg.BootstrapAdminPasswordHash()
+	if hash == "" {
+		hash = cfg.Bootstrap.AdminPasswordHash
+	}
+	setEnvIfEmpty("CA_API_BOOTSTRAP_ADMIN_PASSWORD_HASH", hash)
 	if secret := strings.TrimSpace(cfg.Security.JWTSecret); secret != "" {
 		setEnvIfEmpty("CA_API_JWT_SECRET", secret)
 	}
@@ -386,6 +412,7 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("ca.intermediate_path", d.CA.IntermediatePath)
 	v.SetDefault("ca.provisioner_name", d.CA.ProvisionerName)
 	v.SetDefault("security.token_expiration_hours", d.Security.TokenExpirationHours)
+	v.SetDefault("security.initial_admin_password", d.Security.InitialAdminPassword)
 	v.SetDefault("bootstrap.admin_email", d.Bootstrap.AdminEmail)
 	v.SetDefault("bootstrap.admin_password_hash", d.Bootstrap.AdminPasswordHash)
 	v.SetDefault("telemetry.service_name", d.Telemetry.ServiceName)
@@ -523,7 +550,7 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 		cfg.Telemetry.ExporterEndpoint = def.Telemetry.ExporterEndpoint
 	}
 
-	cfg.Bootstrap = normalizeBootstrap(cfg.Bootstrap)
+	cfg.Bootstrap = normalizeBootstrap(cfg.Bootstrap, cfg.Security)
 	cfg.WebUI = normalizeWebUI(cfg.WebUI)
 	return cfg
 }
@@ -557,12 +584,16 @@ func normalizeWebUI(w WebUIConfig) WebUIConfig {
 	return w
 }
 
-func normalizeBootstrap(b Bootstrap) Bootstrap {
+func normalizeBootstrap(b Bootstrap, sec SecurityConfig) Bootstrap {
 	def := DefaultServerConfig().Bootstrap
 	if b.AdminEmail == "" {
 		b.AdminEmail = def.AdminEmail
 	}
-	if b.AdminPasswordHash == "" {
+	if h := strings.TrimSpace(sec.InitialAdminPassword); IsBcryptPasswordHash(h) {
+		if strings.TrimSpace(b.AdminPasswordHash) == "" || !IsBcryptPasswordHash(b.AdminPasswordHash) {
+			b.AdminPasswordHash = h
+		}
+	} else if b.AdminPasswordHash == "" {
 		b.AdminPasswordHash = def.AdminPasswordHash
 	}
 	if v := strings.TrimSpace(os.Getenv("CA_API_BOOTSTRAP_ADMIN_EMAIL")); v != "" {
