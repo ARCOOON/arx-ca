@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -26,6 +27,13 @@ import (
 )
 
 func runServer() error {
+	if configPath, err := arxconfig.ServerConfigPath(); err == nil {
+		configDir := filepath.Dir(configPath)
+		if err := os.Chdir(configDir); err != nil {
+			return fmt.Errorf("change working directory to %s: %w", configDir, err)
+		}
+	}
+
 	serverCfg := arxconfig.ServerConfigFromViper()
 	logging.Configure(serverCfg.Server.LogLevel)
 	log := logging.Logger()
