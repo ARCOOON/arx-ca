@@ -129,7 +129,7 @@ type ServerConfig struct {
 	Server      ServerSettings    `mapstructure:"server" yaml:"server"`
 	Database    DatabaseConfig    `mapstructure:"database" yaml:"database"`
 	CA          CAConfig          `mapstructure:"ca" yaml:"ca"`
-	CABootstrap CABootstrapConfig `mapstructure:"ca_bootstrap" yaml:"CABootstrap"`
+	CABootstrap CABootstrapConfig `mapstructure:"ca_bootstrap" yaml:"ca_bootstrap"`
 	Security    SecurityConfig    `mapstructure:"security" yaml:"security"`
 	Bootstrap   Bootstrap         `mapstructure:"bootstrap" yaml:"bootstrap"`
 	Telemetry   TelemetryConfig   `mapstructure:"telemetry" yaml:"telemetry"`
@@ -137,14 +137,16 @@ type ServerConfig struct {
 	WebUI       WebUIConfig       `mapstructure:"webui" yaml:"webui"`
 }
 
-// DefaultServerConfigForExecutable returns defaults with webui.ui_dir beside the current binary.
+// DefaultServerConfigForExecutable returns defaults with paths beside the current binary.
 func DefaultServerConfigForExecutable() (ServerConfig, error) {
 	cfg := DefaultServerConfig()
-	uiDir, err := webUIDirBesideExecutable()
+	exe, err := ExecutablePath()
 	if err != nil {
 		return ServerConfig{}, err
 	}
-	cfg.WebUI.UIDir = uiDir
+	installDir := filepath.Dir(exe)
+	cfg.WebUI.UIDir = filepath.Join(installDir, "ui")
+	cfg.Service.InstallDir = installDir
 	return cfg, nil
 }
 
