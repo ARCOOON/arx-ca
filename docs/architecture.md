@@ -272,6 +272,18 @@ Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). ste
 
 `ca.max_ttl` in `server.yaml` (default `8760h`) is validated before signing and synchronized into step-ca authority/provisioner `maxTLSCertDuration` claims at startup, replacing the step-ca default 24-hour TLS cap.
 
+When the `.pki` tree is absent, `CABootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation:
+
+| Field | Default (when omitted) | Description |
+| ----- | ---------------------- | ----------- |
+| `RootCN` | `Arx CA Root CA` | Root CA Common Name |
+| `IntermediateCN` | `Arx CA Intermediate CA` | Intermediate CA Common Name |
+| `Organization` | `Arx CA` | Organization (O) on both CAs |
+| `Country` | *(empty)* | Country (C) on both CAs |
+| `KeySize` | `256` | `4096`/`2048` selects RSA; otherwise ECDSA P-256 |
+
+Legacy `security.initial_admin_password` and `bootstrap.admin_password_hash` keys are migrated to `bootstrap.admin_password` on load.
+
 **Do not confuse** `arx.db` (application SQL) with Badger paths under `.pki/` (PKI engine).
 
 ### Driver selection logic
@@ -354,7 +366,7 @@ Immediately after `server.yaml` is parsed, `InitServerConfig` runs config auto-h
 | Check | Action |
 | ----- | ------ |
 | Empty `security.jwt_secret` | Generate 32 random bytes, base64-encode, persist to `server.yaml` |
-| Plaintext admin password | Detect values in `security.initial_admin_password` or `bootstrap.admin_password_hash` that lack a `$2a$` / `$2b$` / `$2y$` prefix; bcrypt-hash at cost 12 and persist |
+| Plaintext admin password | Detect values in `bootstrap.admin_password` that lack a `$2a$` / `$2b$` / `$2y$` prefix; bcrypt-hash at cost 12 and persist |
 | Database credentials | **Not modified** — connection strings remain clear-text for SQL drivers; use `ARX_DATABASE_PASSWORD` or `CA_API_DB_DATA_SOURCE` env overrides in production |
 
 When any field is secured, the updated struct is marshalled back to YAML and written with mode `0600`. Inline YAML comments may be lost on rewrite. Runtime env overrides (`CA_API_JWT_SECRET`, `ARX_SECURITY_JWT_SECRET`) apply after the file is loaded and are not written back to disk.

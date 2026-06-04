@@ -160,7 +160,7 @@ Authenticate and open the admin TUI:
 ./bin/arx ui
 ```
 
-Generate a bcrypt hash for `bootstrap.admin_password_hash`:
+Generate a bcrypt hash for `bootstrap.admin_password`:
 
 ```bash
 ./bin/arx hash 'MySecureAdminPassword!'
@@ -381,11 +381,11 @@ Full table: [docs/api_reference.md](docs/api_reference.md). JSON envelope: `{ "d
 | Email | `admin@arx.local` |
 | Password | `ArxRootCA-Bootstrap-Admin-2026!` |
 
-**Production:** set `bootstrap.admin_password_hash` with `arx hash` before first boot, or supply a plaintext value once — the server auto-bcrypts it and rewrites `server.yaml` on startup. An empty `security.jwt_secret` is also auto-generated and persisted. Rotate credentials after initial access.
+**Production:** set `bootstrap.admin_password` with `arx hash` before first boot, or supply a plaintext value once — the server auto-bcrypts it and rewrites `server.yaml` on startup. An empty `security.jwt_secret` is also auto-generated and persisted. Rotate credentials after initial access.
 
 **Zero-touch startup:** On first `arx server start`, the server inspects `server.yaml` and automatically:
 - Generates and persists a 256-bit `security.jwt_secret` when empty.
-- Bcrypt-hashes plaintext values in `security.initial_admin_password` or `bootstrap.admin_password_hash` (cost 12) and rewrites the file with mode `0600`.
+- Bcrypt-hashes plaintext values in `bootstrap.admin_password` (cost 12) and rewrites the file with mode `0600`.
 
 YAML comments in `server.yaml` may be lost when the file is rewritten (standard `yaml.v3` marshalling). Database passwords in `server.yaml` are **not** encrypted — SQL drivers require clear-text DSN components. Override PostgreSQL credentials via `ARX_DATABASE_PASSWORD` or the full DSN through `CA_API_DB_DATA_SOURCE` / `ARX_DATABASE_*` environment variables instead of storing secrets on disk.
 

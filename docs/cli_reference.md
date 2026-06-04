@@ -297,7 +297,7 @@ Service:  arx
 Unit:     /etc/systemd/system/arx.service
 Binary:   /opt/arx/arx
 Config:   /opt/arx/server.yaml
-Edit server.yaml (JWT secret, bootstrap password hash) before production use.
+Edit server.yaml (JWT secret, bootstrap admin password) before production use.
 ```
 
 ### `arx server service uninstall`
@@ -384,7 +384,7 @@ Administrative helper commands.
 
 ### `arx util hash <password>`
 
-Generate a bcrypt hash for `bootstrap.admin_password_hash` in `server.yaml`.
+Generate a bcrypt hash for `bootstrap.admin_password` in `server.yaml`.
 
 ```bash
 arx util hash 'MySecureAdminPassword!'

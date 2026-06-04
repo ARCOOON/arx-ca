@@ -389,6 +389,95 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 * `500 Internal Server Error` — root certificate unavailable.
 
 ---
+### GET /api/v1/ca/info
+> Returns parsed X.509 metadata and PEM strings for the active Root and Intermediate CA certificates.
+
+- **Authentication:** Required (JWT or service account API key)
+- **Permissions:** `certificates:read`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `root` | object | Yes | Root CA certificate metadata |
+| `intermediate` | object | Yes | Intermediate CA certificate metadata |
+
+**`root` / `intermediate` object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `subject` | object | Yes | Parsed certificate subject DN |
+| `issuer` | object | Yes | Parsed certificate issuer DN |
+| `not_before` | string | Yes | Validity start (RFC3339 UTC) |
+| `not_after` | string | Yes | Validity end (RFC3339 UTC) |
+| `fingerprint` | string | Yes | SHA-256 fingerprint (lowercase hex) |
+| `pem` | string | Yes | PEM-encoded certificate |
+
+**`subject` / `issuer` object:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `common_name` | string | Yes | Common Name (CN) |
+| `organization` | string[] | No | Organization (O) |
+| `organizational_unit` | string[] | No | Organizational Unit (OU) |
+| `country` | string[] | No | Country (C) |
+| `province` | string[] | No | State or province (ST) |
+| `locality` | string[] | No | Locality (L) |
+| `street_address` | string[] | No | Street address |
+| `postal_code` | string[] | No | Postal code |
+| `serial_number` | string | No | Subject serial number |
+
+**Example JSON (`data`):**
+```json
+{
+  "root": {
+    "subject": {
+      "common_name": "ARX Root CA",
+      "organization": ["ARX Infrastructure"],
+      "country": ["AT"]
+    },
+    "issuer": {
+      "common_name": "ARX Root CA",
+      "organization": ["ARX Infrastructure"],
+      "country": ["AT"]
+    },
+    "not_before": "2026-06-04T12:00:00Z",
+    "not_after": "2036-06-02T12:00:00Z",
+    "fingerprint": "a1b2c3d4e5f6…",
+    "pem": "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----\n"
+  },
+  "intermediate": {
+    "subject": {
+      "common_name": "ARX Intermediate CA",
+      "organization": ["ARX Infrastructure"],
+      "country": ["AT"]
+    },
+    "issuer": {
+      "common_name": "ARX Root CA",
+      "organization": ["ARX Infrastructure"],
+      "country": ["AT"]
+    },
+    "not_before": "2026-06-04T12:00:00Z",
+    "not_after": "2036-06-02T12:00:00Z",
+    "fingerprint": "f6e5d4c3b2a1…",
+    "pem": "-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----\n"
+  }
+}
+```
+
+</details>
+
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — caller lacks `certificates:read`.
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — CA certificates unavailable.
+
+---
 ### GET /api/v1/ca/crl
 > Returns the current Certificate Revocation List in DER or PEM format. Not wrapped in the JSON envelope.
 
