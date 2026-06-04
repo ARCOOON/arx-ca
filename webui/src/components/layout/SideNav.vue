@@ -1,16 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import {
-  LayoutDashboard,
-  FileKey2,
-  GlobeLock,
-  Network,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  ShieldCheck,
-} from 'lucide-vue-next'
+import ChevronLeft from 'lucide-vue-next/dist/esm/icons/chevron-left.js'
+import ChevronRight from 'lucide-vue-next/dist/esm/icons/chevron-right.js'
+import FileKey2 from 'lucide-vue-next/dist/esm/icons/file-key.js'
+import GlobeLock from 'lucide-vue-next/dist/esm/icons/globe-lock.js'
+import LayoutDashboard from 'lucide-vue-next/dist/esm/icons/layout-dashboard.js'
+import Network from 'lucide-vue-next/dist/esm/icons/network.js'
+import Settings from 'lucide-vue-next/dist/esm/icons/settings.js'
+import ShieldCheck from 'lucide-vue-next/dist/esm/icons/shield-check.js'
 
 const props = defineProps<{
   collapsed: boolean
@@ -49,19 +47,22 @@ function toggleCollapsed(): void {
 
 <template>
   <aside
-    class="flex shrink-0 flex-col border-r border-zinc-800 bg-zinc-900 transition-[width] duration-150"
+    class="ui-border-r ui-surface flex shrink-0 flex-col transition-[width] duration-150"
     :class="sidebarWidthClass"
   >
     <div
-      class="flex items-center border-b border-zinc-800 px-3 py-3"
+      class="ui-border-b flex items-center px-3 py-3"
       :class="collapsed ? 'justify-center' : 'gap-2.5'"
     >
-      <div class="flex h-8 w-8 shrink-0 items-center justify-center border border-zinc-700 bg-zinc-950">
-        <ShieldCheck class="h-4 w-4 text-emerald-400" aria-hidden="true" />
+      <div
+        class="flex h-8 w-8 shrink-0 items-center justify-center border"
+        style="border-color: var(--border-color); background-color: var(--bg-inset)"
+      >
+        <ShieldCheck class="h-4 w-4" style="color: var(--accent-color)" aria-hidden="true" />
       </div>
       <div v-if="!collapsed" class="min-w-0">
-        <p class="truncate text-sm font-semibold text-zinc-50">Arx CA</p>
-        <p class="text-[10px] uppercase tracking-wide text-zinc-500">Management</p>
+        <p class="truncate text-sm font-semibold ui-text-primary">Arx CA</p>
+        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Management</p>
       </div>
     </div>
 
@@ -70,12 +71,10 @@ function toggleCollapsed(): void {
         v-for="item in navItems"
         :key="item.to"
         :to="item.to"
-        class="flex items-center border border-transparent text-xs transition"
+        class="ui-nav-link flex items-center text-xs"
         :class="[
           collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-2.5 py-2',
-          isActive(item.to)
-            ? 'border-zinc-700 bg-zinc-800 text-zinc-50'
-            : 'text-zinc-400 hover:border-zinc-800 hover:bg-zinc-800/50 hover:text-zinc-200',
+          isActive(item.to) ? 'ui-nav-link-active' : '',
         ]"
         :title="collapsed ? item.label : undefined"
       >
@@ -84,10 +83,10 @@ function toggleCollapsed(): void {
       </RouterLink>
     </nav>
 
-    <div class="border-t border-zinc-800 p-2">
+    <div class="ui-border-t p-2">
       <button
         type="button"
-        class="flex w-full items-center justify-center border border-zinc-700 bg-zinc-950 py-2 text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200"
+        class="ui-btn-secondary flex w-full items-center justify-center py-2"
         :aria-label="collapsed ? 'Expand navigation' : 'Collapse navigation'"
         @click="toggleCollapsed"
       >

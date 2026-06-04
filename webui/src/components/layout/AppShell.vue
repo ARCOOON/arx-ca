@@ -25,7 +25,7 @@ function handleLogout(): void {
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-zinc-950 text-zinc-100">
+  <div class="ui-shell flex min-h-screen">
     <SideNav :collapsed="sidebarCollapsed" @update:collapsed="onSidebarCollapsedChange" />
 
     <div class="flex min-w-0 flex-1 flex-col">

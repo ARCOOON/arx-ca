@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { LogOut, UserRound } from 'lucide-vue-next'
+import LogOut from 'lucide-vue-next/dist/esm/icons/log-out.js'
+import Moon from 'lucide-vue-next/dist/esm/icons/moon.js'
+import Sun from 'lucide-vue-next/dist/esm/icons/sun.js'
+import UserRound from 'lucide-vue-next/dist/esm/icons/user-round.js'
 import { useAuthStore } from '../../store/auth'
+import { applyTheme, resolveInitialTheme, type ThemeMode, toggleTheme } from '../../composables/useTheme'
 
 const emit = defineEmits<{
   logout: []
@@ -10,6 +14,7 @@ const emit = defineEmits<{
 
 const route = useRoute()
 const authStore = useAuthStore()
+const theme = ref<ThemeMode>(resolveInitialTheme())
 
 const pageTitle = computed(() => {
   const title = route.meta.title
@@ -27,29 +32,58 @@ const roleLabel = computed(() => {
   }
   return 'Administrator'
 })
+
+const isDark = computed(() => theme.value === 'dark')
+
+function onThemeToggle(): void {
+  theme.value = toggleTheme(theme.value)
+}
+
+function setLightTheme(): void {
+  theme.value = 'light'
+  applyTheme('light')
+}
+
+function setDarkTheme(): void {
+  theme.value = 'dark'
+  applyTheme('dark')
+}
 </script>
 
 <template>
-  <header class="flex items-center justify-between border-b border-zinc-800 bg-zinc-900/40 px-5 py-3">
+  <header class="ui-border-b ui-elevated flex items-center justify-between px-5 py-3">
     <div class="min-w-0">
-      <h1 class="truncate text-base font-semibold text-zinc-50">{{ pageTitle }}</h1>
-      <p v-if="pageSubtitle" class="truncate text-xs text-zinc-500">{{ pageSubtitle }}</p>
+      <h1 class="truncate text-base font-semibold ui-text-primary">{{ pageTitle }}</h1>
+      <p v-if="pageSubtitle" class="truncate text-xs ui-text-muted">{{ pageSubtitle }}</p>
     </div>
 
     <div class="flex items-center gap-3">
-      <div class="hidden items-center gap-2 border border-zinc-800 bg-zinc-950 px-3 py-1.5 sm:flex">
-        <UserRound class="h-3.5 w-3.5 text-zinc-500" aria-hidden="true" />
+      <div class="hidden items-center gap-2 sm:flex">
+        <span class="sr-only">Color theme</span>
+        <Sun v-if="isDark" class="h-3.5 w-3.5 ui-text-muted" aria-hidden="true" />
+        <Moon v-else class="h-3.5 w-3.5 ui-text-muted" aria-hidden="true" />
+        <button
+          type="button"
+          class="ui-theme-toggle"
+          :data-active="isDark"
+          :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="onThemeToggle"
+          @keydown.home.prevent="setLightTheme"
+          @keydown.end.prevent="setDarkTheme"
+        >
+          <span class="ui-theme-toggle-thumb" />
+        </button>
+      </div>
+
+      <div class="hidden items-center gap-2 ui-inset px-3 py-1.5 sm:flex">
+        <UserRound class="h-3.5 w-3.5 ui-text-muted" aria-hidden="true" />
         <div class="text-right">
-          <p class="text-[10px] uppercase tracking-wide text-zinc-500">Signed in</p>
-          <p class="max-w-[12rem] truncate text-xs text-zinc-200">{{ roleLabel }}</p>
+          <p class="text-[10px] uppercase tracking-wide ui-text-muted">Signed in</p>
+          <p class="max-w-[12rem] truncate text-xs ui-text-secondary">{{ roleLabel }}</p>
         </div>
       </div>
 
-      <button
-        type="button"
-        class="inline-flex items-center gap-1.5 border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
-        @click="emit('logout')"
-      >
+      <button type="button" class="ui-btn-secondary inline-flex items-center gap-1.5" @click="emit('logout')">
         <LogOut class="h-3.5 w-3.5" aria-hidden="true" />
         Logout
       </button>
