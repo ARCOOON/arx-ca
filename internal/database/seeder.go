@@ -22,7 +22,7 @@ func EnsureBootstrapAdmin(db *sql.DB, cfg config.ServerConfig) error {
 	}
 	hash := cfg.BootstrapAdminPasswordHash()
 	if hash == "" {
-		hash = def.AdminPasswordHash
+		hash = def.AdminPassword
 	}
 	if !config.IsBcryptPasswordHash(hash) {
 		return fmt.Errorf("bootstrap admin password hash is not a valid bcrypt hash")
