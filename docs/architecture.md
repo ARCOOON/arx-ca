@@ -272,15 +272,17 @@ Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). ste
 
 `ca.max_ttl` in `server.yaml` (default `8760h`) is validated before signing and synchronized into step-ca authority/provisioner `maxTLSCertDuration` claims at startup, replacing the step-ca default 24-hour TLS cap.
 
-When the `.pki` tree is absent, `CABootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation:
+When the `.pki` tree is absent, `ca_bootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation (legacy `CABootstrap` is still accepted on load):
 
 | Field | Default (when omitted) | Description |
 | ----- | ---------------------- | ----------- |
-| `RootCN` | `Arx CA Root CA` | Root CA Common Name |
-| `IntermediateCN` | `Arx CA Intermediate CA` | Intermediate CA Common Name |
-| `Organization` | `Arx CA` | Organization (O) on both CAs |
-| `Country` | *(empty)* | Country (C) on both CAs |
-| `KeySize` | `256` | `4096`/`2048` selects RSA; otherwise ECDSA P-256 |
+| `root_cn` | `Arx CA Root CA` | Root CA Common Name |
+| `intermediate_cn` | `Arx CA Intermediate CA` | Intermediate CA Common Name |
+| `organization` | `Arx CA` | Organization (O) on both CAs |
+| `country` | *(empty)* | Country (C) on both CAs |
+| `key_size` | `4096` | `4096`/`2048` selects RSA; otherwise ECDSA P-256 |
+
+`arx server start` changes the process working directory to the directory containing `server.yaml` so relative paths such as `.pki/` and `arx.db` resolve beside the install layout (matching the systemd unit `WorkingDirectory`).
 
 Legacy `security.initial_admin_password` and `bootstrap.admin_password_hash` keys are migrated to `bootstrap.admin_password` on load.
 

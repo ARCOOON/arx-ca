@@ -233,7 +233,7 @@ Optional `service` block in `server.yaml` for IaC and `arx server service instal
 ```yaml
 service:
   run_as_user: arx-ca
-  install_dir: /opt/arx
+  install_dir: /opt/arx   # user installs: set to $HOME/.arx (config init sets this beside the binary)
 ```
 
 The `ca.max_ttl` field (default `8760h`, one year) caps certificate lifetimes for `POST /api/v1/certificates/issue` and `POST /api/v1/certificates/generate`. On startup, arx-ca synchronizes this limit into step-ca `ca.json` claims so the embedded PKI honors the same maximum.
