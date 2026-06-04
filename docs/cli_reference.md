@@ -77,11 +77,58 @@ Interactive login (TTY) may prompt for server URL (if not fully non-interactive)
 
 ---
 
+## Install and uninstall scripts
+
+Scripts in [`scripts/`](../scripts/) provide one-line installation from the latest [GitHub Release](https://github.com/ARCOOON/arx-ca/releases). They download `arx-<goos>-<goarch>` (or `arx-windows-amd64.exe`) and `webui-dist.tar.gz`, lay out the install tree, and expose the binary on PATH. Upgrades preserve existing `server.yaml` and `.pki/` in the install directory.
+
+| Script | Platform | Scope flags | Install directory | PATH / symlink |
+| ------ | -------- | ----------- | ----------------- | -------------- |
+| `scripts/install.sh` | Linux, macOS | `--user` (default), `--system` | `$HOME/.arx` or `/opt/arx` | `$HOME/.local/bin/arx` or `/usr/local/bin/arx` |
+| `scripts/uninstall.sh` | Linux, macOS | `--user` (default), `--system` | same | removes symlink |
+| `scripts/install.ps1` | Windows | `-User` (default), `-System` | `%LOCALAPPDATA%\arx` or `%ProgramFiles%\arx` | User or Machine `Path` |
+| `scripts/uninstall.ps1` | Windows | `-User` (default), `-System` | same | removes PATH entry |
+
+**Linux / macOS**
+
+```bash
+./scripts/install.sh              # user scope
+./scripts/install.sh --system     # requires root (sudo)
+./scripts/uninstall.sh --user
+sudo ./scripts/uninstall.sh --system
+```
+
+`--system` verifies `[ $(id -u) = 0 ]` and exits with an error otherwise. User scope creates `$HOME/.local/bin` when missing and warns if that directory is not on `$PATH`.
+
+**Windows**
+
+```powershell
+# Remote one-liner (user scope) — use Bypass when execution policy is unknown
+powershell -ExecutionPolicy Bypass -NoProfile -Command "irm https://raw.githubusercontent.com/ARCOOON/arx-ca/main/scripts/install.ps1 | iex"
+powershell -ExecutionPolicy Bypass -NoProfile -Command "irm https://raw.githubusercontent.com/ARCOOON/arx-ca/main/scripts/uninstall.ps1 | iex"
+
+# When RemoteSigned or Unrestricted already allows scripts
+irm https://raw.githubusercontent.com/ARCOOON/arx-ca/main/scripts/install.ps1 | iex
+
+# From a checkout
+.\scripts\install.ps1             # user scope
+.\scripts\install.ps1 -System     # requires Administrator
+.\scripts\uninstall.ps1 -User
+.\scripts\uninstall.ps1 -System
+```
+
+`-System` verifies elevation via `WindowsPrincipal` and exits with an error when not running as Administrator. PATH updates avoid duplicate entries.
+
+Uninstall removes the binary, `ui/`, and the symlink or PATH entry. If `server.yaml` or `.pki/` remain, the install directory is retained and a log line notes the preserved paths.
+
+These scripts install the **binary and WebUI assets only**. For Linux systemd production deployment, run `arx server setup` or `arx server service install` after install. See [README](../README.md#one-line-install).
+
+---
+
 ## Global conventions
 
 - Run `arx <command> --help` for subcommand-specific flags.
 - `arx server` accepts persistent `--config` for `server.yaml` location (except `config`, `setup`, `service`, and `ui` subcommands, which load `server.yaml` on demand).
-- Examples use `bin/arx` and `bin/arx-agent` after `make build-all`.
+- Examples use `bin/arx` and `bin/arx-agent` after `make build` (or cross-compiled assets under `build/` after `make build-all`).
 
 ---
 
@@ -160,13 +207,18 @@ No configuration file found at ... Run 'arx server config init' to generate one.
 
 ### `arx server ui download`
 
-Zero-configuration WebUI deployment: detects the running `arx` binary version, downloads `webui-dist.tar.gz` from the matching [ARCOOON/arx-ca](https://github.com/ARCOOON/arx-ca) GitHub release, extracts static assets into `webui.ui_dir`, and sets `webui.enabled: true` in `server.yaml`.
+Zero-configuration WebUI deployment: downloads `webui-dist.tar.gz` from a [ARCOOON/arx-ca](https://github.com/ARCOOON/arx-ca) GitHub release, extracts static assets into `webui.ui_dir`, and sets `webui.enabled: true` in `server.yaml`.
 
-Development builds (`v0.0.0-dev` or an empty version) fetch the **latest** GitHub release. Release binaries use the tag that matches `main.Version` (for example `v1.0.2` → `releases/tags/v1.0.2`).
+By default the command detects the running `arx` binary version and resolves the matching release tag (`https://api.github.com/repos/ARCOOON/arx-ca/releases/tags/{tag}`). Development builds (`v0.0.0-dev` or an empty version) fetch the **latest** release instead. Use `--version` to pin a specific tag (for downgrades, CI, or dev binaries).
+
+| Flag | Description |
+| ---- | ----------- |
+| `--version` | GitHub release tag to download (for example `v1.0.2` or `1.0.2`). When omitted, the tag is derived from the `arx` binary version. |
 
 ```bash
 ./bin/arx server config init
 sudo ./bin/arx server ui download
+./bin/arx server ui download --version v1.0.1
 ./bin/arx server --config /opt/arx/server.yaml ui download
 ```
 
@@ -176,11 +228,21 @@ sudo ./bin/arx server ui download
 | Network | Outbound HTTPS to `api.github.com` and `github.com` |
 | Filesystem | `webui.ui_dir` must be writable (use `sudo` for `/opt/arx/ui`) |
 
-Example progress output:
+Example progress output (auto-detected binary version):
 
 ```text
 Detecting server version...
 Using GitHub release target: latest (binary version v0.0.0-dev)
+Downloading webui-dist.tar.gz from GitHub...
+Extracting assets to /opt/arx/ui...
+WebUI successfully enabled in server.yaml!
+```
+
+Example progress output (`--version v1.0.1`):
+
+```text
+Using requested WebUI version: v1.0.1
+Using GitHub release target: tags/v1.0.1 (requested version v1.0.1)
 Downloading webui-dist.tar.gz from GitHub...
 Extracting assets to /opt/arx/ui...
 WebUI successfully enabled in server.yaml!
