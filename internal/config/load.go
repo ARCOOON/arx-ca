@@ -9,6 +9,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const caPasswordEnvVar = "ARX_CA_PASSWORD"
+
 const configFileMode = 0o600
 
 // ErrConfigHealPersist indicates server.yaml could not be updated after auto-securing configuration.
@@ -27,7 +29,8 @@ func (e *ErrConfigHealPersist) Unwrap() error {
 
 // HealServerConfig inspects cfg immediately after server.yaml is parsed. It generates a
 // JWT secret when missing, bcrypt-hashes plaintext admin passwords, and rewrites server.yaml
-// when any field was secured. Database connection strings and passwords are never modified.
+// when any field was secured. Database connection strings, ca.password (symmetric key
+// material), and ARX_CA_PASSWORD overrides are never modified or persisted here.
 func HealServerConfig(configPath string, cfg *ServerConfig) error {
 	if cfg == nil {
 		return fmt.Errorf("server config is nil")
@@ -52,6 +55,10 @@ func HealServerConfig(configPath string, cfg *ServerConfig) error {
 	if passwordHealed {
 		configNeedsRewrite = true
 		log.Println("Detected clear-text admin password in configuration. Automatically secured via bcrypt.")
+	}
+
+	if healWebUICORS(cfg) {
+		configNeedsRewrite = true
 	}
 
 	if !configNeedsRewrite {
@@ -104,4 +111,70 @@ func healAdminPasswords(cfg *ServerConfig) (healed bool, err error) {
 	}
 
 	return healed, nil
+}
+
+// healWebUICORS normalizes wildcard CORS lists and reports whether the configuration changed.
+func healWebUICORS(cfg *ServerConfig) bool {
+	if cfg == nil {
+		return false
+	}
+	before := cloneWebUICORSConfig(cfg.WebUI.CORS)
+	normalizeWebUICORS(&cfg.WebUI.CORS)
+	return !webUICORSEqual(before, cfg.WebUI.CORS)
+}
+
+func cloneWebUICORSConfig(c WebUICORSConfig) WebUICORSConfig {
+	return WebUICORSConfig{
+		AllowedOrigins: append([]string(nil), c.AllowedOrigins...),
+		AllowedMethods: append([]string(nil), c.AllowedMethods...),
+		AllowedHeaders: append([]string(nil), c.AllowedHeaders...),
+	}
+}
+
+func webUICORSEqual(a, b WebUICORSConfig) bool {
+	return stringSlicesEqual(a.AllowedOrigins, b.AllowedOrigins) &&
+		stringSlicesEqual(a.AllowedMethods, b.AllowedMethods) &&
+		stringSlicesEqual(a.AllowedHeaders, b.AllowedHeaders)
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// normalizeWebUICORS ensures each CORS list is strictly ["*"] when a wildcard entry is present.
+func normalizeWebUICORS(cors *WebUICORSConfig) {
+	if cors == nil {
+		return
+	}
+	cors.AllowedOrigins = normalizeCORSList(cors.AllowedOrigins)
+	cors.AllowedMethods = normalizeCORSList(cors.AllowedMethods)
+	cors.AllowedHeaders = normalizeCORSList(cors.AllowedHeaders)
+}
+
+func normalizeCORSList(items []string) []string {
+	for _, item := range items {
+		if strings.TrimSpace(item) == "*" {
+			return []string{"*"}
+		}
+	}
+	return items
+}
+
+// applyCAPasswordEnvOverride replaces ca.password in memory when ARX_CA_PASSWORD is set.
+// The override is never written back to server.yaml during auto-healing.
+func applyCAPasswordEnvOverride(cfg *ServerConfig) {
+	if cfg == nil {
+		return
+	}
+	if v, ok := os.LookupEnv(caPasswordEnvVar); ok {
+		cfg.CA.Password = v
+	}
 }
