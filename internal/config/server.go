@@ -74,13 +74,12 @@ func (c CAConfig) MaxTTLDuration() (time.Duration, error) {
 type SecurityConfig struct {
 	JWTSecret            string `mapstructure:"jwt_secret" yaml:"jwt_secret"`
 	TokenExpirationHours int    `mapstructure:"token_expiration_hours" yaml:"token_expiration_hours"`
-	InitialAdminPassword string `mapstructure:"initial_admin_password" yaml:"initial_admin_password"`
 }
 
 // Bootstrap holds first-run admin credentials seeded when the users table is empty.
 type Bootstrap struct {
-	AdminEmail        string `mapstructure:"admin_email" yaml:"admin_email"`
-	AdminPasswordHash string `mapstructure:"admin_password_hash" yaml:"admin_password_hash"`
+	AdminEmail    string `mapstructure:"admin_email" yaml:"admin_email"`
+	AdminPassword string `mapstructure:"admin_password" yaml:"admin_password"`
 }
 
 // ServiceConfig holds systemd self-install parameters for Infrastructure as Code.
@@ -127,14 +126,15 @@ type WebUIConfig struct {
 
 // ServerConfig is the root configuration loaded from server.yaml.
 type ServerConfig struct {
-	Server    ServerSettings  `mapstructure:"server" yaml:"server"`
-	Database  DatabaseConfig  `mapstructure:"database" yaml:"database"`
-	CA        CAConfig        `mapstructure:"ca" yaml:"ca"`
-	Security  SecurityConfig  `mapstructure:"security" yaml:"security"`
-	Bootstrap Bootstrap       `mapstructure:"bootstrap" yaml:"bootstrap"`
-	Telemetry TelemetryConfig `mapstructure:"telemetry" yaml:"telemetry"`
-	Service   ServiceConfig   `mapstructure:"service" yaml:"service"`
-	WebUI     WebUIConfig     `mapstructure:"webui" yaml:"webui"`
+	Server      ServerSettings    `mapstructure:"server" yaml:"server"`
+	Database    DatabaseConfig    `mapstructure:"database" yaml:"database"`
+	CA          CAConfig          `mapstructure:"ca" yaml:"ca"`
+	CABootstrap CABootstrapConfig `mapstructure:"ca_bootstrap" yaml:"CABootstrap"`
+	Security    SecurityConfig    `mapstructure:"security" yaml:"security"`
+	Bootstrap   Bootstrap         `mapstructure:"bootstrap" yaml:"bootstrap"`
+	Telemetry   TelemetryConfig   `mapstructure:"telemetry" yaml:"telemetry"`
+	Service     ServiceConfig     `mapstructure:"service" yaml:"service"`
+	WebUI       WebUIConfig       `mapstructure:"webui" yaml:"webui"`
 }
 
 // DefaultServerConfigForExecutable returns defaults with webui.ui_dir beside the current binary.
@@ -187,9 +187,10 @@ func DefaultServerConfig() ServerConfig {
 		Security: SecurityConfig{
 			TokenExpirationHours: 24,
 		},
+		CABootstrap: DefaultCABootstrapConfig(),
 		Bootstrap: Bootstrap{
-			AdminEmail:        "admin@arx.local",
-			AdminPasswordHash: "$2a$10$YGbMIqvYmKp3aQucKx0hh.x35Skzd9djQ/leMyXZy3JKKBVotzwxa",
+			AdminEmail:    "admin@arx.local",
+			AdminPassword: "$2a$10$YGbMIqvYmKp3aQucKx0hh.x35Skzd9djQ/leMyXZy3JKKBVotzwxa",
 		},
 		Telemetry: TelemetryConfig{
 			ServiceName:      "arx-ca",
