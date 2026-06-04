@@ -51,7 +51,7 @@ function setDarkTheme(): void {
 </script>
 
 <template>
-  <header class="ui-border-b ui-elevated flex items-center justify-between px-5 py-3">
+  <header class="ui-border-b ui-chrome-bar flex items-center justify-between px-5 py-3">
     <div class="min-w-0">
       <h1 class="truncate text-base font-semibold ui-text-primary">{{ pageTitle }}</h1>
       <p v-if="pageSubtitle" class="truncate text-xs ui-text-muted">{{ pageSubtitle }}</p>
@@ -75,11 +75,15 @@ function setDarkTheme(): void {
         </button>
       </div>
 
-      <div class="ui-topbar-control hidden sm:flex">
+      <div class="ui-topbar-user-badge hidden sm:flex" aria-label="Signed in user">
         <UserRound class="h-3.5 w-3.5 shrink-0 ui-text-muted" aria-hidden="true" />
-        <div class="min-w-0 text-right">
-          <p class="text-[10px] uppercase leading-none tracking-wide ui-text-muted">Signed in</p>
-          <p class="mt-0.5 max-w-[12rem] truncate text-xs leading-none ui-text-secondary">{{ roleLabel }}</p>
+        <div class="flex min-w-0 flex-col items-end justify-center text-right">
+          <span class="whitespace-nowrap text-[10px] font-medium uppercase leading-tight tracking-wide ui-text-muted">
+            Signed in
+          </span>
+          <span class="mt-0.5 max-w-[12rem] truncate whitespace-nowrap text-xs leading-tight ui-text-secondary">
+            {{ roleLabel }}
+          </span>
         </div>
       </div>
 

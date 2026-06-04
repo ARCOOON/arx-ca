@@ -54,10 +54,7 @@ function toggleCollapsed(): void {
       class="ui-border-b flex items-center px-3 py-3"
       :class="collapsed ? 'justify-center' : 'gap-2.5'"
     >
-      <div
-        class="flex h-8 w-8 shrink-0 items-center justify-center border"
-        style="border-color: var(--border-color); background-color: var(--bg-inset)"
-      >
+      <div class="ui-brand-icon flex h-8 w-8 shrink-0 items-center justify-center">
         <ShieldCheck class="h-4 w-4" style="color: var(--accent-color)" aria-hidden="true" />
       </div>
       <div v-if="!collapsed" class="min-w-0">
