@@ -58,3 +58,10 @@ export function shortenFingerprint(fingerprint: string): string {
   }
   return `${normalized.slice(0, 8)}…${normalized.slice(-8)}`
 }
+
+export function formatUsageList(usages?: string[]): string {
+  if (!usages || usages.length === 0) {
+    return '—'
+  }
+  return usages.join(', ')
+}
