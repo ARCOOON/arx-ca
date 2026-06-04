@@ -1,0 +1,29 @@
+---
+description: Enforces mandatory documentation updates immediately following any codebase modification.
+globs: "**/*.go, **/*.yaml, **/*.ts, **/*.vue, **/*.json"
+alwaysApply: true
+---
+
+# Mandatory Continuous Documentation Synchronization Rule
+
+You are strictly forbidden from finalizing a prompt or code change without validating and updating the corresponding project documentation. Code and documentation must never drift.
+
+## Core Mandate
+- **EVERY SINGLE TIME** you modify, add, or deprecate code (functions, CLI commands, API endpoints, configuration structures), you **MUST** immediately update all relevant markdown files (`README.md`, `docs/**/*.md`, `docs/api_reference.md`).
+- This synchronization is part of the change lifecycle. Do not wait for the user to ask for documentation updates.
+
+## Execution Workflow (Per Prompt/Change)
+1. **Analyze:** Identify the impact of your code modifications on the system architecture, CLI commands, or API surface.
+2. **Locate Docs:** Scan the `docs/` directory and `README.md` for sections explaining the modified component.
+3. **Update In-Place:** Rewrite or patch the documentation files immediately.
+4. **No Placeholders:** Write out the full structures, updated fields, and exact CLI flags. Never use `// TODO` or ``.
+5. **Format Enforcement:** Maintain the interactive, collapsible HTML structures (`<details><summary>...`) inside `docs/api_reference.md` if API schemas change.
+
+## Verification Checklist
+Before outputting your final response to the user, ensure you can answer "Yes" to:
+- Has the `README.md` been checked for obsolete references?
+- If a Cobra CLI command changed, has `docs/cli_reference.md` been updated with the correct flags and behavior?
+- If an API payload or endpoint path was altered, has `docs/api_reference.md` been adjusted using the precise table schemas?
+- Are all documentation files written strictly in English?
+
+*Failure to comply with this synchronization protocol will result in broken development pipelines.*
