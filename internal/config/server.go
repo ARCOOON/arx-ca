@@ -44,14 +44,15 @@ type DatabaseConfig struct {
 
 // CAConfig holds step-ca integration paths and provisioner settings.
 type CAConfig struct {
-	StepCAURL               string `mapstructure:"stepca_url" yaml:"stepca_url"`
-	RootPath                string `mapstructure:"root_path" yaml:"root_path"`
-	IntermediatePath        string `mapstructure:"intermediate_path" yaml:"intermediate_path"`
-	ProvisionerName         string `mapstructure:"provisioner_name" yaml:"provisioner_name"`
-	MaxTTL                  string `mapstructure:"max_ttl" yaml:"max_ttl"`
-	Password                string `mapstructure:"password" yaml:"password"`
-	PasswordFile            string `mapstructure:"password_file" yaml:"password_file"`
-	ProvisionerPasswordFile string `mapstructure:"provisioner_password_file" yaml:"provisioner_password_file"`
+	StepCAURL               string               `mapstructure:"stepca_url" yaml:"stepca_url"`
+	RootPath                string               `mapstructure:"root_path" yaml:"root_path"`
+	IntermediatePath        string               `mapstructure:"intermediate_path" yaml:"intermediate_path"`
+	ProvisionerName         string               `mapstructure:"provisioner_name" yaml:"provisioner_name"`
+	MaxTTL                  string               `mapstructure:"max_ttl" yaml:"max_ttl"`
+	Password                string               `mapstructure:"password" yaml:"password"`
+	PasswordFile            string               `mapstructure:"password_file" yaml:"password_file"`
+	ProvisionerPasswordFile string               `mapstructure:"provisioner_password_file" yaml:"provisioner_password_file"`
+	Provisioners            CAProvisionersConfig `mapstructure:"provisioners" yaml:"Provisioners"`
 }
 
 // MaxTTLDuration parses the configured maximum X.509 certificate lifetime.
@@ -185,6 +186,7 @@ func DefaultServerConfig() ServerConfig {
 			IntermediatePath: ".pki/certs/intermediate_ca.crt",
 			ProvisionerName:  "ca-admin",
 			MaxTTL:           "8760h",
+			Provisioners:     DefaultCAProvisionersConfig(),
 		},
 		Security: SecurityConfig{
 			TokenExpirationHours: 24,
