@@ -41,7 +41,7 @@ func runServer() error {
 	if err := database.Migrate(appDB); err != nil {
 		return err
 	}
-	if err := database.EnsureBootstrapAdmin(appDB, serverCfg.Bootstrap); err != nil {
+	if err := database.EnsureBootstrapAdmin(appDB, serverCfg); err != nil {
 		return err
 	}
 
