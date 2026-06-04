@@ -30,6 +30,10 @@ func newServerCmd() *cobra.Command {
 				if errors.As(err, &notFound) {
 					log.Fatal(err)
 				}
+				var persistErr *arxconfig.ErrPasswordHashPersist
+				if errors.As(err, &persistErr) {
+					log.Fatal("cannot start server: failed to persist hashed initial admin password: ", persistErr)
+				}
 				return err
 			}
 			arxconfig.ApplyServerRuntimeFromViper()
