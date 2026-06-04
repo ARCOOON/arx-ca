@@ -68,9 +68,14 @@ func (e *PKIEngine) IssueCertificateWithToken(ctx context.Context, token, csrPEM
 }
 
 // IssueCertificate signs a PEM-encoded CSR using the intermediate CA via step-ca SignWithContext.
-func (e *PKIEngine) IssueCertificate(ctx context.Context, csrPEM, ttl, templateID string, metadata map[string]any) (*models.CertificatePEMResponse, error) {
+func (e *PKIEngine) IssueCertificate(ctx context.Context, req models.IssueCertificateRequest) (*models.CertificatePEMResponse, error) {
 	if e == nil || e.auth == nil {
 		return nil, errors.New("CA engine is not initialized")
+	}
+
+	csrPEM := strings.TrimSpace(req.CSR)
+	if csrPEM == "" {
+		return nil, errors.New("csr is required")
 	}
 
 	csr, err := pemutil.ParseCertificateRequest([]byte(csrPEM))
@@ -78,17 +83,23 @@ func (e *PKIEngine) IssueCertificate(ctx context.Context, csrPEM, ttl, templateI
 		return nil, fmt.Errorf("parse certificate signing request: %w", err)
 	}
 
-	signOpts, err := e.buildSignOptions(ttl)
+	signOpts, err := e.buildSignOptions(req.TTL)
 	if err != nil {
 		return nil, err
 	}
 
-	templateOpts, err := e.templateSignOptions(templateID, metadata, csr, csr.Subject.CommonName)
+	templateOpts, err := e.templateSignOptions(req.TemplateID, req.Metadata, csr, csr.Subject.CommonName)
 	if err != nil {
 		return nil, err
 	}
 
-	chain, err := e.signCSR(ctx, csr, signOpts, templateOpts...)
+	requestOpts, err := certificateSignOptions(subjectInputFromIssueRequest(req), keyUsageInputFromIssueRequest(req))
+	if err != nil {
+		return nil, err
+	}
+
+	signArgs := append(requestOpts, templateOpts...)
+	chain, err := e.signCSR(ctx, csr, signOpts, signArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +359,8 @@ func (e *PKIEngine) signCSRWithToken(ctx context.Context, csr *x509.CertificateR
 
 func (e *PKIEngine) buildSignOptions(ttl string) (provisioner.SignOptions, error) {
 	opts := provisioner.SignOptions{}
-	if strings.TrimSpace(ttl) == "" {
+	ttl = strings.TrimSpace(ttl)
+	if ttl == "" {
 		return opts, nil
 	}
 
@@ -356,8 +368,24 @@ func (e *PKIEngine) buildSignOptions(ttl string) (provisioner.SignOptions, error
 	if err != nil {
 		return opts, fmt.Errorf("invalid ttl: %w", err)
 	}
+	if err := e.validateRequestedTTLValue(notAfter); err != nil {
+		return opts, err
+	}
 	opts.NotAfter = notAfter
 	return opts, nil
+}
+
+func (e *PKIEngine) validateRequestedTTLValue(requested provisioner.TimeDuration) error {
+	if e == nil || e.maxCertTTL <= 0 || requested.IsZero() {
+		return nil
+	}
+	now := time.Now().UTC()
+	expiry := requested.RelativeTime(now)
+	duration := expiry.Sub(now)
+	if duration > e.maxCertTTL {
+		return fmt.Errorf("requested ttl %s exceeds configured maximum %s", duration, e.maxCertTTL)
+	}
+	return nil
 }
 
 func decryptProvisionerKey(kid string, encryptedKey []byte, password []byte) (jose.Signer, error) {
@@ -540,7 +568,8 @@ func MapCAError(err error) (status int, message string) {
 		return http.StatusNotFound, "certificate not found"
 	case strings.Contains(msg, "already revoked"):
 		return http.StatusConflict, "certificate is already revoked"
-	case strings.Contains(msg, "invalid"), strings.Contains(msg, "malformed"), strings.Contains(msg, "parse"):
+	case strings.Contains(msg, "invalid"), strings.Contains(msg, "malformed"), strings.Contains(msg, "parse"),
+		strings.Contains(msg, "exceeds configured maximum"):
 		return http.StatusBadRequest, msg
 	case strings.Contains(msg, "forbidden"), strings.Contains(msg, "not allowed"):
 		return http.StatusForbidden, msg
