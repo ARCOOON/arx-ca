@@ -42,7 +42,7 @@ onUnmounted(() => {
       @click="handleBackdropClick"
     >
       <div
-        class="ui-elevated w-full"
+        class="ui-elevated ui-dialog w-full"
         :class="wide ? 'max-w-2xl' : 'max-w-lg'"
         role="dialog"
         aria-modal="true"

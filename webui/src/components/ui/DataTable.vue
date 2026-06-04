@@ -17,7 +17,7 @@ defineProps<{
 </script>
 
 <template>
-  <div class="overflow-x-auto border" style="border-color: var(--border-color)">
+  <div class="ui-table-wrap overflow-x-auto">
     <table class="min-w-full text-left text-xs">
       <thead class="ui-table-head">
         <tr>
