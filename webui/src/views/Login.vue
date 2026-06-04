@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ShieldCheck } from 'lucide-vue-next'
+import ShieldCheck from 'lucide-vue-next/dist/esm/icons/shield-check.js'
 import axios from 'axios'
 import { login } from '../api/auth'
 import { useAuthStore } from '../store/auth'
@@ -49,31 +49,27 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex min-h-screen items-center justify-center bg-zinc-950 px-4 py-12">
+  <div class="ui-shell flex min-h-screen items-center justify-center px-4 py-12">
     <div class="w-full max-w-md">
       <div class="mb-8 text-center">
-        <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900">
-          <ShieldCheck class="h-7 w-7 text-emerald-400" aria-hidden="true" />
+        <div
+          class="mx-auto mb-4 flex h-14 w-14 items-center justify-center border"
+          style="border-color: var(--border-color); background-color: var(--bg-elevated)"
+        >
+          <ShieldCheck class="h-7 w-7" style="color: var(--accent-color)" aria-hidden="true" />
         </div>
-        <h1 class="text-2xl font-semibold tracking-tight text-zinc-50">Arx Certificate Authority</h1>
-        <p class="mt-2 text-sm text-zinc-400">Sign in with your administrator credentials</p>
+        <h1 class="text-2xl font-semibold tracking-tight ui-text-primary">Arx Certificate Authority</h1>
+        <p class="mt-2 text-sm ui-text-muted">Sign in with your administrator credentials</p>
       </div>
 
-      <form
-        class="rounded-xl border border-zinc-800 bg-zinc-900/80 p-6"
-        @submit.prevent="handleSubmit"
-      >
-        <div
-          v-if="errorMessage"
-          class="mb-4 rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-300"
-          role="alert"
-        >
+      <form class="ui-elevated p-6" @submit.prevent="handleSubmit">
+        <div v-if="errorMessage" class="mb-4 ui-alert-error text-sm" role="alert">
           {{ errorMessage }}
         </div>
 
         <div class="space-y-4">
           <div>
-            <label for="email" class="mb-1.5 block text-sm font-medium text-zinc-300">Email</label>
+            <label for="email" class="mb-1.5 block text-sm font-medium ui-text-secondary">Email</label>
             <input
               id="email"
               v-model="email"
@@ -81,13 +77,13 @@ async function handleSubmit(): Promise<void> {
               name="email"
               autocomplete="username"
               required
-              class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              class="ui-input py-2.5 text-sm"
               placeholder="admin@example.com"
             />
           </div>
 
           <div>
-            <label for="password" class="mb-1.5 block text-sm font-medium text-zinc-300">Password</label>
+            <label for="password" class="mb-1.5 block text-sm font-medium ui-text-secondary">Password</label>
             <input
               id="password"
               v-model="password"
@@ -95,7 +91,7 @@ async function handleSubmit(): Promise<void> {
               name="password"
               autocomplete="current-password"
               required
-              class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+              class="ui-input py-2.5 text-sm"
               placeholder="Enter your password"
             />
           </div>
@@ -104,7 +100,8 @@ async function handleSubmit(): Promise<void> {
         <button
           type="submit"
           :disabled="isSubmitting"
-          class="mt-6 w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+          class="ui-btn-primary mt-6 w-full py-2.5"
+          style="background-color: var(--accent-color); color: var(--text-inverse); border-color: var(--accent-muted)"
         >
           {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
         </button>
