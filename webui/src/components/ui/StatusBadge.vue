@@ -12,22 +12,22 @@ const toneClass = computed(() => {
   switch (props.tone ?? 'neutral') {
     case 'valid':
     case 'enabled':
-      return 'border-emerald-800/80 bg-emerald-950/50 text-emerald-300'
+      return 'ui-badge-valid'
     case 'revoked':
-      return 'border-red-800/80 bg-red-950/50 text-red-300'
+      return 'ui-badge-revoked'
     case 'expired':
-      return 'border-amber-800/80 bg-amber-950/50 text-amber-300'
+      return 'ui-badge-expired'
     case 'disabled':
-      return 'border-zinc-700 bg-zinc-900 text-zinc-500'
+      return 'ui-badge-neutral opacity-60'
     default:
-      return 'border-zinc-700 bg-zinc-900 text-zinc-400'
+      return 'ui-badge-neutral'
   }
 })
 </script>
 
 <template>
   <span
-    class="inline-flex items-center border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide"
+    class="inline-flex items-center px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide"
     :class="toneClass"
   >
     {{ label }}
