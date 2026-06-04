@@ -70,4 +70,4 @@ data/
 .devcontainer/**/db-data/
 phases/
 tests/
-server/
+/server
