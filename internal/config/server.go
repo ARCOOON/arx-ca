@@ -57,6 +57,7 @@ type CAConfig struct {
 type SecurityConfig struct {
 	JWTSecret            string `mapstructure:"jwt_secret" yaml:"jwt_secret"`
 	TokenExpirationHours int    `mapstructure:"token_expiration_hours" yaml:"token_expiration_hours"`
+	InitialAdminPassword string `mapstructure:"initial_admin_password" yaml:"initial_admin_password"`
 }
 
 // Bootstrap holds first-run admin credentials seeded when the users table is empty.
