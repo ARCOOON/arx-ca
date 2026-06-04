@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -156,7 +157,12 @@ func runServer() error {
 
 	handler := middleware.Logger(mux)
 	if serverCfg.WebUI.Enabled {
-		handler = middleware.CORS(serverCfg.WebUI.CORS.AllowedOrigins, nil, handler)
+		corsOpts := middleware.CORSOptions{
+			AllowedOrigins: serverCfg.WebUI.CORS.AllowedOrigins,
+			AllowedMethods: serverCfg.WebUI.CORS.AllowedMethods,
+			AllowedHeaders: serverCfg.WebUI.CORS.AllowedHeaders,
+		}
+		handler = middleware.CORS(corsOpts, handler)
 	}
 	handler = telemetry.HTTPMiddleware(handler)
 
@@ -189,7 +195,15 @@ func runServer() error {
 
 	var webUIServer *arxserver.WebUIServer
 	if serverCfg.WebUI.Enabled {
-		webUIServer, err = arxserver.NewWebUIServer(serverCfg.WebUI, log)
+		var apiUpstream *url.URL
+		if serverCfg.WebUI.ProxyAPIEnabled() {
+			apiUpstream, err = arxserver.BuildAPIUpstreamURL(serverCfg)
+			if err != nil {
+				return fmt.Errorf("resolve WebUI API upstream: %w", err)
+			}
+			log.Info("WebUI API reverse proxy enabled", slog.String("upstream", apiUpstream.String()))
+		}
+		webUIServer, err = arxserver.NewWebUIServer(serverCfg.WebUI, apiUpstream, log)
 		if err != nil {
 			return fmt.Errorf("initialize WebUI server: %w", err)
 		}

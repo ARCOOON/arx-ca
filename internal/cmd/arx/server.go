@@ -30,9 +30,9 @@ func newServerCmd() *cobra.Command {
 				if errors.As(err, &notFound) {
 					log.Fatal(err)
 				}
-				var persistErr *arxconfig.ErrPasswordHashPersist
+				var persistErr *arxconfig.ErrConfigHealPersist
 				if errors.As(err, &persistErr) {
-					log.Fatal("cannot start server: failed to persist hashed initial admin password: ", persistErr)
+					log.Fatal("cannot start server: failed to persist auto-secured configuration: ", persistErr)
 				}
 				return err
 			}
