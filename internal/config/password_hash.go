@@ -22,8 +22,5 @@ func IsBcryptPasswordHash(s string) bool {
 
 // BootstrapAdminPasswordHash returns the bcrypt hash used to seed the initial admin user.
 func (c ServerConfig) BootstrapAdminPasswordHash() string {
-	if h := strings.TrimSpace(c.Security.InitialAdminPassword); IsBcryptPasswordHash(h) {
-		return h
-	}
-	return strings.TrimSpace(c.Bootstrap.AdminPasswordHash)
+	return strings.TrimSpace(c.Bootstrap.AdminPassword)
 }
