@@ -1,5 +1,7 @@
 import type {
   ApiEnvelope,
+  GenerateCertificateRequest,
+  GenerateCertificateResponse,
   IssueCertificateRequest,
   IssueCertificateResponse,
   ListCertificatesResponse,
@@ -36,6 +38,26 @@ export async function issueCertificate(
 
   if (!payload.data) {
     throw new Error('Certificate issue response did not include data')
+  }
+
+  return payload.data
+}
+
+export async function generateCertificate(
+  request: GenerateCertificateRequest,
+): Promise<GenerateCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<GenerateCertificateResponse>>(
+    '/certificates/generate',
+    request,
+  )
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data) {
+    throw new Error('Certificate generation response did not include data')
   }
 
   return payload.data
