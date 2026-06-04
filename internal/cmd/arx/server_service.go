@@ -1,6 +1,7 @@
 package arxcmd
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -17,15 +18,28 @@ func requireRootForService(action string) {
 	}
 }
 
-func runServerServiceInstall(opts service.InstallOptions) {
-	requireRootForService("service install")
+func resolveInstallScope(_ *cobra.Command, flagUser, flagSystem bool) (service.InstallScope, error) {
+	if flagUser && flagSystem {
+		return 0, fmt.Errorf("cannot specify both --user and --system")
+	}
+	if flagSystem {
+		return service.InstallScopeSystem, nil
+	}
+	if flagUser {
+		return service.InstallScopeUser, nil
+	}
+	return service.DefaultInstallScope(), nil
+}
+
+func runServerServiceInstall(scope service.InstallScope, opts service.InstallOptions) {
+	opts.Scope = scope
 	if err := service.Install(opts); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runServerServiceUninstall(opts service.InstallOptions) {
-	requireRootForService("service uninstall")
+func runServerServiceUninstall(scope service.InstallScope, opts service.InstallOptions) {
+	opts.Scope = scope
 	if err := service.Uninstall(opts); err != nil {
 		log.Fatal(err)
 	}
