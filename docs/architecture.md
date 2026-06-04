@@ -241,7 +241,7 @@ Setting **`CGO_ENABLED=0`** for release builds yields:
 | **Cross-compilation** | `GOOS`/`GOARCH` builds from Linux CI without cross-compilers |
 | **Reproducible CI** | Same flags in `Makefile` (`build-linux`, `build-windows`) and `.github/workflows/release.yml` |
 
-On tag push `v*`, `.github/workflows/release.yml` runs four parallel jobs. Each Go job sets `CGO_ENABLED=0` and uses `go build -ldflags="-X main.Version=<tag> -X main.Commit=<sha> -s -w" -o …` for `cmd/arx` or `cmd/arx-agent`. The WebUI job checks out `ARCOOON/arx-ui` at the same tag, runs `npm ci` / `npm run build`, and publishes `webui-dist.tar.gz` (contents of `dist/`). All jobs upload to one GitHub Release; the Linux job generates release notes, and the others set `append_body: true` so concurrent uploads do not overwrite the body.
+On tag push `v*`, `.github/workflows/release.yml` runs four parallel jobs. Each Go job sets `CGO_ENABLED=0` and uses `go build -ldflags="-X main.Version=<tag> -X main.Commit=<sha> -s -w" -o …` for `cmd/arx` or `cmd/arx-agent`. The WebUI job checks out `ARCOOON/arx-ui` at `main` (latest production-ready frontend), runs `npm ci` / `npm run build`, and publishes `webui-dist.tar.gz` (contents of `dist/`). If the UI repository is private, the workflow uses the `UI_REPO_PAT` repository secret for checkout. All jobs upload to one GitHub Release; the Linux job generates release notes, and the others set `append_body: true` so concurrent uploads do not overwrite the body.
 
 | Job | Artifacts |
 | --- | --- |
