@@ -51,7 +51,9 @@ func buildCABundleZip(input caBundleInput) ([]byte, error) {
 		content string
 	}{
 		{name: "root.pem", content: rootPEM},
+		{name: "root.crt", content: rootPEM},
 		{name: "intermediate.pem", content: intermediatePEM},
+		{name: "intermediate.crt", content: intermediatePEM},
 		{name: "ca-chain.pem", content: chain},
 		{name: "ca-chain.crt", content: chain},
 	}

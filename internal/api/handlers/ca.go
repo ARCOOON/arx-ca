@@ -57,7 +57,7 @@ func (h *CAHandler) Info() http.Handler {
 	})
 }
 
-// Chain handles GET /api/v1/ca/chain and returns a ZIP archive with Root, Intermediate, and chain PEM/CRT files.
+// Chain handles GET /api/v1/ca/chain and returns a ZIP archive (root.pem/crt, intermediate.pem/crt, ca-chain.pem/crt).
 func (h *CAHandler) Chain() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
