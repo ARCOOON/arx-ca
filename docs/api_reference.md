@@ -705,7 +705,7 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 
 ### POST /api/v1/certificates/issue
-> Signs a PEM-encoded CSR with the intermediate CA. The server never generates or returns a private key.
+> Signs a PEM-encoded CSR with the intermediate CA. The server never generates or returns a private key. On success, the public certificate PEM and metadata are archived in the application database for `GET /api/v1/certificates/{serial}`.
 
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
@@ -785,7 +785,7 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 ---
 ### POST /api/v1/certificates/generate
-> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key is never stored on the server.
+> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key is never stored on the server or database; only the public certificate PEM is archived for `GET /api/v1/certificates/{serial}`.
 
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
@@ -839,12 +839,18 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 |-------|------|----------|-------------|
 | `certificate_pem` | string | Yes | Issued certificate PEM |
 | `private_key_pem` | string | Yes | Generated private key PEM (PKCS#8) |
+| `serial` | string | Yes | Certificate serial |
+| `not_before` | string | Yes | Validity start |
+| `not_after` | string | Yes | Validity end |
 
 **Example JSON (`data`):**
 ```json
 {
   "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----\n",
-  "private_key_pem": "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n"
+  "private_key_pem": "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----\n",
+  "serial": "12345678901234567890",
+  "not_before": "2026-06-02T10:00:00Z",
+  "not_after": "2027-06-02T10:00:00Z"
 }
 ```
 
@@ -1099,6 +1105,57 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 * `403 Forbidden` — insufficient RBAC permissions.
 * `405 Method Not Allowed` — wrong HTTP method.
 * `500 Internal Server Error` — list failure.
+
+---
+### GET /api/v1/certificates/{serial}
+> Returns a persisted public certificate record archived after `issue` or `generate` operations.
+
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:read`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `serial` | string | Yes | Certificate serial number |
+| `common_name` | string | Yes | Subject common name |
+| `subject` | string | Yes | Full distinguished name |
+| `dns_names` | string[] | No | DNS subject alternative names |
+| `ip_addresses` | string[] | No | IP subject alternative names |
+| `not_before` | string (RFC3339) | Yes | Validity start (`Issued At`) |
+| `not_after` | string (RFC3339) | Yes | Validity end (`Expiry Date`) |
+| `requestor_id` | string | Yes | Application user ID or service account ID of the caller |
+| `certificate_pem` | string | Yes | Public certificate PEM (private keys are never stored) |
+| `revoked` | bool | Yes | Whether the serial is revoked in the step-ca database |
+
+**Example JSON (`data`):**
+```json
+{
+  "serial": "12345678901234567890",
+  "common_name": "www.example.com",
+  "subject": "CN=www.example.com,O=Example Org,C=US",
+  "dns_names": ["www.example.com"],
+  "not_before": "2026-06-01T00:00:00Z",
+  "not_after": "2026-09-01T00:00:00Z",
+  "requestor_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+  "revoked": false
+}
+```
+
+</details>
+
+**Error Codes:**
+* `400 Bad Request` — missing serial path parameter.
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `404 Not Found` — no archived record for the serial (certificates issued before archival was enabled are not available).
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — database or lookup failure.
 
 ---
 ### POST /api/v1/certificates/lint

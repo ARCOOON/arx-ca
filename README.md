@@ -365,8 +365,9 @@ The container runs `arx server start` on **8080**; PKI data is mounted at `./dat
 | `GET` | `/api/v1/health` | — | Health and runtime metrics |
 | `GET` | `/api/v1/ca/root` | — | Root CA PEM |
 | `POST` | `/api/v1/auth/login` | — | Admin JWT (`email` + `password`) |
-| `POST` | `/api/v1/certificates/issue` | Service / Admin | Sign CSR (certificate only) |
-| `POST` | `/api/v1/certificates/generate` | Service / Admin | Native key generation + sign (returns key PEM) |
+| `POST` | `/api/v1/certificates/issue` | Service / Admin | Sign CSR (certificate only); archives public PEM |
+| `POST` | `/api/v1/certificates/generate` | Service / Admin | Native key generation + sign (returns key PEM once); archives public PEM |
+| `GET` | `/api/v1/certificates/{serial}` | Service / Admin | Archived certificate detail (requestor, PEM, validity) |
 | `POST` | `/api/v1/certificates/auto` | Admin | Generate ECDSA P-384 key + sign |
 | `GET` | `/api/v1/crl` | — | CRL (DER or PEM; alias of `/api/v1/ca/crl`) |
 | `POST` | `/api/v1/certificates/renew` | Admin / mTLS | Renew existing certificate |

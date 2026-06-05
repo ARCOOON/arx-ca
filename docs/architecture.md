@@ -274,7 +274,7 @@ Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). ste
 
 `ca.max_ttl` in `server.yaml` (default `8760h`) is validated before signing and synchronized into step-ca authority/provisioner `maxTLSCertDuration` claims at startup, replacing the step-ca default 24-hour TLS cap.
 
-When the `.pki` tree is absent, `ca_bootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation (legacy top-level `CABootstrap` is still accepted on load). Values from `server.yaml` are passed directly into PKI bootstrap (`internal/ca/init.go`); Viper defaults no longer overwrite an explicit `CABootstrap` block before merge.
+When the `.pki` tree is absent, `ca_bootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation (legacy top-level `CABootstrap` with PascalCase keys is still accepted on load). Values from `server.yaml` are applied to the X.509 templates and CAS `Name` fields before cryptographic generation in `internal/ca/bootstrap_pki.go`. Successful `POST /api/v1/certificates/issue` and `POST /api/v1/certificates/generate` responses archive **public** PEM material in the application SQLite/PostgreSQL `issued_certificates` table (`GET /api/v1/certificates/{serial}`); private keys are never persisted.
 
 | Field | Default (when omitted) | Description |
 | ----- | ---------------------- | ----------- |
