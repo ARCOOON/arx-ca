@@ -125,6 +125,16 @@ func DefaultServiceAccountRoles() []Role {
 	return []Role{RoleCAAdmin}
 }
 
+// HasRole reports whether any of the given roles matches target.
+func HasRole(roles []Role, target Role) bool {
+	for _, role := range roles {
+		if role == target {
+			return true
+		}
+	}
+	return false
+}
+
 // HasPermission reports whether any of the given roles grants permission.
 func HasPermission(roles []Role, perm Permission) bool {
 	for _, role := range roles {
