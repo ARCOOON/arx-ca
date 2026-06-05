@@ -425,17 +425,9 @@ func (h *CertificateHandler) decryptEscrowedPrivateKey(ctx context.Context, seri
 }
 
 func (h *CertificateHandler) buildBundleFromMaterial(certificatePEM, privateKeyPEM string) ([]byte, error) {
-	if h.engine == nil {
-		return nil, fmt.Errorf("CA engine is not initialized")
-	}
-
-	intermediatePEM := string(h.engine.IntermediateCertPEM())
-	rootPEM := string(h.engine.RootCertPEM())
 	return buildCertificateBundleZip(certificateBundleInput{
-		CertificatePEM:  certificatePEM,
-		PrivateKeyPEM:   privateKeyPEM,
-		IntermediatePEM: intermediatePEM,
-		RootPEM:         rootPEM,
+		CertificatePEM: certificatePEM,
+		PrivateKeyPEM:  privateKeyPEM,
 	})
 }
 
