@@ -82,6 +82,9 @@ func (e *PKIEngine) GenerateCertificate(ctx context.Context, req models.Generate
 	return &models.GenerateCertificateResponse{
 		CertificatePEM: certResp.CertificatePEM,
 		PrivateKeyPEM:  keyPEM,
+		Serial:         certResp.Serial,
+		NotBefore:      certResp.NotBefore,
+		NotAfter:       certResp.NotAfter,
 	}, nil
 }
 
