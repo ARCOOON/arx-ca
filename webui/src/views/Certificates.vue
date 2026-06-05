@@ -693,32 +693,46 @@ async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
           </div>
         </details>
 
-        <div class="mt-3 space-y-2">
-          <p class="text-xs font-medium ui-text-secondary">Standard Key Usage</p>
-          <FlatToggle
-            label="Digital Signature"
-            :enabled="nativeDigitalSignature"
-            @toggle="nativeDigitalSignature = !nativeDigitalSignature"
-          />
-          <FlatToggle
-            label="Key Encipherment"
-            :enabled="nativeKeyEncipherment"
-            @toggle="nativeKeyEncipherment = !nativeKeyEncipherment"
-          />
-        </div>
+        <div class="mt-3 space-y-3">
+          <p class="text-xs leading-relaxed ui-text-muted">
+            Recommended key-usage profiles for common issuance paths:
+            <span class="mt-1.5 block">
+              <span class="font-medium ui-text-secondary">Webserver / ACME:</span>
+              Digital Signature, Key Encipherment, Server Authentication.
+            </span>
+            <span class="mt-1 block">
+              <span class="font-medium ui-text-secondary">MDM / SCEP:</span>
+              Digital Signature, Client Authentication.
+            </span>
+          </p>
 
-        <div class="mt-3 space-y-2">
-          <p class="text-xs font-medium ui-text-secondary">Extended Key Usage</p>
-          <FlatToggle
-            label="Server Authentication"
-            :enabled="nativeServerAuth"
-            @toggle="nativeServerAuth = !nativeServerAuth"
-          />
-          <FlatToggle
-            label="Client Authentication"
-            :enabled="nativeClientAuth"
-            @toggle="nativeClientAuth = !nativeClientAuth"
-          />
+          <div class="space-y-2">
+            <p class="text-xs font-medium ui-text-secondary">Standard Key Usage</p>
+            <FlatToggle
+              label="Digital Signature"
+              :enabled="nativeDigitalSignature"
+              @toggle="nativeDigitalSignature = !nativeDigitalSignature"
+            />
+            <FlatToggle
+              label="Key Encipherment"
+              :enabled="nativeKeyEncipherment"
+              @toggle="nativeKeyEncipherment = !nativeKeyEncipherment"
+            />
+          </div>
+
+          <div class="space-y-2">
+            <p class="text-xs font-medium ui-text-secondary">Extended Key Usage</p>
+            <FlatToggle
+              label="Server Authentication"
+              :enabled="nativeServerAuth"
+              @toggle="nativeServerAuth = !nativeServerAuth"
+            />
+            <FlatToggle
+              label="Client Authentication"
+              :enabled="nativeClientAuth"
+              @toggle="nativeClientAuth = !nativeClientAuth"
+            />
+          </div>
         </div>
       </template>
 
