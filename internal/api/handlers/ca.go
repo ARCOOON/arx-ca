@@ -3,7 +3,6 @@ package handlers
 import (
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/ca"
@@ -58,7 +57,7 @@ func (h *CAHandler) Info() http.Handler {
 	})
 }
 
-// Chain handles GET /api/v1/ca/chain and returns the Intermediate and Root CA certificates concatenated in PEM order.
+// Chain handles GET /api/v1/ca/chain and returns a ZIP archive with Root, Intermediate, and chain PEM/CRT files.
 func (h *CAHandler) Chain() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
@@ -66,31 +65,20 @@ func (h *CAHandler) Chain() http.Handler {
 			return
 		}
 
-		intermediatePEM := strings.TrimSpace(string(h.engine.IntermediateCertPEM()))
-		if intermediatePEM == "" {
-			api.WriteError(w, http.StatusInternalServerError, "intermediate certificate is unavailable")
-			return
-		}
-		rootPEM := strings.TrimSpace(string(h.engine.RootCertPEM()))
-		if rootPEM == "" {
-			api.WriteError(w, http.StatusInternalServerError, "root certificate is unavailable")
+		zipBytes, err := buildCABundleZip(caBundleInput{
+			IntermediatePEM: string(h.engine.IntermediateCertPEM()),
+			RootPEM:         string(h.engine.RootCertPEM()),
+		})
+		if err != nil {
+			api.WriteError(w, http.StatusInternalServerError, "CA bundle is unavailable")
 			return
 		}
 
-		chain := intermediatePEM
-		if !strings.HasSuffix(chain, "\n") {
-			chain += "\n"
-		}
-		chain += rootPEM
-		if !strings.HasSuffix(chain, "\n") {
-			chain += "\n"
-		}
-
-		w.Header().Set("Content-Type", "application/x-pem-file")
-		w.Header().Set("Content-Disposition", `attachment; filename="ca-chain.crt"`)
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", `attachment; filename="ca-bundle.zip"`)
 		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte(chain)); err != nil {
-			log.Printf("ca: write chain: %v", err)
+		if _, err := w.Write(zipBytes); err != nil {
+			log.Printf("ca: write chain bundle: %v", err)
 		}
 	})
 }
