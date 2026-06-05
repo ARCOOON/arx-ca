@@ -834,7 +834,7 @@ The response body is a ZIP archive with exactly these entries:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `common_name` | string | Yes | Primary common name |
-| `sans` | string[] | No | Additional DNS names or IP addresses |
+| `sans` | string[] | No | Additional DNS names or IP addresses. DNS entries may use a leading wildcard label (`*.example.com`); `*` is only permitted as the entire first label. |
 | `ttl` | string | No | Certificate lifetime (e.g. `720h`, `30d`). Must not exceed `ca.max_ttl` in `server.yaml` (default `8760h`). |
 | `key_algo` | string | Yes | `RSA2048` or `ECDSA256` |
 | `organization` | string | No | X.509 subject organization (`O`) |
@@ -851,7 +851,7 @@ The response body is a ZIP archive with exactly these entries:
 ```json
 {
   "common_name": "www.example.com",
-  "sans": ["www.example.com", "api.example.com", "203.0.113.10"],
+  "sans": ["www.example.com", "*.example.com", "203.0.113.10"],
   "ttl": "720h",
   "key_algo": "ECDSA256",
   "organization": "Example Corp",
