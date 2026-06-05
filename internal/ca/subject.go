@@ -24,10 +24,13 @@ type certificateSubjectInput struct {
 	Locality           string
 }
 
-// certificateKeyUsageInput carries optional extended key usage flags for issuance.
+// certificateKeyUsageInput carries optional key usage flags for issuance.
 type certificateKeyUsageInput struct {
-	ServerAuth bool
-	ClientAuth bool
+	DigitalSignature      bool
+	KeyEncipherment       bool
+	ApplyStandardKeyUsage bool
+	ServerAuth            bool
+	ClientAuth            bool
 }
 
 func subjectInputFromIssueRequest(req models.IssueCertificateRequest) certificateSubjectInput {
@@ -51,16 +54,31 @@ func subjectInputFromGenerateRequest(req models.GenerateCertificateRequest) cert
 }
 
 func keyUsageInputFromIssueRequest(req models.IssueCertificateRequest) certificateKeyUsageInput {
-	return certificateKeyUsageInput{
+	k := certificateKeyUsageInput{
 		ServerAuth: req.IsServerAuth,
 		ClientAuth: req.IsClientAuth,
 	}
+	if req.UseDigitalSignature || req.UseKeyEncipherment {
+		k.ApplyStandardKeyUsage = true
+		k.DigitalSignature = req.UseDigitalSignature
+		k.KeyEncipherment = req.UseKeyEncipherment
+	}
+	return k
 }
 
 func keyUsageInputFromGenerateRequest(req models.GenerateCertificateRequest) certificateKeyUsageInput {
+	digitalSignature := req.UseDigitalSignature
+	keyEncipherment := req.UseKeyEncipherment
+	if !digitalSignature && !keyEncipherment {
+		digitalSignature = true
+		keyEncipherment = true
+	}
 	return certificateKeyUsageInput{
-		ServerAuth: req.IsServerAuth,
-		ClientAuth: req.IsClientAuth,
+		DigitalSignature:      digitalSignature,
+		KeyEncipherment:       keyEncipherment,
+		ApplyStandardKeyUsage: true,
+		ServerAuth:            req.IsServerAuth,
+		ClientAuth:            req.IsClientAuth,
 	}
 }
 
@@ -77,7 +95,7 @@ func (s certificateSubjectInput) hasAny() bool {
 }
 
 func (k certificateKeyUsageInput) hasAny() bool {
-	return k.ServerAuth || k.ClientAuth
+	return k.ApplyStandardKeyUsage || k.ServerAuth || k.ClientAuth
 }
 
 func buildPKIXName(commonName string, subject certificateSubjectInput) pkix.Name {
@@ -125,7 +143,10 @@ func certificateSignOptions(subject certificateSubjectInput, keyUsage certificat
 	if subject.hasAny() {
 		opts = append(opts, subjectModifier(subject))
 	}
-	if keyUsage.hasAny() {
+	if keyUsage.ApplyStandardKeyUsage {
+		opts = append(opts, standardKeyUsageModifier(keyUsage))
+	}
+	if keyUsage.ServerAuth || keyUsage.ClientAuth {
 		opts = append(opts, extKeyUsageModifier(keyUsage))
 	}
 	return opts, nil
@@ -151,6 +172,24 @@ func subjectModifier(subject certificateSubjectInput) provisioner.SignOption {
 		if subject.Locality != "" {
 			cert.Subject.Locality = []string{subject.Locality}
 		}
+		return nil
+	})
+}
+
+func standardKeyUsageModifier(keyUsage certificateKeyUsageInput) provisioner.SignOption {
+	const standardMask = x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment
+	return provisioner.CertificateModifierFunc(func(cert *x509.Certificate, _ provisioner.SignOptions) error {
+		if cert == nil {
+			return nil
+		}
+		var usage x509.KeyUsage
+		if keyUsage.DigitalSignature {
+			usage |= x509.KeyUsageDigitalSignature
+		}
+		if keyUsage.KeyEncipherment {
+			usage |= x509.KeyUsageKeyEncipherment
+		}
+		cert.KeyUsage = (cert.KeyUsage &^ standardMask) | usage
 		return nil
 	})
 }
