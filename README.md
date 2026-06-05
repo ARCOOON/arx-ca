@@ -364,12 +364,13 @@ The container runs `arx server start` on **8080**; PKI data is mounted at `./dat
 | ------ | ---- | ---- | ----------- |
 | `GET` | `/api/v1/health` | — | Health and runtime metrics |
 | `GET` | `/api/v1/ca/root` | — | Root CA PEM |
+| `GET` | `/api/v1/ca/chain` | — | Intermediate + Root CA chain PEM download (`ca-chain.crt`) |
 | `POST` | `/api/v1/auth/login` | — | Admin JWT (`email` + `password`) |
 | `POST` | `/api/v1/certificates/issue` | Service / Admin | Sign CSR (certificate only); archives public PEM |
 | `POST` | `/api/v1/certificates/generate` | Service / Admin | Native key generation + sign; returns key PEM and escrows it encrypted at rest |
 | `GET` | `/api/v1/certificates/{serial}` | Service / Admin | Archived certificate detail (requestor, PEM, validity, escrow flag) |
 | `GET` | `/api/v1/certificates/{serial}/key` | SuperAdmin (JWT) | Decrypt and return escrowed private key PEM |
-| `GET` | `/api/v1/certificates/{serial}/bundle` | SuperAdmin (JWT) | Multi-format ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`, `fullchain.pem`, `ca.crt`) |
+| `GET` | `/api/v1/certificates/{serial}/bundle` | SuperAdmin (JWT) | Minimal ZIP bundle (`certificate.crt`, `private.key`) |
 | `POST` | `/api/v1/certificates/auto` | Admin | Generate ECDSA P-384 key + sign |
 | `GET` | `/api/v1/crl` | — | CRL (DER or PEM; alias of `/api/v1/ca/crl`) |
 | `POST` | `/api/v1/certificates/renew` | Admin / mTLS | Renew existing certificate |

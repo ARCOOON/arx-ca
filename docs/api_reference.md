@@ -389,6 +389,28 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 * `500 Internal Server Error` — root certificate unavailable.
 
 ---
+### GET /api/v1/ca/chain
+> Returns the Intermediate and Root CA certificates concatenated in PEM order (Intermediate first, Root second) as a file download suitable for trust store installation.
+
+- **Authentication:** Not required
+- **Permissions:** `None`
+
+#### Response
+
+Returns `200 OK` with:
+
+| Header | Value |
+|--------|-------|
+| `Content-Type` | `application/x-pem-file` |
+| `Content-Disposition` | `attachment; filename="ca-chain.crt"` |
+
+The response body is PEM text: Intermediate CA block, then Root CA block.
+
+**Error Codes:**
+* `405 Method Not Allowed` — non-GET request.
+* `500 Internal Server Error` — intermediate or root certificate unavailable.
+
+---
 ### GET /api/v1/ca/info
 > Returns parsed X.509 metadata and PEM strings for the active Root and Intermediate CA certificates.
 
@@ -729,6 +751,8 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 | `locality` | string | No | X.509 subject locality (`L`) |
 | `is_server_auth` | boolean | No | When `true`, adds `ExtKeyUsageServerAuth` |
 | `is_client_auth` | boolean | No | When `true`, adds `ExtKeyUsageClientAuth` |
+| `use_digital_signature` | boolean | No | When `true`, adds `KeyUsageDigitalSignature` (applied only when this field or `use_key_encipherment` is `true`) |
+| `use_key_encipherment` | boolean | No | When `true`, adds `KeyUsageKeyEncipherment` |
 
 **Example JSON:**
 ```json
@@ -742,6 +766,8 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
   "state": "CA",
   "locality": "San Francisco",
   "is_server_auth": true,
+  "use_digital_signature": true,
+  "use_key_encipherment": true,
   "metadata": {
     "owner": "platform-team",
     "environment": "production"
@@ -785,7 +811,7 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 ---
 ### POST /api/v1/certificates/generate
-> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key PEM is **AES-256-GCM encrypted at rest** in the application database (`encrypted_private_key`) using a key derived from the CA master password (`ca.password`). Only SuperAdmin JWT holders may retrieve escrowed keys via `GET /api/v1/certificates/{serial}/key`. The WebUI and API clients should assemble a multi-format ZIP bundle containing `certificate.crt`, `certificate.pem`, `private.key`, `fullchain.pem`, and `ca.crt`.
+> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key PEM is **AES-256-GCM encrypted at rest** in the application database (`encrypted_private_key`) using a key derived from the CA master password (`ca.password`). Only SuperAdmin JWT holders may retrieve escrowed keys via `GET /api/v1/certificates/{serial}/key`. The WebUI and API clients should assemble a **minimal** ZIP bundle containing only `certificate.crt` and `private.key`. Install trust anchors from `GET /api/v1/ca/chain` (Intermediate + Root PEM).
 
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
@@ -809,6 +835,8 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 | `locality` | string | No | X.509 subject locality (`L`) |
 | `is_server_auth` | boolean | No | When `true`, adds `ExtKeyUsageServerAuth` |
 | `is_client_auth` | boolean | No | When `true`, adds `ExtKeyUsageClientAuth` |
+| `use_digital_signature` | boolean | No | When `true`, adds `KeyUsageDigitalSignature`. When both standard key usage flags are omitted or `false`, the server defaults both to `true` (typical TLS leaf profile). |
+| `use_key_encipherment` | boolean | No | When `true`, adds `KeyUsageKeyEncipherment` |
 
 **Example JSON:**
 ```json
@@ -823,7 +851,9 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
   "state": "CA",
   "locality": "San Francisco",
   "is_server_auth": true,
-  "is_client_auth": true
+  "is_client_auth": true,
+  "use_digital_signature": true,
+  "use_key_encipherment": true
 }
 ```
 
@@ -1197,7 +1227,7 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 ---
 ### GET /api/v1/certificates/{serial}/bundle
-> Builds and streams a multi-format ZIP archive for a certificate with an escrowed private key. **SuperAdmin JWT only.**
+> Builds and streams a minimal ZIP archive for a certificate with an escrowed private key. **SuperAdmin JWT only.**
 
 - **Authentication:** Required (Bearer JWT only)
 - **Authorization:** `SuperAdmin` role required
@@ -1207,10 +1237,9 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 | File | Description |
 |------|-------------|
 | `certificate.crt` | Issued leaf certificate (PEM) |
-| `certificate.pem` | Same content as `certificate.crt` |
 | `private.key` | Decrypted private key PEM |
-| `fullchain.pem` | Leaf certificate concatenated with the Intermediate CA |
-| `ca.crt` | Root CA certificate PEM |
+
+> Trust anchors are not included. Download the CA chain via `GET /api/v1/ca/chain`.
 
 #### Response
 
