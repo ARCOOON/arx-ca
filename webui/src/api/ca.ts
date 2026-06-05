@@ -41,9 +41,12 @@ export async function fetchCAProvisioners(): Promise<CAProvisionersResponse> {
   return data.data
 }
 
-export async function downloadCAChain(filename = 'ca-chain.crt'): Promise<void> {
-  const response = await apiClient.get<ArrayBuffer>('/ca/chain', { responseType: 'arraybuffer' })
-  const blob = new Blob([response.data], { type: 'application/x-pem-file' })
+export async function downloadCABundle(filename = 'ca-bundle.zip'): Promise<void> {
+  const response = await apiClient.get<Blob>('/ca/chain', { responseType: 'blob' })
+  const blob =
+    response.data instanceof Blob
+      ? response.data
+      : new Blob([response.data], { type: 'application/zip' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

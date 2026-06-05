@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { downloadCAChain, fetchCAInfo, fetchCAProvisioners } from '../api/ca'
+import { downloadCABundle, fetchCAInfo, fetchCAProvisioners } from '../api/ca'
 import { fetchHealth } from '../api/health'
 import { listCertificates } from '../api/certificates'
 import type { CAInfoResponse, CAProvisionerDetail, HealthReport } from '../types/api'
@@ -53,9 +53,9 @@ async function handleDownloadCAChain(): Promise<void> {
   chainError.value = ''
 
   try {
-    await downloadCAChain()
+    await downloadCABundle()
   } catch (error) {
-    chainError.value = extractApiError(error, 'Failed to download CA chain')
+    chainError.value = extractApiError(error, 'Failed to download CA bundle')
   } finally {
     chainDownloading.value = false
   }
@@ -161,7 +161,7 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
             :disabled="chainDownloading"
             @click="handleDownloadCAChain"
           >
-            {{ chainDownloading ? 'Downloading…' : 'Download CA Chain (.crt)' }}
+            {{ chainDownloading ? 'Downloading…' : 'Download CA Bundle (.zip)' }}
           </button>
         </header>
         <p v-if="chainError" class="px-4 pt-2 text-xs" style="color: var(--danger-text)" role="alert">
