@@ -8,6 +8,7 @@ import (
 
 	"go.step.sm/crypto/pemutil"
 
+	arxcrypto "github.com/ARCOOON/arx-ca/internal/crypto"
 	"github.com/ARCOOON/arx-ca/internal/database"
 	"github.com/ARCOOON/arx-ca/internal/models"
 )
@@ -17,6 +18,8 @@ func persistIssuedCertificate(
 	store *database.CertificateStore,
 	requestorID string,
 	certPEM string,
+	privateKeyPEM string,
+	caPassword string,
 ) error {
 	if store == nil {
 		return nil
@@ -43,6 +46,18 @@ func persistIssuedCertificate(
 		CreatedAt:      time.Now().UTC(),
 	}
 
+	keyPEM := strings.TrimSpace(privateKeyPEM)
+	if keyPEM != "" {
+		if strings.TrimSpace(caPassword) == "" {
+			return fmt.Errorf("ca password is required to escrow private key material")
+		}
+		encrypted, err := arxcrypto.EncryptKey([]byte(keyPEM), caPassword)
+		if err != nil {
+			return fmt.Errorf("encrypt private key: %w", err)
+		}
+		rec.EncryptedPrivateKey = encrypted
+	}
+
 	return store.Save(ctx, rec)
 }
 
@@ -60,6 +75,7 @@ func certificateRecordFromStore(rec *database.IssuedCertificate, revoked bool) m
 		RequestorID:    rec.RequestorID,
 		CertificatePEM: rec.CertificatePEM,
 		Revoked:        revoked,
+		HasEscrowedKey: len(rec.EncryptedPrivateKey) > 0,
 	}
 
 	if cert, err := pemutil.ParseCertificate([]byte(rec.CertificatePEM)); err == nil && cert != nil {
