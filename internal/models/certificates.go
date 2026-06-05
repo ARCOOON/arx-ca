@@ -13,8 +13,10 @@ type IssueCertificateRequest struct {
 	Country            string         `json:"country,omitempty"`
 	State              string         `json:"state,omitempty"`
 	Locality           string         `json:"locality,omitempty"`
-	IsServerAuth       bool           `json:"is_server_auth,omitempty"`
-	IsClientAuth       bool           `json:"is_client_auth,omitempty"`
+	IsServerAuth         bool `json:"is_server_auth,omitempty"`
+	IsClientAuth         bool `json:"is_client_auth,omitempty"`
+	UseDigitalSignature  bool `json:"use_digital_signature,omitempty"`
+	UseKeyEncipherment   bool `json:"use_key_encipherment,omitempty"`
 }
 
 // AutoCertificateRequest describes a certificate to be generated and signed in one step.
@@ -62,8 +64,10 @@ type GenerateCertificateRequest struct {
 	Country            string   `json:"country,omitempty"`
 	State              string   `json:"state,omitempty"`
 	Locality           string   `json:"locality,omitempty"`
-	IsServerAuth       bool     `json:"is_server_auth,omitempty"`
-	IsClientAuth       bool     `json:"is_client_auth,omitempty"`
+	IsServerAuth        bool `json:"is_server_auth,omitempty"`
+	IsClientAuth        bool `json:"is_client_auth,omitempty"`
+	UseDigitalSignature bool `json:"use_digital_signature,omitempty"`
+	UseKeyEncipherment  bool `json:"use_key_encipherment,omitempty"`
 }
 
 // GenerateCertificateResponse returns PEM-encoded certificate and private key material.
