@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+	"strings"
 
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/ca"
@@ -53,6 +55,43 @@ func (h *CAHandler) Info() http.Handler {
 		}
 
 		api.WriteSuccess(w, http.StatusOK, info)
+	})
+}
+
+// Chain handles GET /api/v1/ca/chain and returns the Intermediate and Root CA certificates concatenated in PEM order.
+func (h *CAHandler) Chain() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		intermediatePEM := strings.TrimSpace(string(h.engine.IntermediateCertPEM()))
+		if intermediatePEM == "" {
+			api.WriteError(w, http.StatusInternalServerError, "intermediate certificate is unavailable")
+			return
+		}
+		rootPEM := strings.TrimSpace(string(h.engine.RootCertPEM()))
+		if rootPEM == "" {
+			api.WriteError(w, http.StatusInternalServerError, "root certificate is unavailable")
+			return
+		}
+
+		chain := intermediatePEM
+		if !strings.HasSuffix(chain, "\n") {
+			chain += "\n"
+		}
+		chain += rootPEM
+		if !strings.HasSuffix(chain, "\n") {
+			chain += "\n"
+		}
+
+		w.Header().Set("Content-Type", "application/x-pem-file")
+		w.Header().Set("Content-Disposition", `attachment; filename="ca-chain.crt"`)
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write([]byte(chain)); err != nil {
+			log.Printf("ca: write chain: %v", err)
+		}
 	})
 }
 
