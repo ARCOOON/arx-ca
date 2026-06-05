@@ -72,5 +72,8 @@ func Migrate(db *sql.DB) error {
 	if _, err := db.Exec(acmeSchemaDDL); err != nil {
 		return fmt.Errorf("migrate acme tables: %w", err)
 	}
+	if _, err := db.Exec(issuedCertificatesDDL); err != nil {
+		return fmt.Errorf("migrate issued_certificates table: %w", err)
+	}
 	return nil
 }
