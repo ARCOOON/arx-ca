@@ -71,6 +71,22 @@ export interface GenerateCertificateRequest {
 export interface GenerateCertificateResponse {
   certificate_pem: string
   private_key_pem: string
+  serial?: string
+  not_before?: string
+  not_after?: string
+}
+
+export interface CertificateRecordDetail {
+  serial: string
+  common_name: string
+  subject: string
+  dns_names?: string[]
+  ip_addresses?: string[]
+  not_before: string
+  not_after: string
+  requestor_id: string
+  certificate_pem: string
+  revoked: boolean
 }
 
 export interface HealthReport {
