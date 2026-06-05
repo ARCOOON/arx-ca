@@ -1,5 +1,6 @@
 import type {
   ApiEnvelope,
+  CertificatePrivateKeyResponse,
   CertificateRecordDetail,
   GenerateCertificateRequest,
   GenerateCertificateResponse,
@@ -78,4 +79,40 @@ export async function fetchCertificateBySerial(serial: string): Promise<Certific
   }
 
   return payload.data
+}
+
+export async function fetchCertificatePrivateKey(serial: string): Promise<CertificatePrivateKeyResponse> {
+  const encoded = encodeURIComponent(serial)
+  const response = await apiClient.get<ApiEnvelope<CertificatePrivateKeyResponse>>(
+    `/certificates/${encoded}/key`,
+  )
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data?.private_key_pem) {
+    throw new Error('Private key response did not include key material')
+  }
+
+  return payload.data
+}
+
+export async function downloadCertificateBundleFile(serial: string, filename: string): Promise<void> {
+  const encoded = encodeURIComponent(serial)
+  const response = await apiClient.get<ArrayBuffer>(`/certificates/${encoded}/bundle`, {
+    responseType: 'arraybuffer',
+  })
+
+  const blob = new Blob([response.data], { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
 }

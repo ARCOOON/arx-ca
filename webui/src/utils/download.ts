@@ -14,17 +14,29 @@ export function downloadTextFile(filename: string, content: string, mimeType = '
   triggerBlobDownload(filename, new Blob([content], { type: mimeType }))
 }
 
+export interface CertificateBundleInput {
+  certificatePem: string
+  privateKeyPem: string
+  intermediatePem: string
+  rootPem: string
+}
+
 /**
- * Builds a minimal ZIP archive (store only, no compression) for two PEM files.
+ * Builds a minimal ZIP archive (store only, no compression) for a multi-format certificate bundle.
  */
-export function downloadPemZip(
-  archiveName: string,
-  certificatePem: string,
-  privateKeyPem: string,
-): void {
+export function downloadCertificateBundleZip(archiveName: string, input: CertificateBundleInput): void {
+  const certificatePem = input.certificatePem.trim()
+  const privateKeyPem = input.privateKeyPem.trim()
+  const intermediatePem = input.intermediatePem.trim()
+  const rootPem = input.rootPem.trim()
+  const fullChain = `${certificatePem}\n${intermediatePem}`
+
   const files: Array<{ name: string; data: Uint8Array }> = [
+    { name: 'certificate.crt', data: new TextEncoder().encode(certificatePem) },
     { name: 'certificate.pem', data: new TextEncoder().encode(certificatePem) },
-    { name: 'private-key.pem', data: new TextEncoder().encode(privateKeyPem) },
+    { name: 'private.key', data: new TextEncoder().encode(privateKeyPem) },
+    { name: 'fullchain.pem', data: new TextEncoder().encode(fullChain) },
+    { name: 'ca.crt', data: new TextEncoder().encode(rootPem) },
   ]
 
   const chunks: Uint8Array[] = []

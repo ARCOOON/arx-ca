@@ -87,6 +87,12 @@ export interface CertificateRecordDetail {
   requestor_id: string
   certificate_pem: string
   revoked: boolean
+  has_escrowed_key?: boolean
+}
+
+export interface CertificatePrivateKeyResponse {
+  serial: string
+  private_key_pem: string
 }
 
 export interface HealthReport {
