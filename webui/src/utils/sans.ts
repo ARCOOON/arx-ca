@@ -29,6 +29,22 @@ export function isValidDNSName(value: string): boolean {
   if (!name || name.length > 253 || name.startsWith('.') || name.endsWith('.') || name.includes('..')) {
     return false
   }
+
+  // Wildcard DNS names are allowed only as the entire leftmost label ("*.example.com").
+  if (name.startsWith('*.')) {
+    if (name.length <= 2) {
+      return false
+    }
+    const rest = name.slice(2)
+    if (rest.includes('*')) {
+      return false
+    }
+    return DNS_NAME_PATTERN.test(rest)
+  }
+
+  if (name.includes('*')) {
+    return false
+  }
   return DNS_NAME_PATTERN.test(name)
 }
 
