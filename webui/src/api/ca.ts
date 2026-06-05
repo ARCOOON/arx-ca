@@ -40,3 +40,17 @@ export async function fetchCAProvisioners(): Promise<CAProvisionersResponse> {
   }
   return data.data
 }
+
+export async function downloadCAChain(filename = 'ca-chain.crt'): Promise<void> {
+  const response = await apiClient.get<ArrayBuffer>('/ca/chain', { responseType: 'arraybuffer' })
+  const blob = new Blob([response.data], { type: 'application/x-pem-file' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
