@@ -785,7 +785,7 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 ---
 ### POST /api/v1/certificates/generate
-> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key is never stored on the server or database; only the public certificate PEM is archived for `GET /api/v1/certificates/{serial}`.
+> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key PEM is **AES-256-GCM encrypted at rest** in the application database (`encrypted_private_key`) using a key derived from the CA master password (`ca.password`). Only SuperAdmin JWT holders may retrieve escrowed keys via `GET /api/v1/certificates/{serial}/key`. The WebUI and API clients should assemble a multi-format ZIP bundle containing `certificate.crt`, `certificate.pem`, `private.key`, `fullchain.pem`, and `ca.crt`.
 
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
@@ -837,8 +837,8 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `certificate_pem` | string | Yes | Issued certificate PEM |
-| `private_key_pem` | string | Yes | Generated private key PEM (PKCS#8) |
+| `certificate_pem` | string | Yes | Public certificate PEM |
+| `private_key_pem` | string | Yes | Generated private key PEM (PKCS#8). Also escrowed encrypted at rest when archival succeeds. |
 | `serial` | string | Yes | Certificate serial |
 | `not_before` | string | Yes | Validity start |
 | `not_after` | string | Yes | Validity end |
@@ -1129,8 +1129,9 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 | `not_before` | string (RFC3339) | Yes | Validity start (`Issued At`) |
 | `not_after` | string (RFC3339) | Yes | Validity end (`Expiry Date`) |
 | `requestor_id` | string | Yes | Application user ID or service account ID of the caller |
-| `certificate_pem` | string | Yes | Public certificate PEM (private keys are never stored) |
+| `certificate_pem` | string | Yes | Public certificate PEM |
 | `revoked` | bool | Yes | Whether the serial is revoked in the step-ca database |
+| `has_escrowed_key` | bool | Yes | Whether an AES-256-GCM encrypted private key blob is stored for this serial |
 
 **Example JSON (`data`):**
 ```json
@@ -1143,7 +1144,8 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
   "not_after": "2026-09-01T00:00:00Z",
   "requestor_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
-  "revoked": false
+  "revoked": false,
+  "has_escrowed_key": true
 }
 ```
 
@@ -1156,6 +1158,71 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 * `404 Not Found` — no archived record for the serial (certificates issued before archival was enabled are not available).
 * `405 Method Not Allowed` — wrong HTTP method.
 * `500 Internal Server Error` — database or lookup failure.
+
+---
+### GET /api/v1/certificates/{serial}/key
+> Decrypts and returns the escrowed private key PEM for a natively generated certificate. **SuperAdmin JWT only** — service account API keys are rejected even when they hold elevated roles.
+
+- **Authentication:** Required (Bearer JWT only)
+- **Authorization:** `SuperAdmin` role required (checked explicitly in the handler)
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `serial` | string | Yes | Certificate serial number |
+| `private_key_pem` | string | Yes | Decrypted PKCS#8 private key PEM |
+
+**Example JSON (`data`):**
+```json
+{
+  "serial": "12345678901234567890",
+  "private_key_pem": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+}
+```
+
+</details>
+
+**Error Codes:**
+* `400 Bad Request` — missing serial path parameter.
+* `401 Unauthorized` — missing or invalid JWT.
+* `403 Forbidden` — caller is not a SuperAdmin JWT principal.
+* `404 Not Found` — no escrowed private key for the serial (CSR-issued certificates never store keys).
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — decryption or database failure.
+
+---
+### GET /api/v1/certificates/{serial}/bundle
+> Builds and streams a multi-format ZIP archive for a certificate with an escrowed private key. **SuperAdmin JWT only.**
+
+- **Authentication:** Required (Bearer JWT only)
+- **Authorization:** `SuperAdmin` role required
+
+#### ZIP contents
+
+| File | Description |
+|------|-------------|
+| `certificate.crt` | Issued leaf certificate (PEM) |
+| `certificate.pem` | Same content as `certificate.crt` |
+| `private.key` | Decrypted private key PEM |
+| `fullchain.pem` | Leaf certificate concatenated with the Intermediate CA |
+| `ca.crt` | Root CA certificate PEM |
+
+#### Response
+
+Returns `200 OK` with `Content-Type: application/zip` and `Content-Disposition: attachment`.
+
+**Error Codes:**
+* `400 Bad Request` — missing serial path parameter.
+* `401 Unauthorized` — missing or invalid JWT.
+* `403 Forbidden` — caller is not a SuperAdmin JWT principal.
+* `404 Not Found` — certificate record or escrowed private key not found.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — archive build failure.
 
 ---
 ### POST /api/v1/certificates/lint
