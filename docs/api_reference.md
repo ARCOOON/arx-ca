@@ -390,7 +390,7 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 ---
 ### GET /api/v1/ca/chain
-> Returns the Intermediate and Root CA certificates concatenated in PEM order (Intermediate first, Root second) as a file download suitable for trust store installation.
+> Returns a ZIP archive containing the active Root CA and Intermediate CA public certificates, plus concatenated trust chains in PEM and CRT form (Intermediate first, Root second).
 
 - **Authentication:** Not required
 - **Permissions:** `None`
@@ -401,14 +401,21 @@ Returns `200 OK` with:
 
 | Header | Value |
 |--------|-------|
-| `Content-Type` | `application/x-pem-file` |
-| `Content-Disposition` | `attachment; filename="ca-chain.crt"` |
+| `Content-Type` | `application/zip` |
+| `Content-Disposition` | `attachment; filename="ca-bundle.zip"` |
 
-The response body is PEM text: Intermediate CA block, then Root CA block.
+The response body is a ZIP archive with exactly these entries:
+
+| File | Contents |
+|------|----------|
+| `root.pem` | Root CA certificate (PEM) |
+| `intermediate.pem` | Intermediate CA certificate (PEM) |
+| `ca-chain.pem` | Concatenated chain: Intermediate block, then Root block (PEM) |
+| `ca-chain.crt` | Same concatenated chain as `ca-chain.pem` |
 
 **Error Codes:**
 * `405 Method Not Allowed` — non-GET request.
-* `500 Internal Server Error` — intermediate or root certificate unavailable.
+* `500 Internal Server Error` — intermediate or root certificate unavailable, or ZIP generation failed.
 
 ---
 ### GET /api/v1/ca/info
@@ -811,7 +818,7 @@ The response body is PEM text: Intermediate CA block, then Root CA block.
 
 ---
 ### POST /api/v1/certificates/generate
-> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key PEM is **AES-256-GCM encrypted at rest** in the application database (`encrypted_private_key`) using a key derived from the CA master password (`ca.password`). Only SuperAdmin JWT holders may retrieve escrowed keys via `GET /api/v1/certificates/{serial}/key`. The WebUI and API clients should assemble a **minimal** ZIP bundle containing only `certificate.crt` and `private.key`. Install trust anchors from `GET /api/v1/ca/chain` (Intermediate + Root PEM).
+> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key PEM is **AES-256-GCM encrypted at rest** in the application database (`encrypted_private_key`) using a key derived from the CA master password (`ca.password`). Only SuperAdmin JWT holders may retrieve escrowed keys via `GET /api/v1/certificates/{serial}/key`. The WebUI and API clients should assemble a **minimal** ZIP bundle containing only `certificate.crt` and `private.key`. Install trust anchors from `GET /api/v1/ca/chain` (`ca-bundle.zip` with individual certs and chain files).
 
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
@@ -1239,7 +1246,7 @@ The response body is PEM text: Intermediate CA block, then Root CA block.
 | `certificate.crt` | Issued leaf certificate (PEM) |
 | `private.key` | Decrypted private key PEM |
 
-> Trust anchors are not included. Download the CA chain via `GET /api/v1/ca/chain`.
+> Trust anchors are not included. Download the CA bundle via `GET /api/v1/ca/chain` (`ca-bundle.zip`).
 
 #### Response
 
