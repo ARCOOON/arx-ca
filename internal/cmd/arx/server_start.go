@@ -139,6 +139,8 @@ func runServer() error {
 	mux.Handle("POST /api/v1/certificates/lint", certPerm(auth.PermCertificatesLint, certHandler.Lint()))
 	mux.Handle("GET /api/v1/certificates", certPerm(auth.PermCertificatesRead, certHandler.List()))
 	mux.Handle("GET /api/v1/certificates/{serial}", certPerm(auth.PermCertificatesRead, certHandler.GetBySerial()))
+	mux.Handle("GET /api/v1/certificates/{serial}/key", adminPerm(auth.PermCertificatesRead, certHandler.GetPrivateKey()))
+	mux.Handle("GET /api/v1/certificates/{serial}/bundle", adminPerm(auth.PermCertificatesRead, certHandler.DownloadBundle()))
 	mux.Handle("POST /api/v1/provisioners/token", certPerm(auth.PermProvisionersToken, provisionerHandler.Token()))
 	mux.Handle("GET /api/v1/k8s/status", certPerm(auth.PermEnrollmentStatus, provisionerHandler.K8sStatus()))
 	mux.Handle("POST /api/v1/certificates/renew", renewPerm(renewalHandler.Renew()))
