@@ -1,25 +1,34 @@
 package handlers
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/ca"
+	"github.com/ARCOOON/arx-ca/internal/database"
 	"github.com/ARCOOON/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/repository"
 )
 
 const maxCertificateBodyBytes = 1 << 20 // 1 MiB
 
 // CertificateHandler serves protected certificate lifecycle endpoints.
 type CertificateHandler struct {
-	engine *ca.PKIEngine
+	engine    *ca.PKIEngine
+	certStore *database.CertificateStore
+	userStore *repository.UserStore
 }
 
-// NewCertificateHandler constructs a certificate handler bound to the PKI engine.
-func NewCertificateHandler(engine *ca.PKIEngine) *CertificateHandler {
-	return &CertificateHandler{engine: engine}
+// NewCertificateHandler constructs a certificate handler bound to the PKI engine and application stores.
+func NewCertificateHandler(engine *ca.PKIEngine, certStore *database.CertificateStore, userStore *repository.UserStore) *CertificateHandler {
+	return &CertificateHandler{
+		engine:    engine,
+		certStore: certStore,
+		userStore: userStore,
+	}
 }
 
 // Issue handles POST /api/v1/certificates/issue.
@@ -55,6 +64,10 @@ func (h *CertificateHandler) Issue() http.Handler {
 				log.Printf("certificates: issue: %v", err)
 			}
 			api.WriteError(w, status, message)
+			return
+		}
+
+		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM); err != nil {
 			return
 		}
 
@@ -201,8 +214,71 @@ func (h *CertificateHandler) Generate() http.Handler {
 			return
 		}
 
+		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM); err != nil {
+			return
+		}
+
 		api.WriteSuccess(w, http.StatusCreated, resp)
 	})
+}
+
+// GetBySerial handles GET /api/v1/certificates/{serial}.
+func (h *CertificateHandler) GetBySerial() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		serial := strings.TrimSpace(r.PathValue("serial"))
+		if serial == "" {
+			api.WriteError(w, http.StatusBadRequest, "serial is required")
+			return
+		}
+
+		if h.certStore == nil {
+			api.WriteError(w, http.StatusInternalServerError, "certificate archive is unavailable")
+			return
+		}
+
+		rec, err := h.certStore.GetBySerial(r.Context(), serial)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				api.WriteError(w, http.StatusNotFound, "certificate record not found")
+				return
+			}
+			log.Printf("certificates: get record: %v", err)
+			api.WriteError(w, http.StatusInternalServerError, "failed to load certificate record")
+			return
+		}
+
+		revoked := false
+		if h.engine != nil && h.engine.Authority() != nil {
+			revoked, _ = h.engine.Authority().IsRevoked(rec.Serial)
+		}
+
+		api.WriteSuccess(w, http.StatusOK, certificateRecordFromStore(rec, revoked))
+	})
+}
+
+func (h *CertificateHandler) persistCertificate(ctx context.Context, w http.ResponseWriter, certPEM string) error {
+	if h.certStore == nil {
+		return nil
+	}
+
+	requestorID, err := ResolveRequestorID(ctx, h.userStore)
+	if err != nil {
+		log.Printf("certificates: resolve requestor: %v", err)
+		api.WriteError(w, http.StatusInternalServerError, "failed to record certificate metadata")
+		return err
+	}
+
+	if err := persistIssuedCertificate(ctx, h.certStore, requestorID, certPEM); err != nil {
+		log.Printf("certificates: persist record: %v", err)
+		api.WriteError(w, http.StatusInternalServerError, "failed to archive issued certificate")
+		return err
+	}
+	return nil
 }
 
 // List handles GET /api/v1/certificates.
