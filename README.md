@@ -364,7 +364,7 @@ The container runs `arx server start` on **8080**; PKI data is mounted at `./dat
 | ------ | ---- | ---- | ----------- |
 | `GET` | `/api/v1/health` | — | Health and runtime metrics |
 | `GET` | `/api/v1/ca/root` | — | Root CA PEM |
-| `GET` | `/api/v1/ca/chain` | — | CA bundle ZIP download (`ca-bundle.zip`: root, intermediate, chain PEM/CRT) |
+| `GET` | `/api/v1/ca/chain` | — | CA bundle ZIP (`ca-bundle.zip`: root.pem/crt, intermediate.pem/crt, ca-chain.pem/crt) |
 | `POST` | `/api/v1/auth/login` | — | Admin JWT (`email` + `password`) |
 | `POST` | `/api/v1/certificates/issue` | Service / Admin | Sign CSR (certificate only); archives public PEM |
 | `POST` | `/api/v1/certificates/generate` | Service / Admin | Native key generation + sign; returns key PEM and escrows it encrypted at rest |

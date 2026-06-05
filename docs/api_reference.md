@@ -409,9 +409,11 @@ The response body is a ZIP archive with exactly these entries:
 | File | Contents |
 |------|----------|
 | `root.pem` | Root CA certificate (PEM) |
+| `root.crt` | Same content as `root.pem` |
 | `intermediate.pem` | Intermediate CA certificate (PEM) |
+| `intermediate.crt` | Same content as `intermediate.pem` |
 | `ca-chain.pem` | Concatenated chain: Intermediate block, then Root block (PEM) |
-| `ca-chain.crt` | Same concatenated chain as `ca-chain.pem` |
+| `ca-chain.crt` | Same content as `ca-chain.pem` |
 
 **Error Codes:**
 * `405 Method Not Allowed` — non-GET request.
