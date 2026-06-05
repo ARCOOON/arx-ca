@@ -184,8 +184,8 @@ func DefaultServerConfig() ServerConfig {
 		CA: CAConfig{
 			RootPath:         ".pki/certs/root_ca.crt",
 			IntermediatePath: ".pki/certs/intermediate_ca.crt",
-			ProvisionerName:  "ca-admin",
-			MaxTTL:           "8760h",
+			ProvisionerName:  "arx-admin",
+			MaxTTL:           "87600h",
 			Provisioners:     DefaultCAProvisionersConfig(),
 		},
 		Security: SecurityConfig{
@@ -199,8 +199,8 @@ func DefaultServerConfig() ServerConfig {
 		Telemetry: TelemetryConfig{
 			ServiceName:      "arx-ca",
 			ExporterEndpoint: "http://localhost:4318",
-			ExporterInsecure: true,
-			SDKDisabled:      false,
+			ExporterInsecure: false,
+			SDKDisabled:      true,
 		},
 		Service: ServiceConfig{
 			RunAsUser:  "arx-ca",
@@ -219,7 +219,7 @@ func DefaultServerConfig() ServerConfig {
 			},
 			CORS: WebUICORSConfig{
 				AllowedOrigins: []string{"*"},
-				AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+				AllowedMethods: []string{"*"},
 				AllowedHeaders: []string{"Authorization", "Content-Type", "Accept", "X-API-Key", "*"},
 			},
 		},
