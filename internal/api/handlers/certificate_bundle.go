@@ -19,23 +19,33 @@ func buildCertificateBundleZip(input certificateBundleInput) ([]byte, error) {
 	if strings.TrimSpace(input.PrivateKeyPEM) == "" {
 		return nil, fmt.Errorf("private_key_pem is required")
 	}
-	certificatePEM := input.CertificatePEM
-	privateKeyPEM := input.PrivateKeyPEM
+	certificatePEM := strings.TrimSpace(input.CertificatePEM)
+	if !strings.HasSuffix(certificatePEM, "\n") {
+		certificatePEM += "\n"
+	}
+	privateKeyPEM := strings.TrimSpace(input.PrivateKeyPEM)
+	if !strings.HasSuffix(privateKeyPEM, "\n") {
+		privateKeyPEM += "\n"
+	}
 
-	files := map[string]string{
-		"certificate.crt": certificatePEM,
-		"private.key":     privateKeyPEM,
+	entries := []struct {
+		name    string
+		content string
+	}{
+		{name: "certificate.crt", content: certificatePEM},
+		{name: "certificate.pem", content: certificatePEM},
+		{name: "private.key", content: privateKeyPEM},
 	}
 
 	var buf bytes.Buffer
 	writer := zip.NewWriter(&buf)
-	for name, content := range files {
-		entry, err := writer.Create(name)
+	for _, entry := range entries {
+		file, err := writer.Create(entry.name)
 		if err != nil {
-			return nil, fmt.Errorf("create zip entry %q: %w", name, err)
+			return nil, fmt.Errorf("create zip entry %q: %w", entry.name, err)
 		}
-		if _, err := entry.Write([]byte(content)); err != nil {
-			return nil, fmt.Errorf("write zip entry %q: %w", name, err)
+		if _, err := file.Write([]byte(entry.content)); err != nil {
+			return nil, fmt.Errorf("write zip entry %q: %w", entry.name, err)
 		}
 	}
 	if err := writer.Close(); err != nil {

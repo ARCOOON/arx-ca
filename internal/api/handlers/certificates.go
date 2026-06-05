@@ -221,6 +221,18 @@ func (h *CertificateHandler) Generate() http.Handler {
 			return
 		}
 
+		if wantsCertificateBundleZip(r) {
+			safeName := strings.TrimSpace(req.CommonName)
+			if safeName == "" {
+				safeName = resp.Serial
+			}
+			if err := h.writeCertificateBundleResponse(w, resp.CertificatePEM, resp.PrivateKeyPEM, safeName); err != nil {
+				log.Printf("certificates: generate bundle: %v", err)
+				api.WriteError(w, http.StatusInternalServerError, "failed to build certificate bundle")
+			}
+			return
+		}
+
 		api.WriteSuccess(w, http.StatusCreated, resp)
 	})
 }
@@ -329,13 +341,7 @@ func (h *CertificateHandler) DownloadBundle() http.Handler {
 		if safeName == "" {
 			safeName = serial
 		}
-		filename := sanitizeDownloadFilename(safeName) + "-bundle.zip"
-		w.Header().Set("Content-Type", "application/zip")
-		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(bundle); err != nil {
-			log.Printf("certificates: write bundle: %v", err)
-		}
+		writeCertificateBundleBytes(w, bundle, safeName)
 	})
 }
 
@@ -429,6 +435,37 @@ func (h *CertificateHandler) buildBundleFromMaterial(certificatePEM, privateKeyP
 		CertificatePEM: certificatePEM,
 		PrivateKeyPEM:  privateKeyPEM,
 	})
+}
+
+func wantsCertificateBundleZip(r *http.Request) bool {
+	if strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("format")), "zip") {
+		return true
+	}
+	for _, value := range r.Header.Values("Accept") {
+		if strings.Contains(strings.ToLower(value), "application/zip") {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *CertificateHandler) writeCertificateBundleResponse(w http.ResponseWriter, certificatePEM, privateKeyPEM, archiveBaseName string) error {
+	bundle, err := h.buildBundleFromMaterial(certificatePEM, privateKeyPEM)
+	if err != nil {
+		return err
+	}
+	writeCertificateBundleBytes(w, bundle, archiveBaseName)
+	return nil
+}
+
+func writeCertificateBundleBytes(w http.ResponseWriter, bundle []byte, archiveBaseName string) {
+	filename := sanitizeDownloadFilename(archiveBaseName) + "-bundle.zip"
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(bundle); err != nil {
+		log.Printf("certificates: write bundle: %v", err)
+	}
 }
 
 func sanitizeDownloadFilename(value string) string {
