@@ -70,6 +70,23 @@ type GenerateCertificateRequest struct {
 type GenerateCertificateResponse struct {
 	CertificatePEM string `json:"certificate_pem"`
 	PrivateKeyPEM  string `json:"private_key_pem"`
+	Serial         string `json:"serial"`
+	NotBefore      string `json:"not_before"`
+	NotAfter       string `json:"not_after"`
+}
+
+// CertificateRecordDetail is a persisted issued certificate with operator metadata.
+type CertificateRecordDetail struct {
+	Serial         string   `json:"serial"`
+	CommonName     string   `json:"common_name"`
+	Subject        string   `json:"subject"`
+	DNSNames       []string `json:"dns_names,omitempty"`
+	IPAddresses    []string `json:"ip_addresses,omitempty"`
+	NotBefore      string   `json:"not_before"`
+	NotAfter       string   `json:"not_after"`
+	RequestorID    string   `json:"requestor_id"`
+	CertificatePEM string   `json:"certificate_pem"`
+	Revoked        bool     `json:"revoked"`
 }
 
 // RevokeCertificateResponse confirms passive revocation in the step-ca database.
