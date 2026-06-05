@@ -40,7 +40,7 @@ There are no application-level barrel files under `src/`; use direct module path
 
 Authenticated routes render inside `src/components/layout/AppShell.vue` with a collapsible sidebar, top bar (including a light/dark theme toggle persisted in `localStorage`), and CSS-variable theming in `src/assets/theme.css`.
 
-The Certificates view exposes CRL download (`GET /crl`), CSR signing, native generation with a multi-format ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`, `fullchain.pem`, `ca.crt`), and SuperAdmin-only escrowed key retrieval in the certificate details modal.
+The Certificates view exposes CRL download (`GET /crl`), CSR signing, native generation with a minimal ZIP bundle (`certificate.crt`, `private.key`) plus standard/extended key usage toggles, and SuperAdmin-only escrowed key retrieval in the certificate details modal. The Dashboard exposes **Download CA Chain (.crt)** (`GET /ca/chain`, `ca-chain.crt`).
 
 ## Structure
 
