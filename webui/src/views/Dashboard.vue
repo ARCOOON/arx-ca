@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { fetchCAInfo, fetchCAProvisioners } from '../api/ca'
+import { downloadCAChain, fetchCAInfo, fetchCAProvisioners } from '../api/ca'
 import { fetchHealth } from '../api/health'
 import { listCertificates } from '../api/certificates'
 import type { CAInfoResponse, CAProvisionerDetail, HealthReport } from '../types/api'
@@ -21,6 +21,8 @@ const caProvisioners = ref<CAProvisionerDetail[]>([])
 const certificateTotal = ref<number | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref('')
+const chainDownloading = ref(false)
+const chainError = ref('')
 
 const backendDetails = computed(() => parseBackendDetails(health.value?.ca_backend.message))
 
@@ -45,6 +47,19 @@ onMounted(async () => {
     isLoading.value = false
   }
 })
+
+async function handleDownloadCAChain(): Promise<void> {
+  chainDownloading.value = true
+  chainError.value = ''
+
+  try {
+    await downloadCAChain()
+  } catch (error) {
+    chainError.value = extractApiError(error, 'Failed to download CA chain')
+  } finally {
+    chainDownloading.value = false
+  }
+}
 
 function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
   if (status === 'healthy') {
@@ -138,9 +153,20 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
       </section>
 
       <section v-if="caInfo" class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
+        <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
           <h2 class="text-sm font-semibold ui-text-primary">Certificate Authorities</h2>
+          <button
+            type="button"
+            class="ui-btn-secondary"
+            :disabled="chainDownloading"
+            @click="handleDownloadCAChain"
+          >
+            {{ chainDownloading ? 'Downloading…' : 'Download CA Chain (.crt)' }}
+          </button>
         </header>
+        <p v-if="chainError" class="px-4 pt-2 text-xs" style="color: var(--danger-text)" role="alert">
+          {{ chainError }}
+        </p>
         <div class="grid gap-px lg:grid-cols-2" style="background-color: var(--border-subtle)">
           <article
             v-for="entry in [

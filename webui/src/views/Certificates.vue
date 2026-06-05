@@ -9,7 +9,6 @@ import {
   issueCertificate,
   listCertificates,
 } from '../api/certificates'
-import { fetchIntermediateCertPEM, fetchRootCertPEM } from '../api/ca'
 import type { CertificateRecordDetail, CertificateSummary, KeyAlgorithm } from '../types/api'
 import DataTable from '../components/ui/DataTable.vue'
 import FlatToggle from '../components/ui/FlatToggle.vue'
@@ -68,6 +67,8 @@ const nativeState = ref('')
 const nativeLocality = ref('')
 const nativeServerAuth = ref(false)
 const nativeClientAuth = ref(false)
+const nativeDigitalSignature = ref(true)
+const nativeKeyEncipherment = ref(true)
 
 const tableColumns = [
   { key: 'serial', label: 'Serial Number', cellClass: 'font-mono text-[11px]' },
@@ -237,19 +238,14 @@ async function submitNativeGeneration(): Promise<void> {
       locality: nativeLocality.value.trim() || undefined,
       is_server_auth: nativeServerAuth.value || undefined,
       is_client_auth: nativeClientAuth.value || undefined,
+      use_digital_signature: nativeDigitalSignature.value,
+      use_key_encipherment: nativeKeyEncipherment.value,
     })
-
-    const [rootPem, intermediatePem] = await Promise.all([
-      fetchRootCertPEM(),
-      fetchIntermediateCertPEM(),
-    ])
 
     const safeName = commonName.replace(/[^a-zA-Z0-9._-]+/g, '_')
     downloadCertificateBundleZip(`${safeName}-bundle.zip`, {
       certificatePem: result.certificate_pem,
       privateKeyPem: result.private_key_pem,
-      intermediatePem,
-      rootPem,
     })
 
     issueSuccess.value =
@@ -263,6 +259,8 @@ async function submitNativeGeneration(): Promise<void> {
     nativeLocality.value = ''
     nativeServerAuth.value = false
     nativeClientAuth.value = false
+    nativeDigitalSignature.value = true
+    nativeKeyEncipherment.value = true
     nativeAdvancedOpen.value = false
     await loadCertificates()
   } catch (error) {
@@ -588,7 +586,7 @@ async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
       <p v-else class="mb-3 text-xs ui-text-muted">
         Generates a key pair and signs the certificate via
         <code class="ui-code">POST /api/v1/certificates/generate</code>. The private key is
-        returned immediately in a multi-format ZIP bundle and escrowed encrypted at rest for SuperAdmin retrieval.
+        returned immediately in a minimal ZIP bundle (`certificate.crt`, `private.key`) and escrowed encrypted at rest for SuperAdmin retrieval. Download the CA chain separately from the Dashboard.
       </p>
 
       <div v-if="issueError" class="mb-3 ui-alert-error text-xs" role="alert">
@@ -694,6 +692,20 @@ async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
             </div>
           </div>
         </details>
+
+        <div class="mt-3 space-y-2">
+          <p class="text-xs font-medium ui-text-secondary">Standard Key Usage</p>
+          <FlatToggle
+            label="Digital Signature"
+            :enabled="nativeDigitalSignature"
+            @toggle="nativeDigitalSignature = !nativeDigitalSignature"
+          />
+          <FlatToggle
+            label="Key Encipherment"
+            :enabled="nativeKeyEncipherment"
+            @toggle="nativeKeyEncipherment = !nativeKeyEncipherment"
+          />
+        </div>
 
         <div class="mt-3 space-y-2">
           <p class="text-xs font-medium ui-text-secondary">Extended Key Usage</p>
