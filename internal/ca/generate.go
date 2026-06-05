@@ -126,5 +126,21 @@ func isValidDNSName(name string) bool {
 	if strings.Contains(name, "..") {
 		return false
 	}
+
+	// Wildcard DNS names are allowed only as the entire leftmost label ("*.example.com").
+	if strings.HasPrefix(name, "*.") {
+		if len(name) <= 2 {
+			return false
+		}
+		rest := name[2:]
+		if strings.Contains(rest, "*") {
+			return false
+		}
+		return dnsNamePattern.MatchString(rest)
+	}
+
+	if strings.Contains(name, "*") {
+		return false
+	}
 	return dnsNamePattern.MatchString(name)
 }
