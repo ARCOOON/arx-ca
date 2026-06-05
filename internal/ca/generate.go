@@ -21,7 +21,7 @@ const (
 var dnsNamePattern = regexp.MustCompile(`^(?i:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?i:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$`)
 
 // GenerateCertificate generates a private key, builds a CSR, signs it, and returns PEM material.
-// The private key is never persisted by the CA.
+// The handler layer encrypts and persists the private key for SuperAdmin escrow retrieval.
 func (e *PKIEngine) GenerateCertificate(ctx context.Context, req models.GenerateCertificateRequest) (*models.GenerateCertificateResponse, error) {
 	if e == nil || e.auth == nil {
 		return nil, fmt.Errorf("CA engine is not initialized")
