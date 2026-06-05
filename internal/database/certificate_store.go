@@ -8,16 +8,18 @@ import (
 	"time"
 )
 
-// IssuedCertificate is a persisted public certificate record (no private key material).
+// IssuedCertificate is a persisted certificate record. Private key material is stored
+// only as AES-256-GCM encrypted bytes when escrow is enabled for native generation.
 type IssuedCertificate struct {
-	Serial         string
-	CommonName     string
-	Subject        string
-	CertificatePEM string
-	NotBefore      time.Time
-	NotAfter       time.Time
-	RequestorID    string
-	CreatedAt      time.Time
+	Serial              string
+	CommonName          string
+	Subject             string
+	CertificatePEM      string
+	EncryptedPrivateKey []byte
+	NotBefore           time.Time
+	NotAfter            time.Time
+	RequestorID         string
+	CreatedAt           time.Time
 }
 
 const issuedCertificatesDDL = `
@@ -26,6 +28,7 @@ CREATE TABLE IF NOT EXISTS issued_certificates (
 	common_name TEXT NOT NULL,
 	subject TEXT NOT NULL,
 	certificate_pem TEXT NOT NULL,
+	encrypted_private_key BLOB,
 	not_before TEXT NOT NULL,
 	not_after TEXT NOT NULL,
 	requestor_id TEXT NOT NULL,
@@ -45,7 +48,8 @@ func NewCertificateStore(db *sql.DB) *CertificateStore {
 	return &CertificateStore{db: db}
 }
 
-// Save inserts or replaces a public certificate record. Private keys must never be passed here.
+// Save inserts or replaces a certificate record. EncryptedPrivateKey is optional and
+// preserved on upsert when omitted.
 func (s *CertificateStore) Save(ctx context.Context, rec IssuedCertificate) error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("certificate store is not initialized")
@@ -70,22 +74,29 @@ func (s *CertificateStore) Save(ctx context.Context, rec IssuedCertificate) erro
 	}
 
 	query := `INSERT INTO issued_certificates (
-		serial, common_name, subject, certificate_pem, not_before, not_after, requestor_id, created_at
-	) VALUES (` + s.placeholders(8) + `)
+		serial, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at
+	) VALUES (` + s.placeholders(9) + `)
 	ON CONFLICT(serial) DO UPDATE SET
 		common_name = excluded.common_name,
 		subject = excluded.subject,
 		certificate_pem = excluded.certificate_pem,
+		encrypted_private_key = COALESCE(excluded.encrypted_private_key, issued_certificates.encrypted_private_key),
 		not_before = excluded.not_before,
 		not_after = excluded.not_after,
 		requestor_id = excluded.requestor_id,
 		created_at = excluded.created_at`
+
+	var encryptedKey any
+	if len(rec.EncryptedPrivateKey) > 0 {
+		encryptedKey = rec.EncryptedPrivateKey
+	}
 
 	_, err := s.db.ExecContext(ctx, query,
 		serial,
 		strings.TrimSpace(rec.CommonName),
 		strings.TrimSpace(rec.Subject),
 		pem,
+		encryptedKey,
 		rec.NotBefore.UTC().Format(time.RFC3339),
 		rec.NotAfter.UTC().Format(time.RFC3339),
 		requestorID,
@@ -108,14 +119,15 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 		return nil, fmt.Errorf("serial is required")
 	}
 
-	query := `SELECT serial, common_name, subject, certificate_pem, not_before, not_after, requestor_id, created_at
+	query := `SELECT serial, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at
 		FROM issued_certificates WHERE serial = ` + s.placeholder(1)
 
 	var (
-		rec          IssuedCertificate
-		notBeforeRaw string
-		notAfterRaw  string
-		createdAtRaw string
+		rec              IssuedCertificate
+		notBeforeRaw     string
+		notAfterRaw      string
+		createdAtRaw     string
+		encryptedKeyBlob []byte
 	)
 
 	err := s.db.QueryRowContext(ctx, query, serial).Scan(
@@ -123,6 +135,7 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 		&rec.CommonName,
 		&rec.Subject,
 		&rec.CertificatePEM,
+		&encryptedKeyBlob,
 		&notBeforeRaw,
 		&notAfterRaw,
 		&rec.RequestorID,
@@ -146,6 +159,9 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 	rec.CreatedAt, err = time.Parse(time.RFC3339, createdAtRaw)
 	if err != nil {
 		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
+	if len(encryptedKeyBlob) > 0 {
+		rec.EncryptedPrivateKey = append([]byte(nil), encryptedKeyBlob...)
 	}
 
 	return &rec, nil
