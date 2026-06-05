@@ -87,6 +87,14 @@ func (e *PKIEngine) RootCertPEM() []byte {
 	return out
 }
 
+// CAPassword returns the CA master password used for key escrow encryption.
+func (e *PKIEngine) CAPassword() string {
+	if e == nil || len(e.password) == 0 {
+		return ""
+	}
+	return string(e.password)
+}
+
 // IntermediateCertPEM returns the Intermediate CA certificate encoded in PEM format.
 func (e *PKIEngine) IntermediateCertPEM() []byte {
 	if e == nil || e.auth == nil {
