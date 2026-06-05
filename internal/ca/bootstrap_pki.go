@@ -6,6 +6,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -43,8 +44,13 @@ func generateBootstrapRoot(
 	keyReq := boot.KeyCreateRequest()
 	subject := bootstrapSubject(boot.RootCN, boot.Organization, boot.Country)
 
+	rootName := strings.TrimSpace(boot.RootCN)
+	if rootName == "" {
+		rootName = resource + "-Root-CA"
+	}
+
 	resp, err := creator.CreateCertificateAuthority(&apiv1.CreateCertificateAuthorityRequest{
-		Name:     resource + "-Root-CA",
+		Name:     rootName,
 		Type:     apiv1.RootCA,
 		Lifetime: 10 * 365 * 24 * time.Hour,
 		CreateKey: &apiv1.CreateKeyRequest{
@@ -85,8 +91,13 @@ func generateBootstrapIntermediate(
 	keyReq := boot.KeyCreateRequest()
 	subject := bootstrapSubject(boot.IntermediateCN, boot.Organization, boot.Country)
 
+	intermediateName := strings.TrimSpace(boot.IntermediateCN)
+	if intermediateName == "" {
+		intermediateName = resource + "-Intermediate-CA"
+	}
+
 	resp, err := creator.CreateCertificateAuthority(&apiv1.CreateCertificateAuthorityRequest{
-		Name:     resource + "-Intermediate-CA",
+		Name:     intermediateName,
 		Type:     apiv1.IntermediateCA,
 		Lifetime: 10 * 365 * 24 * time.Hour,
 		CreateKey: &apiv1.CreateKeyRequest{
@@ -125,11 +136,13 @@ func generateBootstrapIntermediate(
 
 func bootstrapSubject(commonName, organization, country string) pkix.Name {
 	subject := pkix.Name{
-		CommonName:   commonName,
-		Organization: []string{organization},
+		CommonName: strings.TrimSpace(commonName),
 	}
-	if country != "" {
-		subject.Country = []string{country}
+	if org := strings.TrimSpace(organization); org != "" {
+		subject.Organization = []string{org}
+	}
+	if c := strings.TrimSpace(country); c != "" {
+		subject.Country = []string{c}
 	}
 	return subject
 }
