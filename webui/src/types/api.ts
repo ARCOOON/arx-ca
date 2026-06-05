@@ -43,6 +43,8 @@ export interface IssueCertificateRequest {
   locality?: string
   is_server_auth?: boolean
   is_client_auth?: boolean
+  use_digital_signature?: boolean
+  use_key_encipherment?: boolean
 }
 
 export interface IssueCertificateResponse {
@@ -66,6 +68,8 @@ export interface GenerateCertificateRequest {
   locality?: string
   is_server_auth?: boolean
   is_client_auth?: boolean
+  use_digital_signature?: boolean
+  use_key_encipherment?: boolean
 }
 
 export interface GenerateCertificateResponse {
