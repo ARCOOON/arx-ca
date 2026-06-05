@@ -2,12 +2,15 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/ARCOOON/arx-ca/internal/api"
+	"github.com/ARCOOON/arx-ca/internal/auth"
 	"github.com/ARCOOON/arx-ca/internal/ca"
+	arxcrypto "github.com/ARCOOON/arx-ca/internal/crypto"
 	"github.com/ARCOOON/arx-ca/internal/database"
 	"github.com/ARCOOON/arx-ca/internal/models"
 	"github.com/ARCOOON/arx-ca/internal/repository"
@@ -67,7 +70,7 @@ func (h *CertificateHandler) Issue() http.Handler {
 			return
 		}
 
-		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM); err != nil {
+		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM, "", ""); err != nil {
 			return
 		}
 
@@ -214,11 +217,125 @@ func (h *CertificateHandler) Generate() http.Handler {
 			return
 		}
 
-		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM); err != nil {
+		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM, resp.PrivateKeyPEM, h.engine.CAPassword()); err != nil {
 			return
 		}
 
 		api.WriteSuccess(w, http.StatusCreated, resp)
+	})
+}
+
+// GetPrivateKey handles GET /api/v1/certificates/{serial}/key.
+func (h *CertificateHandler) GetPrivateKey() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		if _, ok := auth.AdminUsernameFromContext(r.Context()); !ok {
+			api.WriteError(w, http.StatusForbidden, "super admin JWT required")
+			return
+		}
+		roles, ok := auth.RolesFromContext(r.Context())
+		if !ok || !auth.HasRole(roles, auth.RoleSuperAdmin) {
+			api.WriteError(w, http.StatusForbidden, "super admin role required")
+			return
+		}
+
+		serial := strings.TrimSpace(r.PathValue("serial"))
+		if serial == "" {
+			api.WriteError(w, http.StatusBadRequest, "serial is required")
+			return
+		}
+
+		privateKeyPEM, err := h.decryptEscrowedPrivateKey(r.Context(), serial)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				api.WriteError(w, http.StatusNotFound, "escrowed private key not found")
+				return
+			}
+			log.Printf("certificates: decrypt escrowed key: %v", err)
+			api.WriteError(w, http.StatusInternalServerError, "failed to retrieve private key")
+			return
+		}
+
+		api.WriteSuccess(w, http.StatusOK, models.CertificatePrivateKeyResponse{
+			Serial:        serial,
+			PrivateKeyPEM: privateKeyPEM,
+		})
+	})
+}
+
+// DownloadBundle handles GET /api/v1/certificates/{serial}/bundle.
+func (h *CertificateHandler) DownloadBundle() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		if _, ok := auth.AdminUsernameFromContext(r.Context()); !ok {
+			api.WriteError(w, http.StatusForbidden, "super admin JWT required")
+			return
+		}
+		roles, ok := auth.RolesFromContext(r.Context())
+		if !ok || !auth.HasRole(roles, auth.RoleSuperAdmin) {
+			api.WriteError(w, http.StatusForbidden, "super admin role required")
+			return
+		}
+
+		serial := strings.TrimSpace(r.PathValue("serial"))
+		if serial == "" {
+			api.WriteError(w, http.StatusBadRequest, "serial is required")
+			return
+		}
+
+		if h.certStore == nil {
+			api.WriteError(w, http.StatusInternalServerError, "certificate archive is unavailable")
+			return
+		}
+
+		rec, err := h.certStore.GetBySerial(r.Context(), serial)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				api.WriteError(w, http.StatusNotFound, "certificate record not found")
+				return
+			}
+			log.Printf("certificates: load bundle record: %v", err)
+			api.WriteError(w, http.StatusInternalServerError, "failed to load certificate record")
+			return
+		}
+
+		privateKeyPEM, err := h.decryptEscrowedPrivateKey(r.Context(), serial)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				api.WriteError(w, http.StatusNotFound, "escrowed private key not found")
+				return
+			}
+			log.Printf("certificates: bundle private key: %v", err)
+			api.WriteError(w, http.StatusInternalServerError, "failed to retrieve private key")
+			return
+		}
+
+		bundle, err := h.buildBundleFromMaterial(rec.CertificatePEM, privateKeyPEM)
+		if err != nil {
+			log.Printf("certificates: build bundle: %v", err)
+			api.WriteError(w, http.StatusInternalServerError, "failed to build certificate bundle")
+			return
+		}
+
+		safeName := strings.TrimSpace(rec.CommonName)
+		if safeName == "" {
+			safeName = serial
+		}
+		filename := sanitizeDownloadFilename(safeName) + "-bundle.zip"
+		w.Header().Set("Content-Type", "application/zip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(bundle); err != nil {
+			log.Printf("certificates: write bundle: %v", err)
+		}
 	})
 }
 
@@ -261,7 +378,7 @@ func (h *CertificateHandler) GetBySerial() http.Handler {
 	})
 }
 
-func (h *CertificateHandler) persistCertificate(ctx context.Context, w http.ResponseWriter, certPEM string) error {
+func (h *CertificateHandler) persistCertificate(ctx context.Context, w http.ResponseWriter, certPEM, privateKeyPEM, caPassword string) error {
 	if h.certStore == nil {
 		return nil
 	}
@@ -273,12 +390,69 @@ func (h *CertificateHandler) persistCertificate(ctx context.Context, w http.Resp
 		return err
 	}
 
-	if err := persistIssuedCertificate(ctx, h.certStore, requestorID, certPEM); err != nil {
+	if err := persistIssuedCertificate(ctx, h.certStore, requestorID, certPEM, privateKeyPEM, caPassword); err != nil {
 		log.Printf("certificates: persist record: %v", err)
 		api.WriteError(w, http.StatusInternalServerError, "failed to archive issued certificate")
 		return err
 	}
 	return nil
+}
+
+func (h *CertificateHandler) decryptEscrowedPrivateKey(ctx context.Context, serial string) (string, error) {
+	if h.certStore == nil {
+		return "", fmt.Errorf("certificate archive is unavailable")
+	}
+
+	rec, err := h.certStore.GetBySerial(ctx, serial)
+	if err != nil {
+		return "", err
+	}
+	if len(rec.EncryptedPrivateKey) == 0 {
+		return "", fmt.Errorf("escrowed private key not found")
+	}
+
+	caPassword := strings.TrimSpace(h.engine.CAPassword())
+	if caPassword == "" {
+		return "", fmt.Errorf("ca password is unavailable")
+	}
+
+	plaintext, err := arxcrypto.DecryptKey(rec.EncryptedPrivateKey, caPassword)
+	if err != nil {
+		return "", err
+	}
+
+	return string(plaintext), nil
+}
+
+func (h *CertificateHandler) buildBundleFromMaterial(certificatePEM, privateKeyPEM string) ([]byte, error) {
+	if h.engine == nil {
+		return nil, fmt.Errorf("CA engine is not initialized")
+	}
+
+	intermediatePEM := string(h.engine.IntermediateCertPEM())
+	rootPEM := string(h.engine.RootCertPEM())
+	return buildCertificateBundleZip(certificateBundleInput{
+		CertificatePEM:  certificatePEM,
+		PrivateKeyPEM:   privateKeyPEM,
+		IntermediatePEM: intermediatePEM,
+		RootPEM:         rootPEM,
+	})
+}
+
+func sanitizeDownloadFilename(value string) string {
+	replacer := strings.NewReplacer(
+		" ", "_",
+		"/", "_",
+		"\\", "_",
+		":", "_",
+		"*", "_",
+		"?", "_",
+		"\"", "_",
+		"<", "_",
+		">", "_",
+		"|", "_",
+	)
+	return replacer.Replace(strings.TrimSpace(value))
 }
 
 // List handles GET /api/v1/certificates.
