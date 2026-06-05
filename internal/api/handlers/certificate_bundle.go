@@ -8,42 +8,23 @@ import (
 )
 
 type certificateBundleInput struct {
-	CertificatePEM  string
-	PrivateKeyPEM   string
-	IntermediatePEM string
-	RootPEM         string
+	CertificatePEM string
+	PrivateKeyPEM  string
 }
 
 func buildCertificateBundleZip(input certificateBundleInput) ([]byte, error) {
-	certificatePEM := strings.TrimSpace(input.CertificatePEM)
-	if certificatePEM == "" {
+	if strings.TrimSpace(input.CertificatePEM) == "" {
 		return nil, fmt.Errorf("certificate_pem is required")
 	}
-	privateKeyPEM := strings.TrimSpace(input.PrivateKeyPEM)
-	if privateKeyPEM == "" {
+	if strings.TrimSpace(input.PrivateKeyPEM) == "" {
 		return nil, fmt.Errorf("private_key_pem is required")
 	}
-	intermediatePEM := strings.TrimSpace(input.IntermediatePEM)
-	if intermediatePEM == "" {
-		return nil, fmt.Errorf("intermediate certificate is unavailable")
-	}
-	rootPEM := strings.TrimSpace(input.RootPEM)
-	if rootPEM == "" {
-		return nil, fmt.Errorf("root certificate is unavailable")
-	}
-
-	fullChain := certificatePEM
-	if !strings.HasSuffix(fullChain, "\n") {
-		fullChain += "\n"
-	}
-	fullChain += intermediatePEM
+	certificatePEM := input.CertificatePEM
+	privateKeyPEM := input.PrivateKeyPEM
 
 	files := map[string]string{
 		"certificate.crt": certificatePEM,
-		"certificate.pem": certificatePEM,
 		"private.key":     privateKeyPEM,
-		"fullchain.pem":   fullChain,
-		"ca.crt":          rootPEM,
 	}
 
 	var buf bytes.Buffer
