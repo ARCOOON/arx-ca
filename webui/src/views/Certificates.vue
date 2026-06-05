@@ -1,21 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { downloadCRL, fetchCRLStatus, type CRLStatus } from '../api/crl'
-import { generateCertificate, issueCertificate, listCertificates } from '../api/certificates'
-import type { CertificateSummary, KeyAlgorithm } from '../types/api'
+import {
+  fetchCertificateBySerial,
+  generateCertificate,
+  issueCertificate,
+  listCertificates,
+} from '../api/certificates'
+import type { CertificateRecordDetail, CertificateSummary, KeyAlgorithm } from '../types/api'
 import DataTable from '../components/ui/DataTable.vue'
 import FlatToggle from '../components/ui/FlatToggle.vue'
 import Modal from '../components/ui/Modal.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
+import TagInput from '../components/ui/TagInput.vue'
 import {
   extractCommonName,
   resolveCertificateStatus,
   type CertificateLifecycleStatus,
 } from '../utils/certificate'
-import { downloadPemZip } from '../utils/download'
+import { downloadPemZip, downloadTextFile } from '../utils/download'
 import { extractApiError } from '../utils/errors'
 import { formatDateTime } from '../utils/format'
-import { parseSansInput } from '../utils/sans'
 
 type IssueMode = 'csr' | 'native'
 
@@ -37,7 +42,11 @@ const issueError = ref('')
 const issueSuccess = ref('')
 
 const nativeCommonName = ref('')
-const nativeSansInput = ref('')
+const nativeSansTags = ref<string[]>([])
+const detailsModalOpen = ref(false)
+const detailsLoading = ref(false)
+const detailsError = ref('')
+const certificateDetail = ref<CertificateRecordDetail | null>(null)
 const nativeTtlInput = ref('720h')
 const nativeKeyAlgo = ref<KeyAlgorithm>('ECDSA256')
 const nativeAdvancedOpen = ref(false)
@@ -55,6 +64,7 @@ const tableColumns = [
   { key: 'not_before', label: 'Issue Date' },
   { key: 'not_after', label: 'Expiry Date' },
   { key: 'status', label: 'Status' },
+  { key: 'actions', label: '', headerClass: 'w-28' },
 ]
 
 const tableRows = computed(() =>
@@ -195,12 +205,6 @@ async function submitNativeGeneration(): Promise<void> {
     return
   }
 
-  const parsedSans = parseSansInput(nativeSansInput.value)
-  if (parsedSans.error) {
-    issueError.value = parsedSans.error
-    return
-  }
-
   const ttl = nativeTtlInput.value.trim()
   if (ttl && !/^\d+[smhdwMy]$/.test(ttl)) {
     issueError.value = 'TTL must be a duration such as 720h or 30d.'
@@ -212,7 +216,7 @@ async function submitNativeGeneration(): Promise<void> {
   try {
     const result = await generateCertificate({
       common_name: commonName,
-      sans: parsedSans.sans.length > 0 ? parsedSans.sans : undefined,
+      sans: nativeSansTags.value.length > 0 ? nativeSansTags.value : undefined,
       ttl: ttl || undefined,
       key_algo: nativeKeyAlgo.value,
       organization: nativeOrganization.value.trim() || undefined,
@@ -230,7 +234,7 @@ async function submitNativeGeneration(): Promise<void> {
     issueSuccess.value =
       'Certificate and private key were downloaded as a ZIP archive. Store the key securely; it is not retained on the server.'
     nativeCommonName.value = ''
-    nativeSansInput.value = ''
+    nativeSansTags.value = []
     nativeOrganization.value = ''
     nativeOrganizationalUnit.value = ''
     nativeCountry.value = ''
@@ -253,6 +257,36 @@ async function submitIssue(): Promise<void> {
     return
   }
   await submitIssueCSR()
+}
+
+async function openCertificateDetails(serial: string): Promise<void> {
+  detailsModalOpen.value = true
+  detailsLoading.value = true
+  detailsError.value = ''
+  certificateDetail.value = null
+
+  try {
+    certificateDetail.value = await fetchCertificateBySerial(serial)
+  } catch (error) {
+    detailsError.value = extractApiError(error, 'Failed to load certificate details')
+  } finally {
+    detailsLoading.value = false
+  }
+}
+
+function closeDetailsModal(): void {
+  detailsModalOpen.value = false
+  certificateDetail.value = null
+  detailsError.value = ''
+}
+
+function downloadCertificateCRT(): void {
+  const detail = certificateDetail.value
+  if (!detail?.certificate_pem) {
+    return
+  }
+  const safeName = (detail.common_name || detail.serial).replace(/[^a-zA-Z0-9._-]+/g, '_')
+  downloadTextFile(`${safeName}.crt`, detail.certificate_pem, 'application/x-x509-ca-cert')
 }
 
 async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
@@ -339,7 +373,67 @@ async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
       <template #cell-status="{ row }">
         <StatusBadge :label="statusLabel(row.status)" :tone="statusTone(row.status)" />
       </template>
+      <template #cell-actions="{ row }">
+        <button type="button" class="ui-btn-secondary text-[11px]" @click="openCertificateDetails(row.serial)">
+          View Details
+        </button>
+      </template>
     </DataTable>
+
+    <Modal :open="detailsModalOpen" title="Certificate Details" wide @close="closeDetailsModal">
+      <div v-if="detailsLoading" class="text-sm ui-text-muted">Loading certificate record…</div>
+      <div v-else-if="detailsError" class="ui-alert-error text-xs" role="alert">
+        {{ detailsError }}
+      </div>
+      <template v-else-if="certificateDetail">
+        <dl class="grid gap-3 text-xs sm:grid-cols-2">
+          <div>
+            <dt class="font-medium ui-text-muted">Serial</dt>
+            <dd class="mt-0.5 font-mono ui-text-primary">{{ certificateDetail.serial }}</dd>
+          </div>
+          <div>
+            <dt class="font-medium ui-text-muted">Requestor ID</dt>
+            <dd class="mt-0.5 font-mono ui-text-primary">{{ certificateDetail.requestor_id }}</dd>
+          </div>
+          <div class="sm:col-span-2">
+            <dt class="font-medium ui-text-muted">Subject</dt>
+            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.subject }}</dd>
+          </div>
+          <div>
+            <dt class="font-medium ui-text-muted">Issued At</dt>
+            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(certificateDetail.not_before) }}</dd>
+          </div>
+          <div>
+            <dt class="font-medium ui-text-muted">Expires</dt>
+            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(certificateDetail.not_after) }}</dd>
+          </div>
+          <div v-if="certificateDetail.dns_names?.length" class="sm:col-span-2">
+            <dt class="font-medium ui-text-muted">DNS SANs</dt>
+            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.dns_names.join(', ') }}</dd>
+          </div>
+          <div v-if="certificateDetail.ip_addresses?.length" class="sm:col-span-2">
+            <dt class="font-medium ui-text-muted">IP SANs</dt>
+            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.ip_addresses.join(', ') }}</dd>
+          </div>
+        </dl>
+        <div class="mt-4">
+          <p class="text-xs font-medium ui-text-secondary">Certificate (PEM)</p>
+          <pre class="ui-inset mt-1.5 max-h-48 overflow-auto p-3 font-mono text-[10px] ui-text-secondary">{{ certificateDetail.certificate_pem }}</pre>
+        </div>
+      </template>
+
+      <template #footer>
+        <button type="button" class="ui-btn-secondary" @click="closeDetailsModal">Close</button>
+        <button
+          type="button"
+          class="ui-btn-primary"
+          :disabled="!certificateDetail?.certificate_pem"
+          @click="downloadCertificateCRT"
+        >
+          Download Certificate (.crt)
+        </button>
+      </template>
+    </Modal>
 
     <Modal :open="issueModalOpen" title="Issue Certificate" wide @close="closeIssueModal">
       <div class="mb-4 flex flex-wrap gap-2">
@@ -413,15 +507,14 @@ async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
         <label class="mt-3 block text-xs font-medium ui-text-secondary" for="sans-input">
           Subject Alternative Names
         </label>
-        <textarea
+        <TagInput
           id="sans-input"
-          v-model="nativeSansInput"
-          rows="4"
-          class="ui-textarea mt-1.5"
-          placeholder="One DNS name or IP per line (e.g. api.example.com or 203.0.113.10)"
-          spellcheck="false"
+          v-model="nativeSansTags"
+          placeholder="api.example.com or 203.0.113.10"
         />
-        <p class="mt-1 text-[11px] ui-text-muted">Separate entries with commas or new lines.</p>
+        <p class="mt-1 text-[11px] ui-text-muted">
+          Press Enter, Space, or comma to add each DNS name or IP address.
+        </p>
 
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
