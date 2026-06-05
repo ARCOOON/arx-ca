@@ -5,7 +5,7 @@ import {
   downloadCertificateBundleFile,
   fetchCertificateBySerial,
   fetchCertificatePrivateKey,
-  generateCertificate,
+  generateCertificateBundleFile,
   issueCertificate,
   listCertificates,
 } from '../api/certificates'
@@ -20,7 +20,7 @@ import {
   resolveCertificateStatus,
   type CertificateLifecycleStatus,
 } from '../utils/certificate'
-import { downloadCertificateBundleZip, downloadTextFile } from '../utils/download'
+import { downloadTextFile } from '../utils/download'
 import { extractApiError } from '../utils/errors'
 import { formatDateTime } from '../utils/format'
 import { useAuthStore } from '../store/auth'
@@ -226,7 +226,7 @@ async function submitNativeGeneration(): Promise<void> {
   isIssuing.value = true
 
   try {
-    const result = await generateCertificate({
+    const request = {
       common_name: commonName,
       sans: nativeSansTags.value.length > 0 ? nativeSansTags.value : undefined,
       ttl: ttl || undefined,
@@ -240,13 +240,10 @@ async function submitNativeGeneration(): Promise<void> {
       is_client_auth: nativeClientAuth.value || undefined,
       use_digital_signature: nativeDigitalSignature.value,
       use_key_encipherment: nativeKeyEncipherment.value,
-    })
+    }
 
     const safeName = commonName.replace(/[^a-zA-Z0-9._-]+/g, '_')
-    downloadCertificateBundleZip(`${safeName}-bundle.zip`, {
-      certificatePem: result.certificate_pem,
-      privateKeyPem: result.private_key_pem,
-    })
+    await generateCertificateBundleFile(request, `${safeName}-bundle.zip`)
 
     issueSuccess.value =
       'Certificate bundle downloaded. The private key is also escrowed on the server (AES-256-GCM encrypted) for SuperAdmin retrieval.'
@@ -586,7 +583,7 @@ async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
       <p v-else class="mb-3 text-xs ui-text-muted">
         Generates a key pair and signs the certificate via
         <code class="ui-code">POST /api/v1/certificates/generate</code>. The private key is
-        returned immediately in a minimal ZIP bundle (`certificate.crt`, `private.key`) and escrowed encrypted at rest for SuperAdmin retrieval. Download the CA chain separately from the Dashboard.
+        returned immediately in a ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) and escrowed encrypted at rest for SuperAdmin retrieval. Download the CA chain separately from the Dashboard.
       </p>
 
       <div v-if="issueError" class="mb-3 ui-alert-error text-xs" role="alert">

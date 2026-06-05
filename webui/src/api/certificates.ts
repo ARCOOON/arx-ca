@@ -65,6 +65,27 @@ export async function generateCertificate(
   return payload.data
 }
 
+export async function generateCertificateBundleFile(
+  request: GenerateCertificateRequest,
+  filename: string,
+): Promise<void> {
+  const response = await apiClient.post<ArrayBuffer>('/certificates/generate?format=zip', request, {
+    headers: { Accept: 'application/zip' },
+    responseType: 'arraybuffer',
+  })
+
+  const blob = new Blob([response.data], { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.rel = 'noopener'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
 export async function fetchCertificateBySerial(serial: string): Promise<CertificateRecordDetail> {
   const encoded = encodeURIComponent(serial)
   const response = await apiClient.get<ApiEnvelope<CertificateRecordDetail>>(`/certificates/${encoded}`)

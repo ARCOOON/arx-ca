@@ -20,15 +20,19 @@ export interface CertificateBundleInput {
 }
 
 /**
- * Builds a minimal ZIP archive (store only, no compression) containing only the leaf certificate and private key.
+ * Builds a ZIP archive (store only, no compression) containing the leaf certificate in PEM and CRT
+ * formats plus the plaintext private key.
  */
 export function downloadCertificateBundleZip(archiveName: string, input: CertificateBundleInput): void {
   const certificatePem = input.certificatePem.trim()
   const privateKeyPem = input.privateKeyPem.trim()
+  const normalizedCertificatePem = certificatePem.endsWith('\n') ? certificatePem : `${certificatePem}\n`
+  const normalizedPrivateKeyPem = privateKeyPem.endsWith('\n') ? privateKeyPem : `${privateKeyPem}\n`
 
   const files: Array<{ name: string; data: Uint8Array }> = [
-    { name: 'certificate.crt', data: new TextEncoder().encode(certificatePem) },
-    { name: 'private.key', data: new TextEncoder().encode(privateKeyPem) },
+    { name: 'certificate.crt', data: new TextEncoder().encode(normalizedCertificatePem) },
+    { name: 'certificate.pem', data: new TextEncoder().encode(normalizedCertificatePem) },
+    { name: 'private.key', data: new TextEncoder().encode(normalizedPrivateKeyPem) },
   ]
 
   const chunks: Uint8Array[] = []
