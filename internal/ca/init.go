@@ -22,6 +22,8 @@ import (
 // configPath must point to ca.json or to the PKI base directory containing config/ca.json.
 // When the .pki tree is absent, new certificates are generated using cabootstrap from server.yaml.
 func InitCA(configPath string, caCfg config.CAConfig, caBootstrap config.CABootstrapConfig) (*PKIEngine, error) {
+	caBootstrap = caBootstrap.WithDefaults()
+
 	maxCertTTL, err := caCfg.MaxTTLDuration()
 	if err != nil {
 		return nil, err
@@ -178,12 +180,20 @@ func bootstrapPKI(
 		provisionerName = name
 	}
 
+	dnsNames := []string{defaultCADNS}
+	if cn := strings.TrimSpace(boot.IntermediateCN); cn != "" {
+		dnsNames = []string{cn}
+	}
+
 	pkiOpts := []pki.Option{
 		pki.WithAddress(defaultCAAddress),
-		pki.WithDNSNames([]string{defaultCADNS}),
+		pki.WithDNSNames(dnsNames),
 		pki.WithProvisioner(provisionerName),
 		pki.WithSSH(),
 		pki.WithDeploymentType(pki.StandaloneDeployment),
+	}
+	if org := strings.TrimSpace(boot.Organization); org != "" {
+		pkiOpts = append(pkiOpts, pki.WithSuperAdminSubject(org))
 	}
 	if prov.ACMEEnabled() {
 		pkiOpts = append(pkiOpts, pki.WithACME())
