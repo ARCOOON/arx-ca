@@ -820,7 +820,7 @@ The response body is a ZIP archive with exactly these entries:
 
 ---
 ### POST /api/v1/certificates/generate
-> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key PEM is **AES-256-GCM encrypted at rest** in the application database (`encrypted_private_key`) using a key derived from the CA master password (`ca.password`). Only SuperAdmin JWT holders may retrieve escrowed keys via `GET /api/v1/certificates/{serial}/key`. The WebUI and API clients should assemble a **minimal** ZIP bundle containing only `certificate.crt` and `private.key`. Install trust anchors from `GET /api/v1/ca/chain` (`ca-bundle.zip` with individual certs and chain files).
+> Generates a private key and CSR in memory, signs the certificate, and returns **both** PEM blobs. The private key PEM is **AES-256-GCM encrypted at rest** in the application database (`encrypted_private_key`) using a key derived from the CA master password (`ca.password`). Only SuperAdmin JWT holders may retrieve escrowed keys via `GET /api/v1/certificates/{serial}/key`. Request `?format=zip` or send `Accept: application/zip` to receive a ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) built by the same server-side generator used by `GET /api/v1/certificates/{serial}/bundle`. Install trust anchors from `GET /api/v1/ca/chain` (`ca-bundle.zip` with individual certs and chain files).
 
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:issue`
@@ -869,8 +869,11 @@ The response body is a ZIP archive with exactly these entries:
 </details>
 
 #### Response
+
+When the request includes `?format=zip` or `Accept: application/zip`, the server returns `201 Created` with `Content-Type: application/zip` and a ZIP archive containing `certificate.crt`, `certificate.pem`, and `private.key` (same builder as `GET /api/v1/certificates/{serial}/bundle`). Otherwise the default JSON envelope is returned.
+
 <details>
-  <summary><strong>View Response (201 Created)</strong></summary>
+  <summary><strong>View Response (201 Created, JSON)</strong></summary>
 
 **Properties (`data`):**
 
@@ -1236,7 +1239,7 @@ The response body is a ZIP archive with exactly these entries:
 
 ---
 ### GET /api/v1/certificates/{serial}/bundle
-> Builds and streams a minimal ZIP archive for a certificate with an escrowed private key. **SuperAdmin JWT only.**
+> Builds and streams a ZIP archive for a certificate with an escrowed private key. **SuperAdmin JWT only.**
 
 - **Authentication:** Required (Bearer JWT only)
 - **Authorization:** `SuperAdmin` role required
@@ -1246,6 +1249,7 @@ The response body is a ZIP archive with exactly these entries:
 | File | Description |
 |------|-------------|
 | `certificate.crt` | Issued leaf certificate (PEM) |
+| `certificate.pem` | Same content as `certificate.crt` |
 | `private.key` | Decrypted private key PEM |
 
 > Trust anchors are not included. Download the CA bundle via `GET /api/v1/ca/chain` (`ca-bundle.zip`).
