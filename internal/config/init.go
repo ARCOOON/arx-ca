@@ -188,14 +188,15 @@ func migrateLegacyCABootstrap(v *viper.Viper, cfg *ServerConfig) {
 	if cfg == nil || v == nil {
 		return
 	}
-	for _, key := range []string{"CABootstrap", "cabootstrap"} {
-		if !v.InConfig(key) {
+	for _, key := range []string{"CABootstrap", "cabootstrap", "ca_bootstrap"} {
+		if !v.IsSet(key) {
 			continue
 		}
-		var legacy CABootstrapConfig
-		if err := v.UnmarshalKey(key, &legacy); err != nil {
+		raw := v.GetStringMap(key)
+		if len(raw) == 0 {
 			continue
 		}
+		legacy := CABootstrapFromMap(raw)
 		cfg.CABootstrap = mergeCABootstrap(cfg.CABootstrap, legacy)
 		return
 	}
