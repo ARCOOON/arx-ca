@@ -87,6 +87,13 @@ type CertificateRecordDetail struct {
 	RequestorID    string   `json:"requestor_id"`
 	CertificatePEM string   `json:"certificate_pem"`
 	Revoked        bool     `json:"revoked"`
+	HasEscrowedKey bool     `json:"has_escrowed_key"`
+}
+
+// CertificatePrivateKeyResponse returns escrowed private key material to authorized operators.
+type CertificatePrivateKeyResponse struct {
+	Serial        string `json:"serial"`
+	PrivateKeyPEM string `json:"private_key_pem"`
 }
 
 // RevokeCertificateResponse confirms passive revocation in the step-ca database.
