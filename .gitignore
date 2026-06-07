@@ -13,6 +13,7 @@
 # Test binary, built with `go test -c`
 *.test
 scripts/create-release.sh
+/internal/**/*_test.go
 
 # Output of the go coverage tool
 *.out
