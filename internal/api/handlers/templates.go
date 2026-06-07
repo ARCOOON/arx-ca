@@ -34,6 +34,11 @@ func (h *TemplateHandler) Create() http.Handler {
 			return
 		}
 
+		recordAuditAction(r, "TEMPLATE_CREATE")
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("template_name", strings.TrimSpace(req.Name))
+		}
+
 		tpl, err := h.engine.CreateCertificateTemplate(req)
 		if err != nil {
 			if strings.Contains(err.Error(), "required") ||
