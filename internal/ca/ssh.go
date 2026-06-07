@@ -105,7 +105,7 @@ func (e *PKIEngine) SignSSHHostCertificate(ctx context.Context, req models.SignS
 
 	provisionerName := strings.TrimSpace(req.Provisioner)
 	if provisionerName == "" {
-		provisionerName = defaultProvisioner
+		provisionerName = e.AdminProvisionerName()
 	}
 
 	sshOpts := &provisioner.SignSSHOptions{
@@ -186,7 +186,7 @@ func (e *PKIEngine) MintSSHUserSignToken(req models.SignSSHUserRequest) (string,
 
 	provisionerName := strings.TrimSpace(req.Provisioner)
 	if provisionerName == "" {
-		provisionerName = defaultProvisioner
+		provisionerName = e.AdminProvisionerName()
 	}
 
 	sshOpts := &provisioner.SignSSHOptions{
