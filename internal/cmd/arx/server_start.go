@@ -20,7 +20,9 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/ca"
 	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
 	"github.com/ARCOOON/arx-ca/internal/database"
+	auditdb "github.com/ARCOOON/arx-ca/internal/db"
 	"github.com/ARCOOON/arx-ca/internal/logging"
+	"github.com/ARCOOON/arx-ca/internal/notifications"
 	"github.com/ARCOOON/arx-ca/internal/repository"
 	arxserver "github.com/ARCOOON/arx-ca/internal/server"
 	"github.com/ARCOOON/arx-ca/internal/telemetry"
@@ -102,9 +104,19 @@ func runServer() error {
 	userStore := repository.NewUserStore(appDB)
 	certStore := database.NewCertificateStore(appDB)
 	certHandler := handlers.NewCertificateHandler(pkiEngine, certStore, userStore)
-	authHandler := handlers.NewAuthHandler(jwtManager, apiKeyStore, userStore)
-	sshHandler := handlers.NewSSHHandler(pkiEngine, jwtManager, apiKeyStore)
+	sessionCookie := auth.SessionCookieConfigFromSecurity(serverCfg.Security)
+	authHandler := handlers.NewAuthHandler(jwtManager, apiKeyStore, userStore, sessionCookie)
+	sshCertStore := auditdb.NewSSHCertificateStore(appDB)
+	sshHandler := handlers.NewSSHHandler(pkiEngine, jwtManager, apiKeyStore, sshCertStore)
+	statsHandler := handlers.NewStatsHandler(pkiEngine, sshCertStore)
 	templateHandler := handlers.NewTemplateHandler(pkiEngine)
+	auditStore := auditdb.NewAuditStore(appDB)
+	auditHandler := handlers.NewAuditHandler(auditStore)
+	webhookStore := auditdb.NewWebhookStore(appDB)
+	notificationStore := auditdb.NewNotificationStore(appDB)
+	webhookDispatcher := notifications.NewDispatcher(webhookStore, notificationStore)
+	webhookHandler := handlers.NewWebhookHandler(webhookStore, webhookDispatcher)
+	notificationHandler := handlers.NewNotificationHandler(webhookDispatcher, notificationStore)
 
 	adminPerm := func(perm auth.Permission, h http.Handler) http.Handler {
 		return middleware.RequireAdmin(jwtManager, middleware.RequirePermission(perm, h))
@@ -130,6 +142,7 @@ func runServer() error {
 	mux.Handle("POST /ocsp", ocspHandler.Post())
 	mux.Handle("GET /ocsp/{request}", ocspHandler.Get())
 	mux.Handle("POST /api/v1/auth/login", authHandler.Login())
+	mux.Handle("POST /api/v1/auth/logout", authHandler.Logout())
 	mux.Handle("POST /api/v1/auth/service-accounts", adminPerm(auth.PermServiceAccounts, authHandler.CreateServiceAccount()))
 
 	mux.Handle("POST /api/v1/certificates/issue", certPerm(auth.PermCertificatesIssue, certHandler.Issue()))
@@ -138,6 +151,7 @@ func runServer() error {
 	mux.Handle("POST /api/v1/certificates/auto", adminPerm(auth.PermCertificatesIssue, certHandler.Auto()))
 	mux.Handle("POST /api/v1/certificates/revoke", certPerm(auth.PermCertificatesRevoke, certHandler.Revoke()))
 	mux.Handle("POST /api/v1/certificates/lint", certPerm(auth.PermCertificatesLint, certHandler.Lint()))
+	mux.Handle("GET /api/v1/certificates/stats", certPerm(auth.PermCertificatesRead, statsHandler.CertificateStats()))
 	mux.Handle("GET /api/v1/certificates", certPerm(auth.PermCertificatesRead, certHandler.List()))
 	mux.Handle("GET /api/v1/certificates/{serial}", certPerm(auth.PermCertificatesRead, certHandler.GetBySerial()))
 	mux.Handle("GET /api/v1/certificates/{serial}/key", adminPerm(auth.PermCertificatesRead, certHandler.GetPrivateKey()))
@@ -154,10 +168,27 @@ func runServer() error {
 	mux.Handle("POST /api/v1/templates", certPerm(auth.PermTemplatesManage, templateHandler.Create()))
 	mux.Handle("GET /api/v1/templates", certPerm(auth.PermTemplatesRead, templateHandler.List()))
 
+	mux.Handle("POST /api/v1/ssh/generate/user", certPerm(auth.PermSSHSignUser, sshHandler.GenerateUser()))
+	mux.Handle("POST /api/v1/ssh/generate/host", certPerm(auth.PermSSHSignHost, sshHandler.GenerateHost()))
 	mux.Handle("POST /api/v1/ssh/sign-user", sshHandler.SignUser())
 	mux.Handle("POST /api/v1/ssh/sign-host", certPerm(auth.PermSSHSignHost, sshHandler.SignHost()))
 	mux.Handle("POST /api/v1/ssh/inspect", certPerm(auth.PermSSHInspect, sshHandler.Inspect()))
+	mux.Handle("GET /api/v1/ssh/stats", certPerm(auth.PermSSHInspect, statsHandler.SSHStats()))
+	mux.Handle("GET /api/v1/ssh/certificates", certPerm(auth.PermSSHInspect, sshHandler.ListCertificates()))
 	mux.Handle("GET /api/v1/ssh/roots", sshHandler.Roots())
+	mux.Handle("GET /api/v1/audit", certPerm(auth.PermAuditRead, auditHandler.List()))
+	mux.Handle("GET /api/v1/notifications/stream", certPerm(auth.PermAuditRead, notificationHandler.Stream()))
+	mux.Handle("GET /api/v1/notifications", adminPerm(auth.PermAuditRead, notificationHandler.List()))
+	mux.Handle("POST /api/v1/notifications/read-all", adminPerm(auth.PermAuditRead, notificationHandler.MarkAllRead()))
+	mux.Handle("POST /api/v1/notifications/archive-all", adminPerm(auth.PermAuditRead, notificationHandler.ArchiveAll()))
+	mux.Handle("POST /api/v1/notifications/{id}/read", adminPerm(auth.PermAuditRead, notificationHandler.MarkRead()))
+	mux.Handle("DELETE /api/v1/notifications/{id}", adminPerm(auth.PermAuditRead, notificationHandler.Delete()))
+	mux.Handle("GET /api/v1/webhooks/events", adminPerm(auth.PermWebhooksManage, webhookHandler.Events()))
+	mux.Handle("GET /api/v1/webhooks", adminPerm(auth.PermWebhooksManage, webhookHandler.List()))
+	mux.Handle("POST /api/v1/webhooks", adminPerm(auth.PermWebhooksManage, webhookHandler.Create()))
+	mux.Handle("PUT /api/v1/webhooks/{id}", adminPerm(auth.PermWebhooksManage, webhookHandler.Update()))
+	mux.Handle("DELETE /api/v1/webhooks/{id}", adminPerm(auth.PermWebhooksManage, webhookHandler.Delete()))
+	mux.Handle("POST /api/v1/webhooks/{id}/test", adminPerm(auth.PermWebhooksManage, webhookHandler.Test()))
 
 	if pkiEngine.ACMEEnabled() {
 		mux.Handle("/acme/", http.StripPrefix("/acme", pkiEngine.ACMEHandler()))
@@ -172,15 +203,19 @@ func runServer() error {
 		ca.LogNDESConnectors(pkiEngine.NDESRegistryRef())
 	}
 
+	notifications.RecordSystemEvent(auditStore, webhookDispatcher, auditdb.ActionSysStart, map[string]any{
+		"listen_addr": listenAddr,
+	})
+
 	handler := middleware.Logger(mux)
-	if serverCfg.WebUI.Enabled {
-		corsOpts := middleware.CORSOptions{
-			AllowedOrigins: serverCfg.WebUI.CORS.AllowedOrigins,
-			AllowedMethods: serverCfg.WebUI.CORS.AllowedMethods,
-			AllowedHeaders: serverCfg.WebUI.CORS.AllowedHeaders,
-		}
-		handler = middleware.CORS(corsOpts, handler)
+	handler = middleware.Audit(auditStore, webhookDispatcher, handler)
+	corsOpts := middleware.CORSOptions{
+		AllowedOrigins:   serverCfg.WebUI.CORS.AllowedOrigins,
+		AllowedMethods:   serverCfg.WebUI.CORS.AllowedMethods,
+		AllowedHeaders:   serverCfg.WebUI.CORS.AllowedHeaders,
+		AllowCredentials: serverCfg.WebUI.CORS.AllowCredentials,
 	}
+	handler = middleware.CORS(corsOpts, handler)
 	handler = telemetry.HTTPMiddleware(handler)
 
 	idleTimeout := serverCfg.Server.ReadTimeout + serverCfg.Server.WriteTimeout

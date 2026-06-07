@@ -69,8 +69,9 @@ func newCertListCmd() *cobra.Command {
 
 func newCertRevokeCmd() *cobra.Command {
 	var (
-		serverURL string
-		reason    string
+		serverURL  string
+		reason     string
+		reasonCode int
 	)
 
 	cmd := &cobra.Command{
@@ -82,7 +83,7 @@ func newCertRevokeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			resp, err := client.RevokeCertificate(context.Background(), args[0], reason)
+			resp, err := client.RevokeCertificate(context.Background(), args[0], reason, reasonCode)
 			if err != nil {
 				return err
 			}
@@ -91,7 +92,8 @@ func newCertRevokeCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVarP(&serverURL, "url", "u", "", "Override the server URL")
-	cmd.Flags().StringVar(&reason, "reason", "", "Revocation reason (informational; sent when the API supports it)")
+	cmd.Flags().StringVar(&reason, "reason", "", "Revocation reason text (optional)")
+	cmd.Flags().IntVar(&reasonCode, "reason-code", 0, "RFC 5280 revocation reason code (0=unspecified, 1=key compromise, 5=cessation of operation)")
 
 	return cmd
 }
