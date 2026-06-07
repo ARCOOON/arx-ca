@@ -32,6 +32,7 @@ func (h *CAHandler) CRL() http.Handler {
 			expires = time.Now().UTC()
 		}
 		w.Header().Set("Expires", expires.Format(time.RFC1123))
+		w.Header().Set("Cache-Control", "public, max-age=3600")
 
 		_, formatAsPEM := r.URL.Query()["pem"]
 		if formatAsPEM {
