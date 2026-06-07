@@ -1,0 +1,31 @@
+---
+description: "Core architectural philosophy for the entire project. Enforces KISS principles, direct communication, and strict production-readiness without over-engineering."
+globs: ["*.*"]
+alwaysApply: true
+---
+
+# Skill: KISS Architecture & Pragmatic Execution
+
+## Core Philosophy
+Keep it simple, stupid. Optimize for absolute readability, flat structures, and straightforward logic. Eliminate unnecessary abstractions, deeply nested architectures, and theoretical "future-proofing" that adds immediate complexity. Code must be as simple as possible, but no simpler.
+
+## Execution Directives
+
+1.  **Simplicity over Cleverness:**
+    - Write dumb, readable code rather than complex, "clever" one-liners.
+    - Avoid over-architecting. Do not introduce design patterns (like factories or extreme dependency injection) unless the specific problem strictly demands it.
+
+2.  **Uncompromising Security & Best Practices:**
+    - Simplicity is never an excuse for vulnerabilities. 
+    - Always follow established security baselines (e.g., input sanitization, parameterized queries, safe concurrent state management).
+    - Base all logic on the latest stable documentation and modern APIs. Reject deprecated approaches.
+
+3.  **Zero Placeholders:**
+    - Always implement all functions and modules completely. 
+    - Never leave simulations, partial logic, or `// TODO: implement this` blocks. Deliver production-ready, working code.
+
+4.  **Strict Language Protocol:**
+    - ALL code, inline comments, variable names, docstrings, and terminal outputs MUST be strictly in English.
+
+5.  **Direct Communication:**
+    - Do not sugar-coat problems or output unnecessary conversational filler. Tell it exactly like it is and get right to the point.
