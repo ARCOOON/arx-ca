@@ -206,8 +206,8 @@ func (e *PKIEngine) RevokeCertificate(ctx context.Context, serial, reason string
 	}, nil
 }
 
-// ListCertificates returns all issued certificates stored in the step-ca database.
-func (e *PKIEngine) ListCertificates(ctx context.Context) (*models.ListCertificatesResponse, error) {
+// ListCertificates returns issued certificates stored in the step-ca database.
+func (e *PKIEngine) ListCertificates(ctx context.Context, filter models.CertificateListFilter) (*models.ListCertificatesResponse, error) {
 	if e == nil || e.auth == nil {
 		return nil, errors.New("CA engine is not initialized")
 	}
@@ -260,6 +260,10 @@ func (e *PKIEngine) ListCertificates(ctx context.Context) (*models.ListCertifica
 			}
 		}
 
+		if !certificateMatchesFilter(summary, filter) {
+			continue
+		}
+
 		summaries = append(summaries, summary)
 	}
 
@@ -269,9 +273,51 @@ func (e *PKIEngine) ListCertificates(ctx context.Context) (*models.ListCertifica
 	}, nil
 }
 
+func certificateMatchesFilter(summary models.CertificateSummary, filter models.CertificateListFilter) bool {
+	if serial := strings.TrimSpace(filter.SerialNumber); serial != "" {
+		if !strings.Contains(strings.ToLower(summary.Serial), strings.ToLower(serial)) {
+			return false
+		}
+	}
+
+	if cn := strings.TrimSpace(filter.CommonName); cn != "" {
+		subjectCN := strings.TrimSpace(summary.Subject)
+		if idx := strings.Index(strings.ToUpper(subjectCN), "CN="); idx >= 0 {
+			rest := subjectCN[idx+3:]
+			if comma := strings.Index(rest, ","); comma >= 0 {
+				subjectCN = strings.TrimSpace(rest[:comma])
+			} else {
+				subjectCN = strings.TrimSpace(rest)
+			}
+		}
+		needle := strings.ToLower(cn)
+		if !strings.Contains(strings.ToLower(subjectCN), needle) &&
+			!strings.Contains(strings.ToLower(summary.Subject), needle) {
+			return false
+		}
+	}
+
+	status := strings.ToLower(strings.TrimSpace(filter.Status))
+	if status == "" {
+		return true
+	}
+
+	now := time.Now().UTC()
+	switch status {
+	case "revoked":
+		return summary.Revoked
+	case "expired":
+		return !summary.Revoked && summary.NotAfter.Before(now)
+	case "valid":
+		return !summary.Revoked && !summary.NotAfter.Before(now)
+	default:
+		return true
+	}
+}
+
 // ListPublicCertificates returns read-only certificate metadata for unauthenticated clients.
 func (e *PKIEngine) ListPublicCertificates(ctx context.Context) (*models.PublicListCertificatesResponse, error) {
-	list, err := e.ListCertificates(ctx)
+	list, err := e.ListCertificates(ctx, models.CertificateListFilter{})
 	if err != nil {
 		return nil, err
 	}
