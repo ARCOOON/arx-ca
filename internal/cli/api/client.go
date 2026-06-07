@@ -85,8 +85,12 @@ func (c *Client) AutoCertificate(ctx context.Context, req models.AutoCertificate
 }
 
 // RevokeCertificate calls POST /api/v1/certificates/revoke.
-func (c *Client) RevokeCertificate(ctx context.Context, serial, reason string) (*models.RevokeCertificateResponse, error) {
-	req := models.RevokeCertificateRequest{Serial: serial, Reason: reason}
+func (c *Client) RevokeCertificate(ctx context.Context, serial, reason string, reasonCode int) (*models.RevokeCertificateResponse, error) {
+	req := models.RevokeCertificateRequest{
+		SerialNumber: serial,
+		Reason:       reason,
+		ReasonCode:   &reasonCode,
+	}
 	var resp models.RevokeCertificateResponse
 	if err := c.postJSON(ctx, "/api/v1/certificates/revoke", req, &resp, true); err != nil {
 		return nil, err

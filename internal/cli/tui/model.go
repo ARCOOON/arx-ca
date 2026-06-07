@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	cliapi "github.com/ARCOOON/arx-ca/internal/cli/api"
 	"github.com/ARCOOON/arx-ca/internal/models"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type view int
@@ -196,7 +196,7 @@ func (m model) revokeSelected() tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		_, err := m.client.RevokeCertificate(ctx, serial, "")
+		_, err := m.client.RevokeCertificate(ctx, serial, "", 0)
 		return revokeDoneMsg{serial: serial, err: err}
 	}
 }
