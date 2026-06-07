@@ -65,7 +65,7 @@ func (e *PKIEngine) GenerateProvisionerToken(ctx context.Context, req models.Pro
 
 	provisionerName := strings.TrimSpace(req.Provisioner)
 	if provisionerName == "" {
-		provisionerName = defaultProvisioner
+		provisionerName = e.AdminProvisionerName()
 	}
 
 	tokenTTL, err := parseProvisionerTokenTTL(req.TokenTTL)
