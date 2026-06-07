@@ -6,12 +6,14 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/auth"
 	"github.com/ARCOOON/arx-ca/internal/ca"
 	arxcrypto "github.com/ARCOOON/arx-ca/internal/crypto"
 	"github.com/ARCOOON/arx-ca/internal/database"
+	"github.com/ARCOOON/arx-ca/internal/db"
 	"github.com/ARCOOON/arx-ca/internal/models"
 	"github.com/ARCOOON/arx-ca/internal/repository"
 )
@@ -74,6 +76,11 @@ func (h *CertificateHandler) Issue() http.Handler {
 			return
 		}
 
+		recordCertAudit(r, db.ActionCertIssueCSR, "", resp.CertificatePEM)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("serial", resp.Serial)
+		}
+
 		api.WriteSuccess(w, http.StatusCreated, resp)
 	})
 }
@@ -106,6 +113,12 @@ func (h *CertificateHandler) Auto() http.Handler {
 			return
 		}
 
+		recordCertAudit(r, "CERT_AUTO", "", resp.CertificatePEM)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("serial", resp.Serial)
+			ac.PutMetadata("common_name", req.CommonName)
+		}
+
 		api.WriteSuccess(w, http.StatusCreated, resp)
 	})
 }
@@ -124,12 +137,17 @@ func (h *CertificateHandler) Revoke() http.Handler {
 			return
 		}
 
-		if strings.TrimSpace(req.Serial) == "" {
-			api.WriteError(w, http.StatusBadRequest, "serial is required")
+		serial := req.ResolvedSerial()
+		if serial == "" {
+			api.WriteError(w, http.StatusBadRequest, "serial_number is required")
+			return
+		}
+		if req.ReasonCode == nil {
+			api.WriteError(w, http.StatusBadRequest, "reason_code is required")
 			return
 		}
 
-		resp, err := h.engine.RevokeCertificate(r.Context(), req.Serial, req.Reason, req.ReasonCode)
+		resp, err := h.engine.RevokeCertificate(r.Context(), serial, req.Reason, *req.ReasonCode)
 		if err != nil {
 			status, message := ca.MapCAError(err)
 			if status >= http.StatusInternalServerError {
@@ -137,6 +155,31 @@ func (h *CertificateHandler) Revoke() http.Handler {
 			}
 			api.WriteError(w, status, message)
 			return
+		}
+
+		if h.certStore != nil {
+			revokedAt, parseErr := time.Parse(time.RFC3339, resp.RevokedAt)
+			if parseErr != nil {
+				revokedAt = time.Now().UTC()
+			}
+			if err := h.certStore.MarkRevoked(r.Context(), resp.Serial, *req.ReasonCode, req.Reason, revokedAt); err != nil {
+				if strings.Contains(err.Error(), "not found") {
+					log.Printf("certificates: revoke archive sync skipped for serial %s: %v", resp.Serial, err)
+				} else {
+					log.Printf("certificates: revoke archive sync: %v", err)
+				}
+			}
+		}
+
+		recordAuditAction(r, db.ActionCertRevoke)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("serial", resp.Serial)
+			if req.ReasonCode != nil {
+				ac.PutMetadata("reason_code", *req.ReasonCode)
+			}
+			if req.Reason != "" {
+				ac.PutMetadata("reason", req.Reason)
+			}
 		}
 
 		api.WriteSuccess(w, http.StatusOK, resp)
@@ -178,6 +221,11 @@ func (h *CertificateHandler) IssueWithToken() http.Handler {
 			}
 			api.WriteError(w, status, message)
 			return
+		}
+
+		recordCertAudit(r, db.ActionCertIssueCSR, "", resp.CertificatePEM)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("serial", resp.Serial)
 		}
 
 		api.WriteSuccess(w, http.StatusCreated, resp)
@@ -231,6 +279,12 @@ func (h *CertificateHandler) Generate() http.Handler {
 				api.WriteError(w, http.StatusInternalServerError, "failed to build certificate bundle")
 			}
 			return
+		}
+
+		recordCertAudit(r, db.ActionCertIssueNative, "", resp.CertificatePEM)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("serial", resp.Serial)
+			ac.PutMetadata("common_name", req.CommonName)
 		}
 
 		api.WriteSuccess(w, http.StatusCreated, resp)
