@@ -9,6 +9,7 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/ca"
 	"github.com/ARCOOON/arx-ca/internal/models"
+	"github.com/ARCOOON/arx-ca/internal/version"
 )
 
 const apiVersion = "v1"
@@ -82,8 +83,9 @@ func (h *HealthHandler) memoryStats() models.MemoryStats {
 
 func (h *HealthHandler) apiStatus() models.APIStatus {
 	return models.APIStatus{
-		Status:  "healthy",
-		Version: apiVersion,
+		Status:        "healthy",
+		Version:       apiVersion,
+		BinaryVersion: version.Current(),
 	}
 }
 
