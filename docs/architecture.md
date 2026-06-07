@@ -1,5 +1,7 @@
 # Architecture
 
+> **Canonical documentation:** The [Project Wiki → Architecture](https://github.com/ARCOOON/arx-ca/wiki/Architecture) includes `server.yaml` reference examples and deployment topology. This file is the in-repo developer deep dive.
+
 This document describes how **arx** and **arx-agent** are structured: two static binaries sharing internal packages, separate Cobra entrypoints, domain-driven internal packages, dual persistence on the server (application SQL + step-ca Badger), and self-installing Linux deployment paths for both the CA and the renewal agent.
 
 ## Design goals

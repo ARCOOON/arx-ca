@@ -1,5 +1,7 @@
 # SSH CA Trust Setup
 
+> **Canonical documentation:** The [Project Wiki → SSH CA Setup](https://github.com/ARCOOON/arx-ca/wiki/SSH-CA-Setup) is the operator reference (principal mapping, Proxmox VE, Debian drop-ins). This file is a developer-repo mirror.
+
 This guide explains how to configure Linux hosts and clients to trust certificates issued by the arx SSH Certificate Authority (step-ca SSH engine).
 
 ## 1. Retrieve the CA public keys
