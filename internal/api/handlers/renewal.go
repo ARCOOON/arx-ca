@@ -8,6 +8,7 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/auth"
 	"github.com/ARCOOON/arx-ca/internal/ca"
+	"github.com/ARCOOON/arx-ca/internal/db"
 	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
@@ -67,6 +68,11 @@ func (h *RenewalHandler) Renew() http.Handler {
 			return
 		}
 
+		recordCertAudit(r, db.ActionCertRenew, "", resp.CertificatePEM)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("serial", resp.Serial)
+		}
+
 		api.WriteSuccess(w, http.StatusCreated, resp)
 	})
 }
@@ -116,6 +122,11 @@ func (h *RenewalHandler) Rekey() http.Handler {
 			}
 			api.WriteError(w, status, message)
 			return
+		}
+
+		recordCertAudit(r, "CERT_REKEY", "", resp.CertificatePEM)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("serial", resp.Serial)
 		}
 
 		api.WriteSuccess(w, http.StatusCreated, resp)
