@@ -28,6 +28,7 @@ const (
 // Config drives a single self-update run.
 type Config struct {
 	Component Component
+	Channel   string
 	Current   string
 	Out       io.Writer
 	Client    *http.Client
@@ -51,7 +52,11 @@ func Run(ctx context.Context, cfg Config) error {
 
 	fmt.Fprintln(cfg.Out, "Checking for updates...")
 
-	release, err := fetchLatestRelease(ctx, cfg.Client)
+	channel := strings.TrimSpace(strings.ToLower(cfg.Channel))
+	if channel == "" {
+		channel = "main"
+	}
+	release, err := fetchReleaseForChannel(ctx, cfg.Client, channel)
 	if err != nil {
 		return err
 	}
