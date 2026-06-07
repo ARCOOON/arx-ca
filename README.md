@@ -1,11 +1,28 @@
 # arx — Enterprise X.509 & SSH Certificate Authority
 
-**arx** is an enterprise-grade Certificate Authority platform built with **Go** (control plane, PKI engine, REST API) and **Vue 3** (operator WebUI). It ships two static binaries — `arx` (CA server) and `arx-agent` (renewal daemon) — with zero external database required for default deployments.
+**arx** is an enterprise-grade Certificate Authority platform: a **Go** control plane (PKI engine, REST API, enrollment protocols) and a **Vue 3** operator WebUI. Two static binaries ship with zero external database required for default deployments.
 
 | Binary | Role |
 | ------ | ---- |
 | **`arx`** | Control plane — HTTP API, WebUI, admin CLI, ACME / SCEP / NDES |
 | **`arx-agent`** | Data plane — certificate renewal, local trust stores, CRL self-quarantine |
+
+---
+
+## Documentation
+
+> ### [📖 Project Wiki — https://github.com/ARCOOON/arx-ca/wiki](https://github.com/ARCOOON/arx-ca/wiki)
+>
+> All technical documentation lives in the **GitHub Wiki**. The `wiki/` directory in this repository is a **Git submodule** linked to `ARCOOON/arx-ca.wiki`. Clone with `git clone --recurse-submodules` or run `git submodule update --init wiki` after checkout.
+
+| Topic | Wiki page |
+| ----- | --------- |
+| Architecture & `server.yaml` | [Architecture](https://github.com/ARCOOON/arx-ca/wiki/Architecture) |
+| SSH CA trust & principals | [SSH CA Setup](https://github.com/ARCOOON/arx-ca/wiki/SSH-CA-Setup) |
+| CLI commands | [CLI Reference](https://github.com/ARCOOON/arx-ca/wiki/CLI-Reference) |
+| REST API schemas | [API Reference](https://github.com/ARCOOON/arx-ca/wiki/API-Reference) |
+| ACME enrollment | [ACME](https://github.com/ARCOOON/arx-ca/wiki/ACME) |
+| Renewal agent | [Agent](https://github.com/ARCOOON/arx-ca/wiki/Agent) |
 
 ---
 
@@ -31,7 +48,7 @@ arx login --url https://ca.example.com
 arx ui
 ```
 
-Production systemd deployment: `sudo arx server setup` — see the [Project Wiki](https://github.com/ARCOOON/arx-ca/wiki) for full deployment guides.
+Production systemd deployment: `sudo arx server setup` — see the [Wiki](https://github.com/ARCOOON/arx-ca/wiki) for full deployment guides.
 
 ---
 
@@ -40,29 +57,10 @@ Production systemd deployment: `sudo arx server setup` — see the [Project Wiki
 Distribute root trust to Linux hosts with a single remote script:
 
 ```bash
-curl -sL https://ca.example.com/trust.sh | sudo bash
+curl -sL https://ca.arx.local/trust.sh | sudo bash
 ```
 
-The script installs the arx root CA into the system trust store and configures renewal-agent hooks. Host-specific variants (Debian, Proxmox VE, RHEL) are documented in the [Wiki → SSH CA Setup](https://github.com/ARCOOON/arx-ca/wiki/SSH-CA-Setup).
-
----
-
-## Documentation
-
-> **All technical documentation lives in the [Project Wiki](https://github.com/ARCOOON/arx-ca/wiki).**
->
-> The `wiki/` directory in this repository is a **Git submodule** linked to the official GitHub Wiki (`ARCOOON/arx-ca.wiki`). Clone with `git clone --recurse-submodules` or run `git submodule update --init wiki` after checkout.
-
-| Topic | Wiki page |
-| ----- | --------- |
-| **Architecture** — dual-listener model, DDD layers, `server.yaml` reference | [Architecture](https://github.com/ARCOOON/arx-ca/wiki/Architecture) |
-| **Deployment** — systemd, Docker, PostgreSQL, production hardening | [Architecture → Configuration](https://github.com/ARCOOON/arx-ca/wiki/Architecture#configuration-reference-serveryaml) |
-| **SSH CA** — `sshd` trust, principals, Proxmox & Debian | [SSH CA Setup](https://github.com/ARCOOON/arx-ca/wiki/SSH-CA-Setup) |
-| **REST API** — full endpoint matrix | [API Reference](https://github.com/ARCOOON/arx-ca/wiki/API-Reference) |
-| **Audit & forensics** — immutable log, filters | [Audit Log](https://github.com/ARCOOON/arx-ca/wiki/Audit-Log) |
-| **Webhooks & notifications** — SSE, Discord, Slack | [Webhooks & Notifications](https://github.com/ARCOOON/arx-ca/wiki/Webhooks-&-Notifications) |
-
-Developer-oriented references remain in [`docs/`](docs/) (CLI flags, API schemas, agent spec).
+Host-specific variants (Debian, Proxmox VE, RHEL) are documented in the [Wiki → SSH CA Setup](https://github.com/ARCOOON/arx-ca/wiki/SSH-CA-Setup).
 
 ---
 
