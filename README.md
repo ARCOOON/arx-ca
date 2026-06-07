@@ -11,7 +11,7 @@
 
 ## Documentation
 
-> ### [📖 Project Wiki — https://github.com/ARCOOON/arx-ca/wiki](https://github.com/ARCOOON/arx-ca/wiki)
+> ### [📖 Project Wiki](https://github.com/ARCOOON/arx-ca/wiki)
 >
 > All technical documentation lives in the **GitHub Wiki**. The `wiki/` directory in this repository is a **Git submodule** linked to `ARCOOON/arx-ca.wiki`. Clone with `git clone --recurse-submodules` or run `git submodule update --init wiki` after checkout.
 
