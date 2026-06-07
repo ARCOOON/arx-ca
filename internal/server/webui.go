@@ -142,9 +142,10 @@ func buildWebUIHandler(cfg arxconfig.WebUIConfig, uiDir, indexPath string) http.
 	var handler http.Handler = fileHandler
 	handler = maxBodySizeMiddleware(cfg.MaxBodySize, handler)
 	corsOpts := middleware.CORSOptions{
-		AllowedOrigins: cfg.CORS.AllowedOrigins,
-		AllowedMethods: cfg.CORS.AllowedMethods,
-		AllowedHeaders: cfg.CORS.AllowedHeaders,
+		AllowedOrigins:   cfg.CORS.AllowedOrigins,
+		AllowedMethods:   cfg.CORS.AllowedMethods,
+		AllowedHeaders:   cfg.CORS.AllowedHeaders,
+		AllowCredentials: cfg.CORS.AllowCredentials,
 	}
 	handler = middleware.CORS(corsOpts, handler)
 	return handler
