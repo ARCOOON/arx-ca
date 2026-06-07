@@ -2,7 +2,9 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import { useNotifications } from '../../composables/useNotifications'
+import { useUpdater } from '../../composables/useUpdater'
 import { useAuthStore } from '../../store/auth'
+import PostUpdateChangelogModal from '../modals/PostUpdateChangelogModal.vue'
 import NotificationToaster from '../NotificationToaster.vue'
 import ToastHost from '../ui/ToastHost.vue'
 import SideNav from './SideNav.vue'
@@ -17,6 +19,7 @@ function readCollapsedPreference(): boolean {
 const authStore = useAuthStore()
 const route = useRoute()
 const { connect, disconnect } = useNotifications()
+const { triggerChangelogModal, runVersionDriftCheck, dismissChangelogModal } = useUpdater()
 const sidebarCollapsed = ref(readCollapsedPreference())
 const mobileNavOpen = ref(false)
 
@@ -41,6 +44,7 @@ function handleLogout(): void {
 onMounted(() => {
   if (authStore.isAuthenticated) {
     connect()
+    runVersionDriftCheck()
   }
 })
 
@@ -53,6 +57,7 @@ watch(
   (authenticated) => {
     if (authenticated) {
       connect()
+      runVersionDriftCheck()
       return
     }
     disconnect()
@@ -96,5 +101,9 @@ watch(
 
     <NotificationToaster />
     <ToastHost />
+    <PostUpdateChangelogModal
+      :open="triggerChangelogModal"
+      @close="dismissChangelogModal"
+    />
   </div>
 </template>
