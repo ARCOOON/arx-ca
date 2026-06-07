@@ -1,6 +1,6 @@
-# arx — Enterprise X.509 & SSH Certificate Authority
+# ARX CA — Enterprise X.509 & SSH Certificate Authority
 
-**arx** is an enterprise-grade Certificate Authority platform: a **Go** control plane (PKI engine, REST API, enrollment protocols) and a **Vue 3** operator WebUI. Two static binaries ship with zero external database required for default deployments.
+**ARX CA** is an enterprise-grade Certificate Authority platform: a **Go** control plane (PKI engine, REST API, enrollment protocols) and a **Vue 3** operator WebUI. Two static binaries ship with zero external database required for default deployments.
 
 | Binary | Role |
 | ------ | ---- |
