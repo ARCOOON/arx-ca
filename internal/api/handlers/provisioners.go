@@ -39,6 +39,12 @@ func (h *ProvisionerHandler) Token() http.Handler {
 			return
 		}
 
+		recordAuditAction(r, "PROVISIONER_TOKEN")
+		if ac := auditFromRequest(r); ac != nil {
+			ac.SetProvisioner(strings.TrimSpace(req.Provisioner))
+			ac.PutMetadata("common_name", strings.TrimSpace(req.CommonName))
+		}
+
 		resp, err := h.engine.GenerateProvisionerToken(r.Context(), req)
 		if err != nil {
 			if isClientProvisionerError(err) {
