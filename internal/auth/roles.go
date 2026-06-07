@@ -35,6 +35,7 @@ const (
 	PermSSHInspect         Permission = "ssh:inspect"
 	PermAuditRead          Permission = "audit:read"
 	PermWebhooksManage     Permission = "webhooks:manage"
+	PermSettingsManage     Permission = "settings:manage"
 )
 
 var rolePermissions = map[Role][]Permission{
@@ -55,6 +56,7 @@ var rolePermissions = map[Role][]Permission{
 		PermSSHInspect,
 		PermAuditRead,
 		PermWebhooksManage,
+		PermSettingsManage,
 	},
 	RoleCAAdmin: {
 		PermCertificatesIssue,
@@ -71,6 +73,7 @@ var rolePermissions = map[Role][]Permission{
 		PermSSHInspect,
 		PermAuditRead,
 		PermWebhooksManage,
+		PermSettingsManage,
 	},
 	RoleRevocationManager: {
 		PermCertificatesRevoke,
