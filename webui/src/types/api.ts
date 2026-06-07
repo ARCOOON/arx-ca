@@ -122,6 +122,7 @@ export interface HealthReport {
   api: {
     status: string
     version: string
+    binary_version: string
   }
   ca_backend: {
     status: string
@@ -545,4 +546,30 @@ export interface WebhookTestResponse {
   status_code: number
   latency_ms: number
   error?: string
+}
+
+export interface UpdaterConfigView {
+  enabled: boolean
+  channel: string
+  notify_only: boolean
+  check_interval: string
+  view_changelog_after_update: boolean
+}
+
+export interface UpdaterChangelogResponse {
+  version: string
+  markdown: string
+}
+
+export interface SettingsConfigResponse {
+  server: Record<string, unknown>
+  database: Record<string, unknown>
+  ca: Record<string, unknown>
+  ca_bootstrap: Record<string, unknown>
+  security: Record<string, unknown>
+  bootstrap: Record<string, unknown>
+  telemetry: Record<string, unknown>
+  service: Record<string, unknown>
+  webui: Record<string, unknown>
+  updater: UpdaterConfigView
 }
