@@ -1,22 +1,25 @@
 package models
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // IssueCertificateRequest carries a PEM-encoded CSR to be signed by the intermediate CA.
 type IssueCertificateRequest struct {
-	CSR                string         `json:"csr"`
-	TTL                string         `json:"ttl,omitempty"`
-	TemplateID         string         `json:"template_id,omitempty"`
-	Metadata           map[string]any `json:"metadata,omitempty"`
-	Organization       string         `json:"organization,omitempty"`
-	OrganizationalUnit string         `json:"organizational_unit,omitempty"`
-	Country            string         `json:"country,omitempty"`
-	State              string         `json:"state,omitempty"`
-	Locality           string         `json:"locality,omitempty"`
-	IsServerAuth         bool `json:"is_server_auth,omitempty"`
-	IsClientAuth         bool `json:"is_client_auth,omitempty"`
-	UseDigitalSignature  bool `json:"use_digital_signature,omitempty"`
-	UseKeyEncipherment   bool `json:"use_key_encipherment,omitempty"`
+	CSR                 string         `json:"csr"`
+	TTL                 string         `json:"ttl,omitempty"`
+	TemplateID          string         `json:"template_id,omitempty"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
+	Organization        string         `json:"organization,omitempty"`
+	OrganizationalUnit  string         `json:"organizational_unit,omitempty"`
+	Country             string         `json:"country,omitempty"`
+	State               string         `json:"state,omitempty"`
+	Locality            string         `json:"locality,omitempty"`
+	IsServerAuth        bool           `json:"is_server_auth,omitempty"`
+	IsClientAuth        bool           `json:"is_client_auth,omitempty"`
+	UseDigitalSignature bool           `json:"use_digital_signature,omitempty"`
+	UseKeyEncipherment  bool           `json:"use_key_encipherment,omitempty"`
 }
 
 // AutoCertificateRequest describes a certificate to be generated and signed in one step.
@@ -31,9 +34,18 @@ type AutoCertificateRequest struct {
 
 // RevokeCertificateRequest revokes a previously issued certificate by serial number.
 type RevokeCertificateRequest struct {
-	Serial     string `json:"serial"`
-	Reason     string `json:"reason,omitempty"`
-	ReasonCode int    `json:"reason_code,omitempty"`
+	SerialNumber string `json:"serial_number"`
+	Serial       string `json:"serial,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	ReasonCode   *int   `json:"reason_code"`
+}
+
+// ResolvedSerial returns the serial number from serial_number or the legacy serial field.
+func (r RevokeCertificateRequest) ResolvedSerial() string {
+	if s := strings.TrimSpace(r.SerialNumber); s != "" {
+		return s
+	}
+	return strings.TrimSpace(r.Serial)
 }
 
 // CertificatePEMResponse returns a signed certificate in PEM encoding.
@@ -55,19 +67,19 @@ type AutoCertificateResponse struct {
 
 // GenerateCertificateRequest describes a native key generation and issuance request.
 type GenerateCertificateRequest struct {
-	CommonName         string   `json:"common_name"`
-	SANs               []string `json:"sans,omitempty"`
-	TTL                string   `json:"ttl,omitempty"`
-	KeyAlgo            string   `json:"key_algo"`
-	Organization       string   `json:"organization,omitempty"`
-	OrganizationalUnit string   `json:"organizational_unit,omitempty"`
-	Country            string   `json:"country,omitempty"`
-	State              string   `json:"state,omitempty"`
-	Locality           string   `json:"locality,omitempty"`
-	IsServerAuth        bool `json:"is_server_auth,omitempty"`
-	IsClientAuth        bool `json:"is_client_auth,omitempty"`
-	UseDigitalSignature bool `json:"use_digital_signature,omitempty"`
-	UseKeyEncipherment  bool `json:"use_key_encipherment,omitempty"`
+	CommonName          string   `json:"common_name"`
+	SANs                []string `json:"sans,omitempty"`
+	TTL                 string   `json:"ttl,omitempty"`
+	KeyAlgo             string   `json:"key_algo"`
+	Organization        string   `json:"organization,omitempty"`
+	OrganizationalUnit  string   `json:"organizational_unit,omitempty"`
+	Country             string   `json:"country,omitempty"`
+	State               string   `json:"state,omitempty"`
+	Locality            string   `json:"locality,omitempty"`
+	IsServerAuth        bool     `json:"is_server_auth,omitempty"`
+	IsClientAuth        bool     `json:"is_client_auth,omitempty"`
+	UseDigitalSignature bool     `json:"use_digital_signature,omitempty"`
+	UseKeyEncipherment  bool     `json:"use_key_encipherment,omitempty"`
 }
 
 // GenerateCertificateResponse returns PEM-encoded certificate and private key material.
@@ -81,17 +93,20 @@ type GenerateCertificateResponse struct {
 
 // CertificateRecordDetail is a persisted issued certificate with operator metadata.
 type CertificateRecordDetail struct {
-	Serial         string   `json:"serial"`
-	CommonName     string   `json:"common_name"`
-	Subject        string   `json:"subject"`
-	DNSNames       []string `json:"dns_names,omitempty"`
-	IPAddresses    []string `json:"ip_addresses,omitempty"`
-	NotBefore      string   `json:"not_before"`
-	NotAfter       string   `json:"not_after"`
-	RequestorID    string   `json:"requestor_id"`
-	CertificatePEM string   `json:"certificate_pem"`
-	Revoked        bool     `json:"revoked"`
-	HasEscrowedKey bool     `json:"has_escrowed_key"`
+	Serial           string   `json:"serial"`
+	CommonName       string   `json:"common_name"`
+	Subject          string   `json:"subject"`
+	DNSNames         []string `json:"dns_names,omitempty"`
+	IPAddresses      []string `json:"ip_addresses,omitempty"`
+	NotBefore        string   `json:"not_before"`
+	NotAfter         string   `json:"not_after"`
+	RequestorID      string   `json:"requestor_id"`
+	CertificatePEM   string   `json:"certificate_pem"`
+	Revoked          bool     `json:"revoked"`
+	RevokedAt        string   `json:"revoked_at,omitempty"`
+	ReasonCode       *int     `json:"reason_code,omitempty"`
+	RevocationReason string   `json:"revocation_reason,omitempty"`
+	HasEscrowedKey   bool     `json:"has_escrowed_key"`
 }
 
 // CertificatePrivateKeyResponse returns escrowed private key material to authorized operators.

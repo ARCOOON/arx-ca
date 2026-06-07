@@ -11,6 +11,22 @@ type SignSSHUserRequest struct {
 	Provisioner string   `json:"provisioner,omitempty"`
 }
 
+// GenerateSSHUserRequest issues an SSH user certificate via the generate API.
+type GenerateSSHUserRequest struct {
+	PublicKey   string   `json:"public_key"`
+	Principals  []string `json:"principals"`
+	TTL         string   `json:"ttl,omitempty"`
+	Provisioner string   `json:"provisioner,omitempty"`
+}
+
+// GenerateSSHHostRequest issues an SSH host certificate via the generate API.
+type GenerateSSHHostRequest struct {
+	PublicKey   string   `json:"public_key"`
+	Principals  []string `json:"principals"`
+	TTL         string   `json:"ttl,omitempty"`
+	Provisioner string   `json:"provisioner,omitempty"`
+}
+
 // SignSSHHostRequest issues an SSH host certificate.
 type SignSSHHostRequest struct {
 	PublicKey   string   `json:"public_key"`
@@ -61,4 +77,23 @@ type SSHRootKey struct {
 	PublicKey   string `json:"public_key"`
 	KeyType     string `json:"key_type"`
 	Fingerprint string `json:"fingerprint"`
+}
+
+// SSHCertificateListItem is a persisted SSH certificate record exposed via the API.
+type SSHCertificateListItem struct {
+	ID          string   `json:"id"`
+	Serial      string   `json:"serial"`
+	CertType    string   `json:"cert_type"`
+	Principals  []string `json:"principals"`
+	Fingerprint string   `json:"fingerprint"`
+	ValidAfter  string   `json:"valid_after"`
+	ValidBefore string   `json:"valid_before"`
+}
+
+// ListSSHCertificatesResponse returns a paginated list of persisted SSH certificates.
+type ListSSHCertificatesResponse struct {
+	Certificates []SSHCertificateListItem `json:"certificates"`
+	Total        int                      `json:"total"`
+	Limit        int                      `json:"limit"`
+	Offset       int                      `json:"offset"`
 }
