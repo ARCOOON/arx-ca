@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { createServiceAccount } from '../api/auth'
 import { fetchRootCertPEM, fetchIntermediateCertPEM } from '../api/ca'
+import { fetchSettingsConfig, updateSettingsConfig } from '../api/config'
 import { resolveApiBaseURL } from '../api/client'
 import { fetchHealth } from '../api/health'
 import { listPublicCertificates } from '../api/public'
@@ -56,6 +57,30 @@ const intermediateDownloading = ref(false)
 const certDownloadError = ref('')
 
 const isSuperAdmin = computed(() => authStore.roles.includes('SuperAdmin'))
+const canManageSettings = computed(
+  () => authStore.roles.includes('SuperAdmin') || authStore.roles.includes('CA-Admin'),
+)
+
+const UPDATE_CHANNELS = ['main', 'stable', 'develop', 'beta'] as const
+
+const updaterEnabled = ref(true)
+const updaterChannel = ref('main')
+const updaterNotifyOnly = ref(true)
+const updaterCheckInterval = ref('1h')
+const updaterViewChangelogAfterUpdate = ref(true)
+const updaterLoading = ref(false)
+const updaterSaving = ref(false)
+const updaterError = ref('')
+const updaterSaved = ref(false)
+
+const updateActionOptions = [
+  { value: true, label: 'Notify Only', description: 'Emit operator notifications when a newer release is available.' },
+  {
+    value: false,
+    label: 'Download & Apply',
+    description: 'Download the release, swap the binary, and gracefully restart the server.',
+  },
+] as const
 
 const publicListUrl = computed(() => `${appOrigin}${apiBaseUrl}/public/certificates`)
 
@@ -72,7 +97,65 @@ onMounted(async () => {
   }
 
   void loadPublicCertCount()
+
+  if (canManageSettings.value) {
+    void loadUpdaterSettings()
+  }
 })
+
+async function loadUpdaterSettings(): Promise<void> {
+  updaterLoading.value = true
+  updaterError.value = ''
+  updaterSaved.value = false
+
+  try {
+    const config = await fetchSettingsConfig()
+    updaterEnabled.value = config.updater.enabled
+    updaterChannel.value = config.updater.channel || 'main'
+    updaterNotifyOnly.value = config.updater.notify_only
+    updaterCheckInterval.value = config.updater.check_interval || '1h'
+    updaterViewChangelogAfterUpdate.value = config.updater.view_changelog_after_update ?? true
+  } catch (error) {
+    updaterError.value = extractApiError(error, 'Failed to load system configuration')
+  } finally {
+    updaterLoading.value = false
+  }
+}
+
+async function saveUpdaterSettings(): Promise<void> {
+  updaterSaving.value = true
+  updaterError.value = ''
+  updaterSaved.value = false
+
+  const interval = updaterCheckInterval.value.trim()
+  if (!interval) {
+    updaterError.value = 'Check interval is required (e.g. 1h, 24h).'
+    updaterSaving.value = false
+    return
+  }
+
+  try {
+    const config = await updateSettingsConfig({
+      updater: {
+        enabled: updaterEnabled.value,
+        channel: updaterChannel.value,
+        notify_only: updaterNotifyOnly.value,
+        check_interval: interval,
+        view_changelog_after_update: updaterViewChangelogAfterUpdate.value,
+      },
+    })
+    updaterEnabled.value = config.updater.enabled
+    updaterChannel.value = config.updater.channel
+    updaterNotifyOnly.value = config.updater.notify_only
+    updaterCheckInterval.value = config.updater.check_interval
+    updaterViewChangelogAfterUpdate.value = config.updater.view_changelog_after_update
+    updaterSaved.value = true
+  } catch (error) {
+    updaterError.value = extractApiError(error, 'Failed to save auto-updater settings')
+  } finally {
+    updaterSaving.value = false
+  }
+}
 
 async function loadPublicCertCount(): Promise<void> {
   publicLoading.value = true
@@ -359,6 +442,138 @@ function dismissServiceAccountResult(): void {
         </div>
         <button type="button" class="ui-btn-primary" :disabled="saCreating" @click="submitServiceAccount">
           {{ saCreating ? 'Creating…' : 'Create Service Account' }}
+        </button>
+      </div>
+    </section>
+
+    <section v-if="canManageSettings" class="ui-surface-muted">
+      <header class="ui-border-b px-4 py-2.5">
+        <h2 class="text-sm font-semibold ui-text-primary">Auto-Updater</h2>
+        <p class="mt-0.5 text-xs ui-text-muted">
+          Background GitHub release checker. Changes are written to
+          <code class="ui-code">server.yaml</code>
+          on save.
+        </p>
+        <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
+          <code class="ui-code">GET/PUT /api/v1/settings/config</code>
+        </p>
+      </header>
+
+      <div class="ui-divide text-xs">
+        <div v-if="updaterError" class="px-4 py-3">
+          <p class="ui-alert-error" role="alert">{{ updaterError }}</p>
+        </div>
+        <div v-if="updaterSaved" class="px-4 py-3">
+          <p class="ui-alert-success" role="status">Auto-updater settings saved to server.yaml.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <p class="font-medium ui-text-secondary">Enable Auto-Updater</p>
+            <p class="mt-0.5 ui-text-muted">Poll GitHub releases on the configured channel and interval.</p>
+          </div>
+          <button
+            type="button"
+            class="ui-theme-toggle shrink-0"
+            :data-active="updaterEnabled"
+            :aria-pressed="updaterEnabled"
+            :disabled="updaterLoading || updaterSaving"
+            aria-label="Enable Auto-Updater"
+            @click="updaterEnabled = !updaterEnabled"
+          >
+            <span class="ui-theme-toggle-thumb" />
+          </button>
+        </div>
+
+        <div class="grid gap-3 px-4 py-3 sm:grid-cols-2">
+          <div>
+            <label class="block font-medium ui-text-secondary" for="updater-channel">Update Channel</label>
+            <select
+              id="updater-channel"
+              v-model="updaterChannel"
+              class="ui-input mt-1.5"
+              :disabled="updaterLoading || updaterSaving"
+            >
+              <option v-for="channel in UPDATE_CHANNELS" :key="channel" :value="channel">
+                {{ channel }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-medium ui-text-secondary" for="updater-interval">Check Interval</label>
+            <input
+              id="updater-interval"
+              v-model="updaterCheckInterval"
+              type="text"
+              class="ui-input mt-1.5 font-mono"
+              placeholder="1h"
+              :disabled="updaterLoading || updaterSaving"
+              autocomplete="off"
+            />
+            <p class="mt-1 ui-text-muted">Go duration string, e.g. <code class="ui-code">30m</code>, <code class="ui-code">24h</code>.</p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <p class="font-medium ui-text-secondary">View Changelog After Update</p>
+            <p class="mt-0.5 ui-text-muted">
+              Show release notes once on the first administrator visit after a version change.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="ui-theme-toggle shrink-0"
+            :data-active="updaterViewChangelogAfterUpdate"
+            :aria-pressed="updaterViewChangelogAfterUpdate"
+            :disabled="updaterLoading || updaterSaving"
+            aria-label="View Changelog After Update"
+            @click="updaterViewChangelogAfterUpdate = !updaterViewChangelogAfterUpdate"
+          >
+            <span class="ui-theme-toggle-thumb" />
+          </button>
+        </div>
+
+        <div class="space-y-3 px-4 py-3">
+          <div>
+            <p class="font-medium ui-text-secondary">Action on Update</p>
+            <p class="mt-0.5 ui-text-muted">Choose notification-only mode or automatic binary replacement.</p>
+          </div>
+          <div
+            class="grid gap-2 sm:grid-cols-2"
+            role="radiogroup"
+            aria-label="Action on Update"
+          >
+            <button
+              v-for="option in updateActionOptions"
+              :key="String(option.value)"
+              type="button"
+              class="rounded-[var(--radius-control)] border px-3 py-2.5 text-left transition-all duration-300"
+              :class="
+                updaterNotifyOnly === option.value
+                  ? 'border-[var(--accent-border)] bg-[var(--accent-surface)]'
+                  : 'border-[var(--border-color)] bg-[var(--bg-surface)] hover:border-[var(--border-subtle)]'
+              "
+              role="radio"
+              :aria-checked="updaterNotifyOnly === option.value"
+              :disabled="updaterLoading || updaterSaving"
+              @click="updaterNotifyOnly = option.value"
+            >
+              <span class="block font-medium ui-text-primary">{{ option.label }}</span>
+              <span class="mt-0.5 block ui-text-muted">{{ option.description }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="ui-border-t px-4 py-3">
+        <button
+          type="button"
+          class="ui-btn-primary"
+          :disabled="updaterLoading || updaterSaving"
+          @click="saveUpdaterSettings"
+        >
+          {{ updaterSaving ? 'Saving…' : updaterLoading ? 'Loading…' : 'Save Auto-Updater Settings' }}
         </button>
       </div>
     </section>
