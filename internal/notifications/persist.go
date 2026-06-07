@@ -11,13 +11,14 @@ import (
 // notifications and SSE broadcasts. All other audit events remain in the immutable
 // audit log only.
 var operatorNotificationActions = map[string]struct{}{
-	db.ActionAuthLoginFailed: {},
-	db.ActionCertIssueNative: {},
-	db.ActionCertIssueCSR:    {},
-	db.ActionCertRevoke:      {},
-	db.ActionCertRenew:       {},
-	db.ActionEABGenerate:     {},
-	db.ActionEABRevoke:       {},
+	db.ActionAuthLoginFailed:    {},
+	db.ActionCertIssueNative:    {},
+	db.ActionCertIssueCSR:       {},
+	db.ActionCertRevoke:         {},
+	db.ActionCertRenew:          {},
+	db.ActionEABGenerate:        {},
+	db.ActionEABRevoke:          {},
+	db.ActionSysUpdateAvailable: {},
 }
 
 // suppressedOperatorActions are explicit audit action identifiers that must never
@@ -70,6 +71,11 @@ func NotificationLevel(action string) string {
 
 // NotificationMessage formats a human-readable summary for operator notifications.
 func NotificationMessage(entry db.AuditLog) string {
+	if msg, ok := entry.Metadata["message"].(string); ok {
+		if trimmed := strings.TrimSpace(msg); trimmed != "" {
+			return trimmed
+		}
+	}
 	actor := strings.TrimSpace(entry.ActorID)
 	if actor == "" {
 		actor = "system"

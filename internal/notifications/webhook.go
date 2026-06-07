@@ -29,6 +29,8 @@ const (
 var NotifiableActions = []string{
 	db.ActionSysStart,
 	db.ActionSysConfigUpdate,
+	db.ActionSysUpdateAvailable,
+	db.ActionSysUpdateApplied,
 	db.ActionAuthLoginSuccess,
 	db.ActionAuthLoginFailed,
 	db.ActionCertIssueNative,
