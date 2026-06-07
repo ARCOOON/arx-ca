@@ -40,18 +40,21 @@ defineProps<{
             {{ emptyMessage ?? 'No records found.' }}
           </td>
         </tr>
-        <tr v-for="row in rows" v-else :key="rowKey(row)" class="ui-table-row">
-          <td
-            v-for="column in columns"
-            :key="column.key"
-            class="px-3 py-2 ui-text-secondary"
-            :class="column.cellClass"
-          >
-            <slot :name="`cell-${column.key}`" :row="row">
-              {{ column.format ? column.format(row) : String(row[column.key] ?? '') }}
-            </slot>
-          </td>
-        </tr>
+        <template v-for="row in rows" v-else :key="rowKey(row)">
+          <tr class="ui-table-row">
+            <td
+              v-for="column in columns"
+              :key="column.key"
+              class="px-3 py-2 ui-text-secondary"
+              :class="column.cellClass"
+            >
+              <slot :name="`cell-${column.key}`" :row="row">
+                {{ column.format ? column.format(row) : String(row[column.key] ?? '') }}
+              </slot>
+            </td>
+          </tr>
+          <slot name="row-expanded" :row="row" :columns="columns" />
+        </template>
       </tbody>
     </table>
   </div>

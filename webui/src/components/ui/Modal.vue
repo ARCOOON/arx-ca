@@ -37,23 +37,23 @@ onUnmounted(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="ui-overlay fixed inset-0 z-50 flex items-start justify-center overflow-y-auto px-4 py-10"
+      class="ui-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-2 sm:p-4"
       role="presentation"
       @click="handleBackdropClick"
     >
       <div
-        class="ui-elevated ui-dialog w-full"
-        :class="wide ? 'max-w-2xl' : 'max-w-lg'"
+        class="ui-elevated ui-dialog flex max-h-[90vh] w-full max-w-[95vw] flex-col"
+        :class="wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'"
         role="dialog"
         aria-modal="true"
         :aria-label="title"
         @click.stop
       >
-        <header class="ui-border-b flex items-center justify-between px-4 py-3">
-          <h2 class="text-sm font-semibold ui-text-primary">{{ title }}</h2>
+        <header class="ui-border-b flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+          <h2 class="min-w-0 text-sm font-semibold ui-text-primary">{{ title }}</h2>
           <button
             type="button"
-            class="ui-btn-secondary inline-flex h-7 w-7 items-center justify-center p-0"
+            class="ui-btn-secondary inline-flex h-7 w-7 shrink-0 items-center justify-center p-0"
             aria-label="Close dialog"
             @click="emit('close')"
           >
@@ -61,11 +61,11 @@ onUnmounted(() => {
           </button>
         </header>
 
-        <div class="px-4 py-4">
+        <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           <slot />
         </div>
 
-        <footer v-if="$slots.footer" class="ui-border-t flex items-center justify-end gap-2 px-4 py-3">
+        <footer v-if="$slots.footer" class="ui-border-t ui-modal-footer shrink-0 px-4 py-3">
           <slot name="footer" />
         </footer>
       </div>
