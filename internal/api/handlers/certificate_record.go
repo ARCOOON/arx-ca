@@ -66,16 +66,25 @@ func certificateRecordFromStore(rec *database.IssuedCertificate, revoked bool) m
 		return models.CertificateRecordDetail{}
 	}
 
+	isRevoked := revoked || rec.Status == database.CertificateStatusRevoked
 	detail := models.CertificateRecordDetail{
-		Serial:         rec.Serial,
-		CommonName:     rec.CommonName,
-		Subject:        rec.Subject,
-		NotBefore:      rec.NotBefore.UTC().Format(time.RFC3339),
-		NotAfter:       rec.NotAfter.UTC().Format(time.RFC3339),
-		RequestorID:    rec.RequestorID,
-		CertificatePEM: rec.CertificatePEM,
-		Revoked:        revoked,
-		HasEscrowedKey: len(rec.EncryptedPrivateKey) > 0,
+		Serial:           rec.Serial,
+		CommonName:       rec.CommonName,
+		Subject:          rec.Subject,
+		NotBefore:        rec.NotBefore.UTC().Format(time.RFC3339),
+		NotAfter:         rec.NotAfter.UTC().Format(time.RFC3339),
+		RequestorID:      rec.RequestorID,
+		CertificatePEM:   rec.CertificatePEM,
+		Revoked:          isRevoked,
+		RevocationReason: rec.RevocationReason,
+		HasEscrowedKey:   len(rec.EncryptedPrivateKey) > 0,
+	}
+	if rec.RevokedAt != nil {
+		detail.RevokedAt = rec.RevokedAt.UTC().Format(time.RFC3339)
+	}
+	if rec.ReasonCode != nil {
+		code := *rec.ReasonCode
+		detail.ReasonCode = &code
 	}
 
 	if cert, err := pemutil.ParseCertificate([]byte(rec.CertificatePEM)); err == nil && cert != nil {
