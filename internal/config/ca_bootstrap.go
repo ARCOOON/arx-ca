@@ -8,11 +8,11 @@ import (
 
 // CABootstrapConfig holds subject and key parameters used when generating a new PKI tree.
 type CABootstrapConfig struct {
-	RootCN         string `mapstructure:"root_cn" yaml:"root_cn"`
-	IntermediateCN string `mapstructure:"intermediate_cn" yaml:"intermediate_cn"`
-	Organization   string `mapstructure:"organization" yaml:"organization"`
-	Country        string `mapstructure:"country" yaml:"country"`
-	KeySize        int    `mapstructure:"key_size" yaml:"key_size"`
+	RootCN         string `json:"root_cn" mapstructure:"root_cn" yaml:"root_cn"`
+	IntermediateCN string `json:"intermediate_cn" mapstructure:"intermediate_cn" yaml:"intermediate_cn"`
+	Organization   string `json:"organization" mapstructure:"organization" yaml:"organization"`
+	Country        string `json:"country" mapstructure:"country" yaml:"country"`
+	KeySize        int    `json:"key_size" mapstructure:"key_size" yaml:"key_size"`
 }
 
 // CABootstrapFromMap parses a CABootstrap block from server.yaml keys (snake_case or PascalCase).

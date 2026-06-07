@@ -143,6 +143,7 @@ func InitServerConfig() error {
 
 	migrateLegacyAdminPassword(v, &loaded)
 	migrateLegacyCABootstrap(v, &loaded)
+	migrateLegacyProvisioners(v, &loaded)
 
 	if err := HealServerConfig(configPath, &loaded); err != nil {
 		return err
@@ -254,6 +255,171 @@ func InitCLIConfig() error {
 	}
 	activeCLIConfig = normalizeCLIConfig(activeCLIConfig)
 	return nil
+}
+
+// ReloadServerConfigFromDisk re-reads server.yaml into Viper and the active in-memory snapshot.
+func ReloadServerConfigFromDisk(configPath string) error {
+	if strings.TrimSpace(configPath) == "" {
+		var err error
+		configPath, err = serverConfigFilePath()
+		if err != nil {
+			return err
+		}
+	}
+
+	v := viper.GetViper()
+	v.SetConfigFile(configPath)
+	if err := v.ReadInConfig(); err != nil {
+		return fmt.Errorf("read server config %s: %w", configPath, err)
+	}
+
+	var loaded ServerConfig
+	if err := unmarshalServerConfig(v, &loaded); err != nil {
+		return fmt.Errorf("unmarshal server config: %w", err)
+	}
+
+	migrateLegacyAdminPassword(v, &loaded)
+	migrateLegacyCABootstrap(v, &loaded)
+	migrateLegacyProvisioners(v, &loaded)
+	applyCAPasswordEnvOverride(&loaded)
+	syncServerSecurityFieldsInViper(v, loaded)
+
+	activeServerConfig = normalizeServerConfig(loaded)
+	return nil
+}
+
+// migrateLegacyProvisioners loads ca.provisioners when server.yaml uses legacy PascalCase keys.
+func migrateLegacyProvisioners(v *viper.Viper, cfg *ServerConfig) {
+	if cfg == nil || v == nil {
+		return
+	}
+
+	for _, key := range []string{"ca.Provisioners", "ca.provisioners"} {
+		raw := v.GetStringMap(key)
+		if len(raw) == 0 {
+			continue
+		}
+		legacy := provisionersFromLegacyMap(raw)
+		cfg.CA.Provisioners = mergeCAProvisionersConfig(cfg.CA.Provisioners, legacy)
+		return
+	}
+}
+
+func provisionersFromLegacyMap(raw map[string]any) CAProvisionersConfig {
+	var out CAProvisionersConfig
+	if acmeRaw, ok := raw["ACME"]; ok {
+		if m, ok := acmeRaw.(map[string]any); ok {
+			out.ACME = acmeProvisionerFromLegacyMap(m)
+		}
+	} else if acmeRaw, ok := raw["acme"]; ok {
+		if m, ok := acmeRaw.(map[string]any); ok {
+			out.ACME = acmeProvisionerFromLegacyMap(m)
+		}
+	}
+	if scepRaw, ok := raw["SCEP"]; ok {
+		if m, ok := scepRaw.(map[string]any); ok {
+			out.SCEP = scepProvisionerFromLegacyMap(m)
+		}
+	} else if scepRaw, ok := raw["scep"]; ok {
+		if m, ok := scepRaw.(map[string]any); ok {
+			out.SCEP = scepProvisionerFromLegacyMap(m)
+		}
+	}
+	return out
+}
+
+func acmeProvisionerFromLegacyMap(raw map[string]any) ACMEProvisionerConfig {
+	var out ACMEProvisionerConfig
+	if enabled, ok := legacyBoolPtr(raw, "Enabled", "enabled"); ok {
+		out.Enabled = enabled
+	}
+	if requireEAB, ok := legacyBool(raw, "RequireEAB", "require_eab"); ok {
+		out.RequireEAB = requireEAB
+	}
+	if challenges, ok := legacyStringSlice(raw, "Challenges", "challenges"); ok {
+		out.Challenges = challenges
+	}
+	if deviceAttest, ok := legacyBool(raw, "DeviceAttestation", "device_attestation"); ok {
+		out.DeviceAttestation = deviceAttest
+	}
+	return out
+}
+
+func scepProvisionerFromLegacyMap(raw map[string]any) SCEPProvisionerConfig {
+	var out SCEPProvisionerConfig
+	if enabled, ok := legacyBoolPtr(raw, "Enabled", "enabled"); ok {
+		out.Enabled = enabled
+	}
+	if deviceAttest, ok := legacyBool(raw, "DeviceAttestation", "device_attestation"); ok {
+		out.DeviceAttestation = deviceAttest
+	}
+	if challenge, ok := legacyString(raw, "ChallengePassword", "challenge_password"); ok {
+		out.ChallengePassword = challenge
+	}
+	return out
+}
+
+func legacyBoolPtr(raw map[string]any, keys ...string) (*bool, bool) {
+	for _, key := range keys {
+		value, ok := raw[key]
+		if !ok {
+			continue
+		}
+		switch v := value.(type) {
+		case bool:
+			return boolPtr(v), true
+		}
+	}
+	return nil, false
+}
+
+func legacyBool(raw map[string]any, keys ...string) (bool, bool) {
+	for _, key := range keys {
+		value, ok := raw[key]
+		if !ok {
+			continue
+		}
+		switch v := value.(type) {
+		case bool:
+			return v, true
+		}
+	}
+	return false, false
+}
+
+func legacyString(raw map[string]any, keys ...string) (string, bool) {
+	for _, key := range keys {
+		value, ok := raw[key]
+		if !ok {
+			continue
+		}
+		if s, ok := value.(string); ok {
+			return s, true
+		}
+	}
+	return "", false
+}
+
+func legacyStringSlice(raw map[string]any, keys ...string) ([]string, bool) {
+	for _, key := range keys {
+		value, ok := raw[key]
+		if !ok {
+			continue
+		}
+		switch items := value.(type) {
+		case []string:
+			return append([]string(nil), items...), true
+		case []any:
+			out := make([]string, 0, len(items))
+			for _, item := range items {
+				if s, ok := item.(string); ok {
+					out = append(out, s)
+				}
+			}
+			return out, true
+		}
+	}
+	return nil, false
 }
 
 // ServerConfigFromViper returns the active server configuration after InitServerConfig.
@@ -504,6 +670,11 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("webui.cors.allowed_methods", d.WebUI.CORS.AllowedMethods)
 	v.SetDefault("webui.cors.allowed_headers", d.WebUI.CORS.AllowedHeaders)
 	v.SetDefault("webui.cors.allow_credentials", d.WebUI.CORS.AllowCredentials)
+	v.SetDefault("updater.enabled", d.Updater.Enabled)
+	v.SetDefault("updater.channel", d.Updater.Channel)
+	v.SetDefault("updater.notify_only", d.Updater.NotifyOnly)
+	v.SetDefault("updater.check_interval", d.Updater.CheckInterval)
+	v.SetDefault("updater.view_changelog_after_update", d.Updater.ViewChangelogAfterUpdate)
 }
 
 func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
@@ -626,7 +797,19 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 	cfg.CABootstrap = cfg.EffectiveCABootstrap()
 	cfg.CA.Provisioners = cfg.CA.EffectiveProvisioners()
 	cfg.WebUI = normalizeWebUI(cfg.WebUI)
+	cfg.Updater = normalizeUpdater(cfg.Updater)
 	return cfg
+}
+
+func normalizeUpdater(u UpdaterConfig) UpdaterConfig {
+	def := DefaultServerConfig().Updater
+	if strings.TrimSpace(u.Channel) == "" {
+		u.Channel = def.Channel
+	}
+	if strings.TrimSpace(u.CheckInterval) == "" {
+		u.CheckInterval = def.CheckInterval
+	}
+	return u
 }
 
 func normalizeWebUI(w WebUIConfig) WebUIConfig {

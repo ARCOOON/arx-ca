@@ -4,23 +4,23 @@ import "strings"
 
 // CAProvisionersConfig groups enrollment provisioners controlled from server.yaml.
 type CAProvisionersConfig struct {
-	ACME ACMEProvisionerConfig `mapstructure:"acme" yaml:"ACME"`
-	SCEP SCEPProvisionerConfig `mapstructure:"scep" yaml:"SCEP"`
+	ACME ACMEProvisionerConfig `json:"acme" mapstructure:"acme" yaml:"acme"`
+	SCEP SCEPProvisionerConfig `json:"scep" mapstructure:"scep" yaml:"scep"`
 }
 
 // ACMEProvisionerConfig controls the step-ca ACME provisioner entry in ca.json.
 type ACMEProvisionerConfig struct {
-	Enabled           *bool    `mapstructure:"enabled" yaml:"Enabled"`
-	RequireEAB        bool     `mapstructure:"require_eab" yaml:"RequireEAB"`
-	Challenges        []string `mapstructure:"challenges" yaml:"Challenges"`
-	DeviceAttestation bool     `mapstructure:"device_attestation" yaml:"DeviceAttestation"`
+	Enabled           *bool    `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+	RequireEAB        bool     `json:"require_eab" mapstructure:"require_eab" yaml:"require_eab"`
+	Challenges        []string `json:"challenges" mapstructure:"challenges" yaml:"challenges"`
+	DeviceAttestation bool     `json:"device_attestation" mapstructure:"device_attestation" yaml:"device_attestation"`
 }
 
 // SCEPProvisionerConfig controls the step-ca SCEP provisioner entry in ca.json.
 type SCEPProvisionerConfig struct {
-	Enabled           *bool  `mapstructure:"enabled" yaml:"Enabled"`
-	DeviceAttestation bool   `mapstructure:"device_attestation" yaml:"DeviceAttestation"`
-	ChallengePassword string `mapstructure:"challenge_password" yaml:"ChallengePassword"`
+	Enabled           *bool  `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
+	DeviceAttestation bool   `json:"device_attestation" mapstructure:"device_attestation" yaml:"device_attestation"`
+	ChallengePassword string `json:"challenge_password" mapstructure:"challenge_password" yaml:"challenge_password"`
 }
 
 // DefaultCAProvisionersConfig returns enrollment defaults when server.yaml omits the block.
