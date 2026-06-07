@@ -1,17 +1,49 @@
 import type {
   ApiEnvelope,
+  AutoCertificateRequest,
+  AutoCertificateResponse,
   CertificatePrivateKeyResponse,
   CertificateRecordDetail,
+  CertificateStatsResponse,
   GenerateCertificateRequest,
   GenerateCertificateResponse,
   IssueCertificateRequest,
   IssueCertificateResponse,
+  IssueCertificateWithTokenRequest,
+  LintCertificateRequest,
+  LintCertificateResponse,
   ListCertificatesResponse,
+  RekeyCertificateRequest,
+  RenewCertificateRequest,
+  RevokeCertificateRequest,
+  RevokeCertificateResponse,
 } from '../types/api'
 import { apiClient } from './client'
 
-export async function listCertificates(): Promise<ListCertificatesResponse> {
-  const response = await apiClient.get<ApiEnvelope<ListCertificatesResponse>>('/certificates')
+export interface ListCertificatesParams {
+  common_name?: string
+  serial_number?: string
+  status?: 'valid' | 'revoked' | 'expired' | ''
+}
+
+export async function listCertificates(
+  params: ListCertificatesParams = {},
+): Promise<ListCertificatesResponse> {
+  const query: Record<string, string> = {}
+
+  if (params.common_name?.trim()) {
+    query.common_name = params.common_name.trim()
+  }
+  if (params.serial_number?.trim()) {
+    query.serial_number = params.serial_number.trim()
+  }
+  if (params.status?.trim()) {
+    query.status = params.status.trim()
+  }
+
+  const response = await apiClient.get<ApiEnvelope<ListCertificatesResponse>>('/certificates', {
+    params: query,
+  })
   const payload = response.data
 
   if (payload.error) {
@@ -136,4 +168,139 @@ export async function downloadCertificateBundleFile(serial: string, filename: st
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(url)
+}
+
+export async function revokeCertificate(
+  request: RevokeCertificateRequest,
+): Promise<RevokeCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<RevokeCertificateResponse>>(
+    '/certificates/revoke',
+    request,
+  )
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data) {
+    throw new Error('Certificate revocation response did not include data')
+  }
+
+  return payload.data
+}
+
+export async function lintCertificate(
+  request: LintCertificateRequest,
+): Promise<LintCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<LintCertificateResponse>>(
+    '/certificates/lint',
+    request,
+  )
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data) {
+    throw new Error('Certificate lint response did not include data')
+  }
+
+  return payload.data
+}
+
+export async function renewCertificate(
+  request: RenewCertificateRequest,
+): Promise<IssueCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<IssueCertificateResponse>>(
+    '/certificates/renew',
+    request,
+  )
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data) {
+    throw new Error('Certificate renewal response did not include data')
+  }
+
+  return payload.data
+}
+
+export async function rekeyCertificate(
+  request: RekeyCertificateRequest,
+): Promise<IssueCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<IssueCertificateResponse>>(
+    '/certificates/rekey',
+    request,
+  )
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data) {
+    throw new Error('Certificate rekey response did not include data')
+  }
+
+  return payload.data
+}
+
+export async function issueCertificateWithToken(
+  request: IssueCertificateWithTokenRequest,
+): Promise<IssueCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<IssueCertificateResponse>>(
+    '/certificates/issue-with-token',
+    request,
+  )
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data) {
+    throw new Error('Certificate issue-with-token response did not include data')
+  }
+
+  return payload.data
+}
+
+export async function autoCertificate(
+  request: AutoCertificateRequest,
+): Promise<AutoCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<AutoCertificateResponse>>(
+    '/certificates/auto',
+    request,
+  )
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data) {
+    throw new Error('Auto certificate response did not include data')
+  }
+
+  return payload.data
+}
+
+export async function fetchCertificateStats(): Promise<CertificateStatsResponse> {
+  const response = await apiClient.get<ApiEnvelope<CertificateStatsResponse>>('/certificates/stats')
+  const payload = response.data
+
+  if (payload.error) {
+    throw new Error(payload.error)
+  }
+
+  if (!payload.data) {
+    throw new Error('Certificate stats response did not include data')
+  }
+
+  return payload.data
 }
