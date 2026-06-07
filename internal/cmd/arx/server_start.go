@@ -26,6 +26,7 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/repository"
 	arxserver "github.com/ARCOOON/arx-ca/internal/server"
 	"github.com/ARCOOON/arx-ca/internal/telemetry"
+	"github.com/ARCOOON/arx-ca/internal/updater"
 )
 
 func runServer() error {
@@ -117,6 +118,12 @@ func runServer() error {
 	webhookDispatcher := notifications.NewDispatcher(webhookStore, notificationStore)
 	webhookHandler := handlers.NewWebhookHandler(webhookStore, webhookDispatcher)
 	notificationHandler := handlers.NewNotificationHandler(webhookDispatcher, notificationStore)
+	configManager, err := arxconfig.NewManager()
+	if err != nil {
+		return fmt.Errorf("initialize configuration manager: %w", err)
+	}
+	configHandler := handlers.NewConfigHandler(configManager, auditStore, webhookDispatcher)
+	updaterHandler := handlers.NewUpdaterHandler()
 
 	adminPerm := func(perm auth.Permission, h http.Handler) http.Handler {
 		return middleware.RequireAdmin(jwtManager, middleware.RequirePermission(perm, h))
@@ -189,6 +196,9 @@ func runServer() error {
 	mux.Handle("PUT /api/v1/webhooks/{id}", adminPerm(auth.PermWebhooksManage, webhookHandler.Update()))
 	mux.Handle("DELETE /api/v1/webhooks/{id}", adminPerm(auth.PermWebhooksManage, webhookHandler.Delete()))
 	mux.Handle("POST /api/v1/webhooks/{id}/test", adminPerm(auth.PermWebhooksManage, webhookHandler.Test()))
+	mux.Handle("GET /api/v1/settings/config", adminPerm(auth.PermSettingsManage, configHandler.Get()))
+	mux.Handle("PUT /api/v1/settings/config", adminPerm(auth.PermSettingsManage, configHandler.Put()))
+	mux.Handle("GET /api/v1/updater/current-changelog", adminPerm(auth.PermSettingsManage, updaterHandler.CurrentChangelog()))
 
 	if pkiEngine.ACMEEnabled() {
 		mux.Handle("/acme/", http.StripPrefix("/acme", pkiEngine.ACMEHandler()))
@@ -262,6 +272,20 @@ func runServer() error {
 		webUIServer.Start()
 	}
 
+	serverCtx, serverCancel := context.WithCancel(context.Background())
+	defer serverCancel()
+
+	restartCh := make(chan struct{}, 1)
+	if serverCfg.Updater.Enabled {
+		updateEngine := updater.NewEngine(serverCfg.Updater, auditStore, webhookDispatcher, func() {
+			select {
+			case restartCh <- struct{}{}:
+			default:
+			}
+		})
+		go updateEngine.Run(serverCtx)
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
 		if serverCfg.Server.TLS.Enabled {
@@ -280,11 +304,19 @@ func runServer() error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
+	restartAfterShutdown := false
+
 	select {
 	case err := <-errCh:
+		serverCancel()
 		return err
 	case sig := <-sigCh:
 		log.Info("shutdown signal received", slog.String("signal", sig.String()))
+		serverCancel()
+	case <-restartCh:
+		log.Info("updater: graceful restart scheduled after binary update")
+		restartAfterShutdown = true
+		serverCancel()
 	}
 
 	if webUIServer != nil {
@@ -306,5 +338,12 @@ func runServer() error {
 		return err
 	}
 	log.Info("server stopped")
+
+	if restartAfterShutdown {
+		if err := updater.RestartExecutable(); err != nil {
+			return fmt.Errorf("restart after update: %w", err)
+		}
+	}
+
 	return nil
 }
