@@ -59,6 +59,13 @@ func Migrate(db *sql.DB) error {
 		{path: "migrations/005_ssh_certificates.sql", name: "ssh_certificates"},
 	}
 	for _, migration := range migrations {
+		if migration.name == "notifications_archive" {
+			if err := migrateNotificationsArchive(db); err != nil {
+				return fmt.Errorf("migrate %s table: %w", migration.name, err)
+			}
+			continue
+		}
+
 		ddl, err := migrationFS.ReadFile(migration.path)
 		if err != nil {
 			return fmt.Errorf("read %s migration: %w", migration.name, err)
@@ -153,45 +160,56 @@ type ListResult struct {
 	Total int
 }
 
+// AuditLogListFilter narrows audit log queries by column values.
+type AuditLogListFilter struct {
+	Action     string
+	Actor      string
+	IPAddress  string
+	StatusCode int // zero means no status filter
+}
+
+// AuditLogListOptions configures pagination and optional column filters.
+type AuditLogListOptions struct {
+	Limit  int
+	Offset int
+	Filter AuditLogListFilter
+}
+
 // List returns audit logs ordered by timestamp descending with limit/offset pagination.
-func (s *AuditStore) List(ctx context.Context, limit, offset int) (ListResult, error) {
+func (s *AuditStore) List(ctx context.Context, opts AuditLogListOptions) (ListResult, error) {
 	if s == nil || s.db == nil {
 		return ListResult{}, fmt.Errorf("audit store is not initialized")
 	}
+	limit := opts.Limit
 	if limit <= 0 {
 		limit = 50
 	}
 	if limit > 500 {
 		limit = 500
 	}
+	offset := opts.Offset
 	if offset < 0 {
 		offset = 0
 	}
 
+	whereClause, filterArgs := buildAuditLogWhereClause(s.db, opts.Filter)
+
 	var total int
-	countQuery := `SELECT COUNT(*) FROM audit_logs`
-	if err := s.db.QueryRowContext(ctx, countQuery).Scan(&total); err != nil {
+	countQuery := `SELECT COUNT(*) FROM audit_logs` + whereClause
+	if err := s.db.QueryRowContext(ctx, countQuery, filterArgs...).Scan(&total); err != nil {
 		return ListResult{}, fmt.Errorf("count audit logs: %w", err)
 	}
 
+	limitPlaceholder, offsetPlaceholder := auditLogPlaceholder(s.db, len(filterArgs)+1), auditLogPlaceholder(s.db, len(filterArgs)+2)
 	listQuery := `
 SELECT id, timestamp, request_id, ip_address, http_method, endpoint,
 	status_code, actor_type, actor_id, actor_roles, action,
 	provisioner, fingerprint, metadata
-FROM audit_logs
+FROM audit_logs` + whereClause + `
 ORDER BY timestamp DESC
-LIMIT ? OFFSET ?`
-	listArgs := []any{limit, offset}
-	if isPostgreSQL(s.db) {
-		listQuery = `
-SELECT id, timestamp, request_id, ip_address, http_method, endpoint,
-	status_code, actor_type, actor_id, actor_roles, action,
-	provisioner, fingerprint, metadata
-FROM audit_logs
-ORDER BY timestamp DESC
-LIMIT $1 OFFSET $2`
-		listArgs = []any{limit, offset}
-	}
+LIMIT ` + limitPlaceholder + ` OFFSET ` + offsetPlaceholder
+
+	listArgs := append(append([]any{}, filterArgs...), limit, offset)
 
 	rows, err := s.db.QueryContext(ctx, listQuery, listArgs...)
 	if err != nil {
@@ -257,6 +275,48 @@ LIMIT $1 OFFSET $2`
 	}
 
 	return ListResult{Logs: logs, Total: total}, nil
+}
+
+func buildAuditLogWhereClause(db *sql.DB, filter AuditLogListFilter) (string, []any) {
+	var conditions []string
+	var args []any
+	argIndex := 1
+
+	nextPlaceholder := func() string {
+		p := auditLogPlaceholder(db, argIndex)
+		argIndex++
+		return p
+	}
+
+	if action := strings.TrimSpace(filter.Action); action != "" {
+		conditions = append(conditions, "action = "+nextPlaceholder())
+		args = append(args, action)
+	}
+	if actor := strings.TrimSpace(filter.Actor); actor != "" {
+		pattern := "%" + actor + "%"
+		conditions = append(conditions, "(actor_id LIKE "+nextPlaceholder()+" OR actor_type LIKE "+nextPlaceholder()+")")
+		args = append(args, pattern, pattern)
+	}
+	if ip := strings.TrimSpace(filter.IPAddress); ip != "" {
+		conditions = append(conditions, "ip_address LIKE "+nextPlaceholder())
+		args = append(args, "%"+ip+"%")
+	}
+	if filter.StatusCode > 0 {
+		conditions = append(conditions, "status_code = "+nextPlaceholder())
+		args = append(args, filter.StatusCode)
+	}
+
+	if len(conditions) == 0 {
+		return "", args
+	}
+	return " WHERE " + strings.Join(conditions, " AND "), args
+}
+
+func auditLogPlaceholder(db *sql.DB, index int) string {
+	if isPostgreSQL(db) {
+		return fmt.Sprintf("$%d", index)
+	}
+	return "?"
 }
 
 func isPostgreSQL(db *sql.DB) bool {
