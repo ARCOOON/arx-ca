@@ -395,7 +395,12 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
         <p class="mt-0.5 text-xs ui-text-muted">
           Trust anchors for client and server configuration.<template v-if="showApiHints">
             See
-            <code class="ui-code">docs/ssh_ca_setup.md</code>
+            <a
+              href="https://github.com/ARCOOON/arx-ca/wiki/SSH-CA-Setup"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="ui-link"
+            >Wiki → SSH CA Setup</a>
             for deployment steps.</template>
         </p>
       </header>

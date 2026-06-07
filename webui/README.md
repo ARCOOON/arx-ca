@@ -15,7 +15,7 @@ npm ci
 npm run dev
 ```
 
-Open **http://localhost:5173**. Vite binds `0.0.0.0:5173` and proxies `/api` to `http://127.0.0.1:8080` by default. See [docs/development_workflow.md](../docs/development_workflow.md) for TLS WebUI proxy targets and the full rapid UI loop.
+Open **http://localhost:5173**. Vite binds `0.0.0.0:5173` and proxies `/api` to `http://127.0.0.1:8080` by default. See the [Wiki → Development Workflow](https://github.com/ARCOOON/arx-ca/wiki/Development-Workflow) for TLS WebUI proxy targets and the full rapid UI loop.
 
 Optional: set `VITE_API_BASE_URL` (see `.env.example`) when the API is not proxied on the same origin. By default the browser uses `{origin}/api/v1`.
 
