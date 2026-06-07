@@ -55,6 +55,60 @@ const router = createRouter({
           },
         },
         {
+          path: 'ndes',
+          name: 'ndes',
+          component: () => import('../views/Ndes.vue'),
+          meta: {
+            title: 'NDES',
+            subtitle: 'Network Device Enrollment Service for AD CS migrations',
+          },
+        },
+        {
+          path: 'provisioners',
+          name: 'provisioners',
+          component: () => import('../views/Provisioners.vue'),
+          meta: {
+            title: 'Provisioners',
+            subtitle: 'Provisioner tokens and Kubernetes enrollment status',
+          },
+        },
+        {
+          path: 'templates',
+          name: 'templates',
+          component: () => import('../views/Templates.vue'),
+          meta: {
+            title: 'Templates',
+            subtitle: 'Certificate issuance template management',
+          },
+        },
+        {
+          path: 'ssh',
+          name: 'ssh',
+          component: () => import('../views/Ssh.vue'),
+          meta: {
+            title: 'SSH CA',
+            subtitle: 'SSH user and host certificate operations',
+          },
+        },
+        {
+          path: 'audit',
+          name: 'audit',
+          component: () => import('../views/Audit.vue'),
+          meta: {
+            title: 'Audit Log',
+            subtitle: 'Immutable forensic trail of critical API operations',
+          },
+        },
+        {
+          path: 'webhooks',
+          name: 'webhooks',
+          component: () => import('../views/Webhooks.vue'),
+          meta: {
+            title: 'Webhooks',
+            subtitle: 'Outbound notifications for high-criticality audit events',
+          },
+        },
+        {
           path: 'settings',
           name: 'settings',
           component: () => import('../views/Settings.vue'),
