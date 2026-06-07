@@ -75,6 +75,8 @@ func (c CAConfig) MaxTTLDuration() (time.Duration, error) {
 type SecurityConfig struct {
 	JWTSecret            string `mapstructure:"jwt_secret" yaml:"jwt_secret"`
 	TokenExpirationHours int    `mapstructure:"token_expiration_hours" yaml:"token_expiration_hours"`
+	CookieSameSite       string `mapstructure:"cookie_same_site" yaml:"cookie_same_site"`
+	CookieSecure         *bool  `mapstructure:"cookie_secure" yaml:"cookie_secure"`
 }
 
 // Bootstrap holds first-run admin credentials seeded when the users table is empty.
@@ -106,9 +108,10 @@ type WebUITLSConfig struct {
 
 // WebUICORSConfig holds CORS policy for the WebUI listener and API cross-origin access.
 type WebUICORSConfig struct {
-	AllowedOrigins []string `mapstructure:"allowed_origins" yaml:"allowed_origins"`
-	AllowedMethods []string `mapstructure:"allowed_methods" yaml:"allowed_methods"`
-	AllowedHeaders []string `mapstructure:"allowed_headers" yaml:"allowed_headers"`
+	AllowedOrigins   []string `mapstructure:"allowed_origins" yaml:"allowed_origins"`
+	AllowedMethods   []string `mapstructure:"allowed_methods" yaml:"allowed_methods"`
+	AllowedHeaders   []string `mapstructure:"allowed_headers" yaml:"allowed_headers"`
+	AllowCredentials bool     `mapstructure:"allow_credentials" yaml:"allow_credentials"`
 }
 
 // WebUIConfig holds the isolated WebUI static file server settings.
@@ -190,6 +193,7 @@ func DefaultServerConfig() ServerConfig {
 		},
 		Security: SecurityConfig{
 			TokenExpirationHours: 24,
+			CookieSameSite:       "lax",
 		},
 		CABootstrap: DefaultCABootstrapConfig(),
 		Bootstrap: Bootstrap{
@@ -218,9 +222,13 @@ func DefaultServerConfig() ServerConfig {
 				Enabled: true,
 			},
 			CORS: WebUICORSConfig{
-				AllowedOrigins: []string{"*"},
-				AllowedMethods: []string{"*"},
-				AllowedHeaders: []string{"Authorization", "Content-Type", "Accept", "X-API-Key", "*"},
+				AllowedOrigins: []string{
+					"http://localhost:5173",
+					"http://127.0.0.1:5173",
+				},
+				AllowedMethods:   []string{"*"},
+				AllowedHeaders:   []string{"Authorization", "Content-Type", "Accept", "X-API-Key", "*"},
+				AllowCredentials: true,
 			},
 		},
 	}

@@ -59,9 +59,9 @@ func bootstrapInt(raw map[string]any, keys ...string) int {
 // DefaultCABootstrapConfig returns safe defaults when CABootstrap is omitted from server.yaml.
 func DefaultCABootstrapConfig() CABootstrapConfig {
 	return CABootstrapConfig{
-		RootCN:         "Arx CA Root CA",
-		IntermediateCN: "Arx CA Intermediate CA",
-		Organization:   "Arx CA",
+		RootCN:         "Arx Root CA",
+		IntermediateCN: "Arx Intermediate CA",
+		Organization:   "Arx",
 		Country:        "",
 		KeySize:        4096,
 	}

@@ -95,22 +95,27 @@ func healWebUICORS(cfg *ServerConfig) bool {
 		return false
 	}
 	before := cloneWebUICORSConfig(cfg.WebUI.CORS)
+	if corsSliceContainsWildcard(cfg.WebUI.CORS.AllowedOrigins) {
+		cfg.WebUI.CORS.AllowCredentials = true
+	}
 	normalizeWebUICORS(&cfg.WebUI.CORS)
 	return !webUICORSEqual(before, cfg.WebUI.CORS)
 }
 
 func cloneWebUICORSConfig(c WebUICORSConfig) WebUICORSConfig {
 	return WebUICORSConfig{
-		AllowedOrigins: append([]string(nil), c.AllowedOrigins...),
-		AllowedMethods: append([]string(nil), c.AllowedMethods...),
-		AllowedHeaders: append([]string(nil), c.AllowedHeaders...),
+		AllowedOrigins:   append([]string(nil), c.AllowedOrigins...),
+		AllowedMethods:   append([]string(nil), c.AllowedMethods...),
+		AllowedHeaders:   append([]string(nil), c.AllowedHeaders...),
+		AllowCredentials: c.AllowCredentials,
 	}
 }
 
 func webUICORSEqual(a, b WebUICORSConfig) bool {
 	return stringSlicesEqual(a.AllowedOrigins, b.AllowedOrigins) &&
 		stringSlicesEqual(a.AllowedMethods, b.AllowedMethods) &&
-		stringSlicesEqual(a.AllowedHeaders, b.AllowedHeaders)
+		stringSlicesEqual(a.AllowedHeaders, b.AllowedHeaders) &&
+		a.AllowCredentials == b.AllowCredentials
 }
 
 func stringSlicesEqual(a, b []string) bool {
@@ -126,13 +131,26 @@ func stringSlicesEqual(a, b []string) bool {
 }
 
 // normalizeWebUICORS ensures each CORS list is strictly ["*"] when a wildcard entry is present.
+// Wildcard origins are incompatible with credentialed requests; explicit dev origins are substituted.
 func normalizeWebUICORS(cors *WebUICORSConfig) {
 	if cors == nil {
 		return
 	}
+	if cors.AllowCredentials && corsSliceContainsWildcard(cors.AllowedOrigins) {
+		cors.AllowedOrigins = append([]string(nil), DefaultServerConfig().WebUI.CORS.AllowedOrigins...)
+	}
 	cors.AllowedOrigins = normalizeCORSList(cors.AllowedOrigins)
 	cors.AllowedMethods = normalizeCORSList(cors.AllowedMethods)
 	cors.AllowedHeaders = normalizeCORSList(cors.AllowedHeaders)
+}
+
+func corsSliceContainsWildcard(values []string) bool {
+	for _, v := range values {
+		if strings.TrimSpace(v) == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeCORSList(items []string) []string {

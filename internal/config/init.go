@@ -499,9 +499,11 @@ func applyServerViperDefaults(v *viper.Viper, d ServerConfig) {
 	v.SetDefault("webui.tls.enabled", d.WebUI.TLS.Enabled)
 	v.SetDefault("webui.tls.cert_file", d.WebUI.TLS.CertFile)
 	v.SetDefault("webui.tls.key_file", d.WebUI.TLS.KeyFile)
+	v.SetDefault("security.cookie_same_site", d.Security.CookieSameSite)
 	v.SetDefault("webui.cors.allowed_origins", d.WebUI.CORS.AllowedOrigins)
 	v.SetDefault("webui.cors.allowed_methods", d.WebUI.CORS.AllowedMethods)
 	v.SetDefault("webui.cors.allowed_headers", d.WebUI.CORS.AllowedHeaders)
+	v.SetDefault("webui.cors.allow_credentials", d.WebUI.CORS.AllowCredentials)
 }
 
 func applyCLIViperDefaults(v *viper.Viper, d CLIConfig) {
@@ -601,6 +603,9 @@ func normalizeServerConfig(cfg ServerConfig) ServerConfig {
 
 	if cfg.Security.TokenExpirationHours <= 0 {
 		cfg.Security.TokenExpirationHours = def.Security.TokenExpirationHours
+	}
+	if strings.TrimSpace(cfg.Security.CookieSameSite) == "" {
+		cfg.Security.CookieSameSite = def.Security.CookieSameSite
 	}
 	if strings.TrimSpace(cfg.Security.JWTSecret) == "" {
 		if v := strings.TrimSpace(os.Getenv("CA_API_JWT_SECRET")); v != "" {
