@@ -1,9 +1,8 @@
 ---
-description: "Core architectural philosophy for the entire project. Enforces KISS principles, direct communication, and strict production-readiness without over-engineering."
+description: "Core architectural philosophy for the entire project. Enforces KISS principles, direct communication, strict production-readiness, and methodical test tracking."
 globs: ["*.*"]
 alwaysApply: true
 ---
-
 # Skill: KISS Architecture & Pragmatic Execution
 
 ## Core Philosophy
@@ -24,8 +23,12 @@ Keep it simple, stupid. Optimize for absolute readability, flat structures, and 
     - Always implement all functions and modules completely. 
     - Never leave simulations, partial logic, or `// TODO: implement this` blocks. Deliver production-ready, working code.
 
-4.  **Strict Language Protocol:**
+4.  **Documentation & Test Tracking (CRITICAL):**
+    - Document everything you build or modify clearly and concisely.
+    - Before executing any testing phase or complex task, you MUST generate a strict Markdown TODO list containing all required tests or steps. You must systematically check these off during execution.
+
+5.  **Strict Language Protocol:**
     - ALL code, inline comments, variable names, docstrings, and terminal outputs MUST be strictly in English.
 
-5.  **Direct Communication:**
+6.  **Direct Communication:**
     - Do not sugar-coat problems or output unnecessary conversational filler. Tell it exactly like it is and get right to the point.
