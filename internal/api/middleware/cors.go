@@ -7,9 +7,10 @@ import (
 
 // CORSOptions holds Cross-Origin Resource Sharing policy applied by CORS middleware.
 type CORSOptions struct {
-	AllowedOrigins []string
-	AllowedMethods []string
-	AllowedHeaders []string
+	AllowedOrigins   []string
+	AllowedMethods   []string
+	AllowedHeaders   []string
+	AllowCredentials bool
 }
 
 // CORS returns middleware that applies configured CORS headers and handles OPTIONS preflight.
@@ -23,10 +24,13 @@ func CORS(opts CORSOptions, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
 		if origin != "" && corsOriginAllowed(origins, origin) {
-			w.Header().Set("Access-Control-Allow-Origin", corsAllowOriginValue(origins, origin))
+			w.Header().Set("Access-Control-Allow-Origin", corsAllowOriginValue(origins, origin, opts.AllowCredentials))
 			w.Header().Add("Vary", "Origin")
-		} else if corsAllowsAnyOrigin(origins) {
+		} else if corsAllowsAnyOrigin(origins) && !opts.AllowCredentials {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+		if opts.AllowCredentials {
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", allowMethods)
 		if acrh := strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers")); acrh != "" && corsHeadersAllowWildcard(opts.AllowedHeaders) {
@@ -132,8 +136,8 @@ func corsOriginAllowed(origins []string, requestOrigin string) bool {
 	return false
 }
 
-func corsAllowOriginValue(origins []string, requestOrigin string) string {
-	if corsAllowsAnyOrigin(origins) {
+func corsAllowOriginValue(origins []string, requestOrigin string, allowCredentials bool) string {
+	if corsAllowsAnyOrigin(origins) && !allowCredentials {
 		return "*"
 	}
 	return requestOrigin
