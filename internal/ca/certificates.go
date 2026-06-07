@@ -321,7 +321,7 @@ func (e *PKIEngine) GetCertificatePEM(ctx context.Context, serial string) (strin
 
 func (e *PKIEngine) signCSR(ctx context.Context, csr *x509.CertificateRequest, signOpts provisioner.SignOptions, extraOpts ...provisioner.SignOption) ([]*x509.Certificate, error) {
 	sans := collectCSRSubjectAlternativeNames(csr)
-	token, _, _, err := e.createProvisionerSignToken(defaultProvisioner, csr.Subject.CommonName, sans, defaultTokenTTL)
+	token, _, _, err := e.createProvisionerSignToken(e.AdminProvisionerName(), csr.Subject.CommonName, sans, defaultTokenTTL)
 	if err != nil {
 		return nil, fmt.Errorf("create signing token: %w", err)
 	}

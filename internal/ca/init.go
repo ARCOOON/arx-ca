@@ -129,18 +129,24 @@ func InitCA(configPath string, caCfg config.CAConfig, caBootstrap config.CABoots
 		return nil, fmt.Errorf("initialize kubernetes token reviewer: %w", err)
 	}
 
+	adminProvisioner := strings.TrimSpace(caCfg.ProvisionerName)
+	if adminProvisioner == "" {
+		adminProvisioner = defaultProvisioner
+	}
+
 	engine := &PKIEngine{
-		configPath:   resolvedConfig,
-		basePath:     basePath,
-		config:       cfg,
-		auth:         authInstance,
-		password:     password,
-		rootPEM:      rootPEM,
-		templates:    templateStore,
-		appConfig:    appCfg,
-		k8sReviewer:  k8sReviewer,
-		maxCertTTL:   maxCertTTL,
-		provisioners: provisioners,
+		configPath:           resolvedConfig,
+		basePath:             basePath,
+		config:               cfg,
+		auth:                 authInstance,
+		password:             password,
+		rootPEM:              rootPEM,
+		templates:            templateStore,
+		appConfig:            appCfg,
+		k8sReviewer:          k8sReviewer,
+		maxCertTTL:           maxCertTTL,
+		provisioners:         provisioners,
+		adminProvisionerName: adminProvisioner,
 	}
 
 	if err := engine.initSCEP(); err != nil {

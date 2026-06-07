@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	defaultSSHUserCertTTL  = 16 * time.Hour
-	defaultSSHHostCertTTL  = 30 * 24 * time.Hour
-	maxSSHUserCertTTL      = 24 * time.Hour
-	maxSSHHostCertTTL      = 30 * 24 * time.Hour
+	defaultSSHUserCertTTL  = 4 * time.Hour
+	defaultSSHHostCertTTL  = 8760 * time.Hour
+	maxSSHUserCertTTL      = 720 * time.Hour
+	maxSSHHostCertTTL      = 8760 * time.Hour
 	sshProvisionerTokenTTL = 5 * time.Minute
 )
 
@@ -139,6 +139,33 @@ func (e *PKIEngine) SignSSHHostCertificate(ctx context.Context, req models.SignS
 	}
 
 	return sshCertificateResponse(cert), nil
+}
+
+// GenerateSSHUserCertificate signs an SSH user certificate for the generate API.
+func (e *PKIEngine) GenerateSSHUserCertificate(ctx context.Context, req models.GenerateSSHUserRequest) (*models.SSHCertificateResponse, error) {
+	signReq := models.SignSSHUserRequest{
+		PublicKey:   req.PublicKey,
+		Principals:  req.Principals,
+		TTL:         req.TTL,
+		Provisioner: req.Provisioner,
+	}
+
+	token, err := e.MintSSHUserSignToken(signReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return e.SignSSHUserCertificate(ctx, signReq, token)
+}
+
+// GenerateSSHHostCertificate signs an SSH host certificate for the generate API.
+func (e *PKIEngine) GenerateSSHHostCertificate(ctx context.Context, req models.GenerateSSHHostRequest) (*models.SSHCertificateResponse, error) {
+	return e.SignSSHHostCertificate(ctx, models.SignSSHHostRequest{
+		PublicKey:   req.PublicKey,
+		Principals:  req.Principals,
+		TTL:         req.TTL,
+		Provisioner: req.Provisioner,
+	})
 }
 
 // MintSSHUserSignToken creates a provisioner token for SSH user certificate signing.
@@ -286,6 +313,10 @@ func (e *PKIEngine) signSSHWithToken(ctx context.Context, pub ssh.PublicKey, opt
 	signOpts, err := e.auth.Authorize(ctx, token)
 	if err != nil {
 		return nil, err
+	}
+
+	if opts.CertType == provisioner.SSHUserCert {
+		signOpts = append(signOpts, sshUserStandardExtensions{})
 	}
 
 	return e.auth.SignSSH(ctx, pub, opts, signOpts...)
@@ -452,16 +483,32 @@ func sshCertificateResponse(cert *ssh.Certificate) *models.SSHCertificateRespons
 	}
 }
 
+// SSHCertificateFingerprint returns the SHA256 fingerprint of the public key embedded in an SSH certificate.
+func SSHCertificateFingerprint(certificatePEM string) (string, error) {
+	cert, err := parseSSHCertificate(certificatePEM)
+	if err != nil {
+		return "", err
+	}
+	return sshPublicKeyFingerprint(cert.Key), nil
+}
+
+func sshPublicKeyFingerprint(key ssh.PublicKey) string {
+	if key == nil {
+		return ""
+	}
+	fingerprint := sha256.Sum256(key.Marshal())
+	return "SHA256:" + base64.RawStdEncoding.EncodeToString(fingerprint[:])
+}
+
 func sshRootKey(key ssh.PublicKey) models.SSHRootKey {
 	if key == nil {
 		return models.SSHRootKey{}
 	}
 
-	fingerprint := sha256.Sum256(key.Marshal())
 	return models.SSHRootKey{
 		PublicKey:   strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key))),
 		KeyType:     key.Type(),
-		Fingerprint: "SHA256:" + base64.RawStdEncoding.EncodeToString(fingerprint[:]),
+		Fingerprint: sshPublicKeyFingerprint(key),
 	}
 }
 

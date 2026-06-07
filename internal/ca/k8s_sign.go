@@ -34,7 +34,7 @@ func (e *PKIEngine) prepareEnrollmentToken(ctx context.Context, csr *x509.Certif
 		sans = []string{cn}
 	}
 
-	bridged, _, _, err := e.createProvisionerSignToken(defaultProvisioner, cn, sans, defaultTokenTTL)
+	bridged, _, _, err := e.createProvisionerSignToken(e.AdminProvisionerName(), cn, sans, defaultTokenTTL)
 	if err != nil {
 		return "", fmt.Errorf("bridge kubernetes token to provisioner token: %w", err)
 	}

@@ -56,10 +56,22 @@ type PKIEngine struct {
 	baseCtx      context.Context
 	templates    *TemplateStore
 
-	appConfig    config.Config
-	k8sReviewer  *K8sTokenReviewer
-	maxCertTTL   time.Duration
-	provisioners config.CAProvisionersConfig
+	appConfig            config.Config
+	k8sReviewer          *K8sTokenReviewer
+	maxCertTTL           time.Duration
+	provisioners         config.CAProvisionersConfig
+	adminProvisionerName string
+}
+
+// AdminProvisionerName returns the JWK provisioner used for admin/API signing.
+func (e *PKIEngine) AdminProvisionerName() string {
+	if e == nil {
+		return defaultProvisioner
+	}
+	if name := strings.TrimSpace(e.adminProvisionerName); name != "" {
+		return name
+	}
+	return defaultProvisioner
 }
 
 // ConfigPath returns the absolute path to ca.json.
