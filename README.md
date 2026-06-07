@@ -18,6 +18,10 @@ The default server deployment needs no external database: application state (adm
 | **Self-installation** | `arx server setup` or `arx server service install` for the CA; `arx-agent service install` for client renewal daemons |
 | **Built-in ACMEv2** | RFC 8555 directory at `/acme/directory` with **HTTP-01**, **DNS-01**, and **TLS-ALPN-01** validation |
 | **REST API** | X.509 issuance, revocation, OCSP, templates, SSH CA, enrollment status |
+| **Immutable audit log** | Append-only `audit_logs` table with HTTP middleware forensics and WebUI dashboard (`GET /api/v1/audit`) |
+| **Webhook notifications** | Asynchronous outbound JSON alerts for subscribed audit actions (Discord, Slack, Gotify); managed via `GET/POST/PUT/DELETE /api/v1/webhooks` and `Webhooks.vue` |
+| **Real-time notification center** | WebUI SSE stream (`GET /api/v1/notifications/stream`) with scrollable priority toasts (`NotificationToaster.vue`) for live audit events |
+| **Persistent notification history** | Stateful `notifications` table with read/unread tracking and soft-delete (`is_archived`); TopBar bell drawer (`NotificationDrawer.vue`) backed by `GET/POST /api/v1/notifications` and `POST /api/v1/notifications/archive-all` |
 | **Enrollment protocols** | SCEP and NDES when configured in `ca.json` |
 | **Stateful CLI** | `arx login --url` persists the CA base URL in `~/.arx/cli.yaml` and the JWT in `~/.arx/config.json` |
 | **Agent renewal daemon** | `arx-agent run` renews local PEM files via `agent.yaml` using the native API or ACMEv2 client mode |
@@ -252,9 +256,12 @@ The REST API and the browser UI run on **separate listeners**. Enable the WebUI 
 | `webui.read_timeout` / `write_timeout` | `10s` | Server timeouts |
 | `webui.tls.enabled` | `true` | HTTPS for the WebUI listener |
 | `webui.tls.cert_file` / `key_file` | (empty) | TLS certificate and key; when omitted or missing, an ephemeral ECDSA cert is generated with SANs (`localhost`, `127.0.0.1`, `::1`, and detected host IPs) |
-| `webui.cors.allowed_origins` | `["*"]` | CORS origins for static assets and for API cross-origin calls when WebUI is enabled |
+| `webui.cors.allowed_origins` | `http://localhost:5173`, `http://127.0.0.1:5173` | CORS origins on the WebUI listener and API listener (wildcard `*` is upgraded to these when `allow_credentials` is true) |
 | `webui.cors.allowed_methods` | `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS` | Allowed methods; `*` expands to the full REST set |
 | `webui.cors.allowed_headers` | `Authorization`, `Content-Type`, `Accept`, `X-API-Key`, `*` | Allowed request headers; `*` mirrors preflight `Access-Control-Request-Headers` |
+| `webui.cors.allow_credentials` | `true` | Sets `Access-Control-Allow-Credentials: true` for credentialed browser clients (required for the `arx_session` cookie) |
+| `security.cookie_same_site` | `lax` | `Set-Cookie` `SameSite` for `arx_session` (`lax`, `strict`, or `none`) |
+| `security.cookie_secure` | (auto) | When omitted, `Secure` is `false` on HTTP and `true` on HTTPS / `X-Forwarded-Proto: https` |
 | `webui.proxy_api` | `true` | Reverse-proxy `/api/`, `/ocsp`, `/acme/`, `/scep/`, `/certsrv/` on the WebUI listener to the API process (same-origin drop-in UI) |
 
 **`path_prefix` and deployment:** A prefix of `/` serves the SPA at the WebUI listener root. A prefix of `/ui` strips `/ui` before looking up files under `ui_dir`, so operators can colocate the API behind one hostname (port 8080) and the console on another port or path without mixing handlers. Configure your frontend build `base` to match `path_prefix`. Unmatched paths under the prefix fall back to `index.html` for client-side routing.
@@ -295,17 +302,23 @@ webui:
 
 `arx server config init` writes this block with defaults. For production, set `webui.tls.cert_file` and `key_file` to operator-managed certificates. For local drop-in use, leave paths empty to auto-generate a SAN-bearing ephemeral server certificate. With `proxy_api: true`, the Vue app can call same-origin `/api/v1` on the WebUI port without CORS or a compile-time `VITE_API_BASE_URL`. Client certificates presented to the WebUI HTTPS listener are forwarded to the API on loopback via `X-Forwarded-Client-Cert`, so mTLS endpoints such as `POST /api/v1/certificates/renew` work through the WebUI port.
 
-The Vue 3 management console (`webui/`) uses a flat dark/light theme with consistent corner radii (6px controls, 8px panels; pill-shaped toggle tracks). Tokens are defined in `webui/src/assets/theme.css` and applied via `ui-*` classes in `webui/src/style.css`. Client-side routing runs under the authenticated shell:
+The Vue 3 management console (`webui/`) uses a flat dark/light theme with consistent corner radii (6px controls, 8px panels; pill-shaped toggle tracks). Tokens are defined in `webui/src/assets/theme.css` and applied via `ui-*` classes in `webui/src/style.css`. Layouts are responsive: modals cap at `95vw` / `90vh` with scrollable bodies and wrapping action rows; data tables scroll horizontally inside cards; the sidebar becomes a hamburger drawer below the `md` breakpoint; dashboard and form grids stack on narrow viewports (`grid-cols-1`, expanding at `md` / `lg`). Operator UI preferences in **Settings → UI Preferences** persist sidebar collapse (`arx_sidebar_collapsed`) and notification center layout (`arx_ui_notification_style`: `drawer` with a dimmed backdrop, or `overlay` as a floating card with uniform 1rem inset below the top bar and from the right edge—no dashboard dimming). Client-side routing runs under the authenticated shell:
 
 | Route | Purpose |
 | ----- | ------- |
 | `/dashboard` | Health metrics, uptime, and CA backend status |
-| `/certificates` | Issued certificate inventory and CSR signing |
-| `/acme` | ACME directory URL and enrollment policy |
+| `/certificates` | Inventory, issuance, revocation, lint, renew/rekey |
+| `/acme` | ACME status, policy, and EAB key generation |
 | `/scep` | SCEP base URL and provisioner status |
-| `/settings` | Session, API base URL, and UI preferences |
+| `/ndes` | NDES connector status for AD CS migrations |
+| `/provisioners` | Provisioner token minting and Kubernetes status |
+| `/templates` | Certificate issuance template management |
+| `/ssh` | SSH CA certificate inventory, stats, modal-based issuance, inspection, and root key downloads |
+| `/settings` | Session, server config, service accounts, public API, UI preferences |
 
-Develop locally with `cd webui && npm ci && npm run dev`, or ship assets via `npm run build` and `arx server ui download`.
+See [docs/api_to_ui_matrix.md](docs/api_to_ui_matrix.md) for the full endpoint-to-UI mapping.
+
+Develop locally with the [rapid UI loop](docs/development_workflow.md) (`./bin/arx server start` + `cd webui && npm run dev`), or ship assets via `npm run build` and `arx server ui download`.
 
 **Automated WebUI install:** `arx server ui download` reads `server.yaml`, fetches `webui-dist.tar.gz` from GitHub (matching the `arx` binary version, or the latest release when the binary is `v0.0.0-dev`), extracts files into `webui.ui_dir`, and sets `webui.enabled: true`. Pass `--version v1.0.2` to download a specific release tag instead. Use `sudo` when the default path is `/opt/arx/ui`.
 
@@ -350,13 +363,31 @@ For **API** renewal entries, run `arx login` on the agent host (or copy credenti
 
 ## Docker Compose
 
+Production image (multi-stage build: `make build-all` compiles `arx` and the Vue WebUI):
+
 ```bash
 cp .env.example .env
+# Edit .env: set ARX_CA_PASSWORD and ARX_HEALTHCHECK_PASSWORD
+
 make docker-build
+docker compose run --rm arx-ca server config init --config /data/server.yaml
 make docker-up
 ```
 
-The container runs `arx server start` on **8080**; PKI data is mounted at `./data/arx-ca`.
+| Port | Purpose |
+| ---- | ------- |
+| `8080` | REST API (ACME, SCEP, health, CRL) |
+| `8443` | WebUI static server (`webui.enabled: true` in container env) |
+
+Persistent state lives on the **`arx_ca_data`** named volume mounted at **`/data`**
+(`server.yaml`, `.pki/`, `arx.db`). The container runs as UID **1000** (non-root).
+
+Health checks poll **`GET /api/v1/ca/info`** via `deploy/docker-healthcheck.sh` (admin JWT
+from `ARX_HEALTHCHECK_EMAIL` / `ARX_HEALTHCHECK_PASSWORD`). For Docker Swarm:
+`docker stack deploy -c docker-compose.yml arx`.
+
+See [docs/agent_crl_spec.md](docs/agent_crl_spec.md) for the **arx-mdm** agent CRL
+self-quarantine architecture.
 
 ## API overview
 
@@ -365,14 +396,16 @@ The container runs `arx server start` on **8080**; PKI data is mounted at `./dat
 | `GET` | `/api/v1/health` | — | Health and runtime metrics |
 | `GET` | `/api/v1/ca/root` | — | Root CA PEM |
 | `GET` | `/api/v1/ca/chain` | — | CA bundle ZIP (`ca-bundle.zip`: root.pem/crt, intermediate.pem/crt, ca-chain.pem/crt) |
-| `POST` | `/api/v1/auth/login` | — | Admin JWT (`email` + `password`) |
+| `POST` | `/api/v1/auth/login` | — | Admin JWT (`email` + `password`) + HttpOnly `arx_session` cookie |
+| `POST` | `/api/v1/auth/logout` | — | Clears `arx_session` cookie |
 | `POST` | `/api/v1/certificates/issue` | Service / Admin | Sign CSR (certificate only); archives public PEM |
 | `POST` | `/api/v1/certificates/generate` | Service / Admin | Native key generation + sign; returns key PEM and escrows it encrypted at rest (or ZIP bundle with `?format=zip`) |
 | `GET` | `/api/v1/certificates/{serial}` | Service / Admin | Archived certificate detail (requestor, PEM, validity, escrow flag) |
 | `GET` | `/api/v1/certificates/{serial}/key` | SuperAdmin (JWT) | Decrypt and return escrowed private key PEM |
 | `GET` | `/api/v1/certificates/{serial}/bundle` | SuperAdmin (JWT) | ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) |
 | `POST` | `/api/v1/certificates/auto` | Admin | Generate ECDSA P-384 key + sign |
-| `GET` | `/api/v1/crl` | — | CRL (DER or PEM; alias of `/api/v1/ca/crl`) |
+| `POST` | `/api/v1/certificates/revoke` | Revocation-Manager / SuperAdmin | Passive revoke in step-ca; updates `issued_certificates` archive when present |
+| `GET` | `/api/v1/crl` | — | CRL (DER or PEM; `Cache-Control: max-age=3600`; alias of `/api/v1/ca/crl`) |
 | `POST` | `/api/v1/certificates/renew` | Admin / mTLS | Renew existing certificate |
 | `GET` | `/acme/directory` | ACME JWS | ACME directory (when enabled) |
 
@@ -400,7 +433,9 @@ YAML comments in `server.yaml` may be lost when the file is rewritten (standard 
 | [docs/architecture.md](docs/architecture.md) | Split-binary layout, SQLite/CGO, systemd, DDD layers |
 | [docs/cli_reference.md](docs/cli_reference.md) | `arx` and `arx-agent` command reference |
 | [docs/agent.md](docs/agent.md) | `agent.yaml`, API vs ACME renewal |
+| [docs/agent_crl_spec.md](docs/agent_crl_spec.md) | arx-mdm CRL polling and self-quarantine |
 | [docs/acme.md](docs/acme.md) | ACME directory, challenge types |
+| [docs/ssh_ca_setup.md](docs/ssh_ca_setup.md) | SSH CA trust configuration for Linux hosts and clients |
 | [docs/api_reference.md](docs/api_reference.md) | HTTP endpoint reference |
 
 ## Project layout

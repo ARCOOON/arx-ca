@@ -162,9 +162,11 @@ When `webui.enabled` is `true`, the CA API process also runs an **isolated** `ne
 
 When `webui.proxy_api` is `true` (default), the WebUI listener reverse-proxies `/api/`, `/ocsp`, `/acme/`, `/scep/`, and `/certsrv/` to the API process on loopback. The Vue app then uses same-origin `/api/v1` without cross-origin calls. Set `webui.proxy_api: false` only when a separate ingress terminates API and UI on one host without the built-in proxy.
 
-The SPA (`webui/`) mounts authenticated routes inside `AppShell` (collapsible sidebar, top bar with roles and logout): `/dashboard` (health and inventory summary), `/certificates` (list + CSR issue modal), `/acme` and `/scep` (read-only status from `GET /api/v1/acme/status` and `GET /api/v1/scep/status`), and `/settings` (session and API client metadata). Axios attaches the admin JWT from Pinia on every protected call; `401` responses trigger logout except for `POST /auth/login`.
+The SPA (`webui/`) mounts authenticated routes inside `AppShell` (collapsible sidebar with a mobile hamburger drawer below `md`, top bar with roles, notification bell, and logout): `/dashboard` (health and inventory summary), `/certificates` (inventory, issuance, revocation, lint, renew/rekey), `/acme` (status and EAB key generation), `/scep` and `/ndes` (read-only enrollment status), `/provisioners` (token minting and Kubernetes status), `/templates` (template list and creation), `/ssh` (SSH user/host certificate generation), and `/settings` (session, server config, service accounts, public API references, and UI preferences). Axios attaches the admin JWT from Pinia on every protected call; `401` responses trigger logout except for `POST /auth/login`.
 
-**Visual design system:** Shared tokens live in `webui/src/assets/theme.css` (`--radius-control` 6px, `--radius-surface` 8px, `--radius-pill` for toggles). Component classes in `webui/src/style.css` apply them to surfaces, buttons, inputs, badges, tables, and modals. The sidebar and top bar stay flush to the viewport edges; only in-bar controls and main-content panels are rounded.
+Full endpoint-to-view mapping: [docs/api_to_ui_matrix.md](../api_to_ui_matrix.md).
+
+**Visual design system:** Shared tokens live in `webui/src/assets/theme.css` (`--radius-control` 6px, `--radius-surface` 8px, `--radius-pill` for toggles). Component classes in `webui/src/style.css` apply them to surfaces, buttons, inputs, badges, tables, and modals. The sidebar and top bar stay flush to the viewport edges; only in-bar controls and main-content panels are rounded. **App shell layout:** `AppShell.vue` fills the viewport (`h-screen overflow-hidden`); the sidebar and top bar are fixed chrome, the sidebar nav scrolls independently when needed (`custom-scrollbar`), and only the `<main>` router outlet scrolls vertically. The mobile hamburger drawer (`SideNav.vue`, Phase 94) remains a fixed overlay with backdrop. The notification center (`NotificationDrawer.vue`) supports two operator-selectable layouts persisted in `localStorage` as `arx_ui_notification_style` (`drawer` | `overlay`): a full-height right slide-out drawer with a dimmed backdrop, or a solid opaque overlay card anchored below the top bar with uniform 1rem spacing from the right edge and below the chrome bar (`top-20`, `right-4`; `useNotificationLayout.ts`). The overlay layout uses a transparent click-catcher instead of dimming the dashboard. Both layouts use the same semantic surface tokens as dashboard panels (`ui-surface-muted`, `ui-chrome-bar`, `ui-inset`, and shared `ui-*` text/border classes from `theme.css`), shadow and border depth (no backdrop blur), and theme-aware notification cards. **Responsive layout:** `Modal.vue` constrains dialogs to `max-w-[95vw]` and `max-h-[90vh]` with a scrollable body and `.ui-modal-footer` action rows that stack on narrow screens; `DataTable.vue` wraps tables in `overflow-x-auto` containers and supports an inline `#row-expanded` slot for valid `<tr>` detail rows; `Pagination.vue` renders numbered page controls with ellipsis truncation for long page counts; dashboard and detail grids use `grid-cols-1` on mobile and expand at `md` / `lg` breakpoints.
 
 | Setting | Default | Role |
 | ------- | ------- | ---- |
@@ -177,9 +179,12 @@ The SPA (`webui/`) mounts authenticated routes inside `AppShell` (collapsible si
 | `webui.write_timeout` | `10s` | `http.Server.WriteTimeout` |
 | `webui.tls.enabled` | `true` | HTTPS on the WebUI listener (`tls.Listen` with optional client certs) |
 | `webui.tls.cert_file` / `key_file` | (empty) | TLS material; when missing, ephemeral ECDSA P-256 with SANs (`DNS:localhost`, `IP:127.0.0.1`, `IP:::1`, host interface addresses) |
-| `webui.cors.allowed_origins` | `["*"]` | CORS `Access-Control-Allow-Origin` on the WebUI listener **and** on the API listener when `webui.enabled` is `true` |
+| `webui.cors.allowed_origins` | `http://localhost:5173`, `http://127.0.0.1:5173` | CORS `Access-Control-Allow-Origin` on the WebUI listener **and** on the API listener (always applied from `webui.cors`) |
 | `webui.cors.allowed_methods` | REST verbs + `OPTIONS` | Allowed methods; entry `*` expands to the full REST set |
 | `webui.cors.allowed_headers` | `Authorization`, `Content-Type`, … | Allowed headers; entry `*` mirrors preflight `Access-Control-Request-Headers` |
+| `webui.cors.allow_credentials` | `true` | Enables `Access-Control-Allow-Credentials`; wildcard origins are replaced with explicit dev origins |
+| `security.cookie_same_site` | `lax` | Session cookie `SameSite` for `POST /api/v1/auth/login` |
+| `security.cookie_secure` | (auto) | Session cookie `Secure` flag; auto-detected from TLS / `X-Forwarded-Proto` when unset |
 | `webui.proxy_api` | `true` | Loopback reverse proxy for API paths on the WebUI listener (drop-in same-origin UI) |
 
 **Path prefix and deployment architecture**
@@ -196,7 +201,7 @@ Use a non-root prefix when the same host also terminates other paths (reverse pr
 
 Requests that do not match a file under `ui_dir` receive **SPA fallback** (`index.html`) so deep links work. Middleware applies configured CORS and `max_body_size` before the file handler.
 
-When the WebUI is enabled, the **API listener** applies the same `webui.cors` policy for direct cross-origin API access (for example UI on `https://ui.example` and API on `https://ca.example:8080` with `webui.proxy_api: false`). Preflight `OPTIONS` requests return `200 OK` with configured `Access-Control-Allow-*` headers. With `proxy_api` enabled (default), the browser uses same-origin `/api/v1` on the WebUI port and CORS is not required for routine dashboard traffic.
+The **API listener** always applies the `webui.cors` policy so the Vite HMR dev server (`http://localhost:5173`) can call the API cross-origin during development. `POST /api/v1/auth/login` also sets an HttpOnly `arx_session` cookie; middleware accepts the cookie or a `Bearer` JWT. Preflight `OPTIONS` requests return `200 OK` with configured `Access-Control-Allow-*` headers. With `proxy_api` enabled (default in production), the browser uses same-origin `/api/v1` on the WebUI port and CORS is not required for routine dashboard traffic.
 
 Startup logs include the effective URL, for example: `WebUI server starting url=https://0.0.0.0:8443/ui` when `path_prefix` is `/ui` and TLS is enabled.
 
@@ -274,7 +279,7 @@ Configured in generated `.pki/config/ca.json` (derived from `ca.root_path`). ste
 
 `ca.max_ttl` in `server.yaml` (default `8760h`) is validated before signing and synchronized into step-ca authority/provisioner `maxTLSCertDuration` claims at startup, replacing the step-ca default 24-hour TLS cap.
 
-When the `.pki` tree is absent, `ca_bootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation (legacy top-level `CABootstrap` with PascalCase keys is still accepted on load). Values from `server.yaml` are applied to the X.509 templates and CAS `Name` fields before cryptographic generation in `internal/ca/bootstrap_pki.go`. Successful `POST /api/v1/certificates/issue` and `POST /api/v1/certificates/generate` responses archive public PEM material in the application SQLite/PostgreSQL `issued_certificates` table (`GET /api/v1/certificates/{serial}`). Native generation additionally **escrows** the private key as an AES-256-GCM encrypted blob (`encrypted_private_key`) derived from `ca.password`; only SuperAdmin JWT holders may retrieve it via `GET /api/v1/certificates/{serial}/key` or download a ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) via `GET /api/v1/certificates/{serial}/bundle`. The same three-file ZIP builder serves `POST /api/v1/certificates/generate?format=zip`. Trust anchors are exported separately through `GET /api/v1/ca/chain` (ZIP bundle `ca-bundle.zip` with `root.pem`, `root.crt`, `intermediate.pem`, `intermediate.crt`, `ca-chain.pem`, and `ca-chain.crt`).
+When the `.pki` tree is absent, `ca_bootstrap` in `server.yaml` controls Root and Intermediate subject fields and key size for the initial step-ca PKI generation (legacy top-level `CABootstrap` with PascalCase keys is still accepted on load). Values from `server.yaml` are applied to the X.509 templates and CAS `Name` fields before cryptographic generation in `internal/ca/bootstrap_pki.go`. Successful `POST /api/v1/certificates/issue` and `POST /api/v1/certificates/generate` responses archive public PEM material in the application SQLite/PostgreSQL `issued_certificates` table (`GET /api/v1/certificates/{serial}`). `POST /api/v1/certificates/revoke` performs passive revocation in step-ca and, when an archive row exists, sets `status = REVOKED`, `revoked_at`, `reason_code`, and `revocation_reason`. The public CRL is served at `GET /api/v1/crl` (alias `GET /api/v1/ca/crl`) with `Cache-Control: max-age=3600`. Native generation additionally **escrows** the private key as an AES-256-GCM encrypted blob (`encrypted_private_key`) derived from `ca.password`; only SuperAdmin JWT holders may retrieve it via `GET /api/v1/certificates/{serial}/key` or download a ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) via `GET /api/v1/certificates/{serial}/bundle`. The same three-file ZIP builder serves `POST /api/v1/certificates/generate?format=zip`. Trust anchors are exported separately through `GET /api/v1/ca/chain` (ZIP bundle `ca-bundle.zip` with `root.pem`, `root.crt`, `intermediate.pem`, `intermediate.crt`, `ca-chain.pem`, and `ca-chain.crt`).
 
 | Field | Default (when omitted) | Description |
 | ----- | ---------------------- | ----------- |
@@ -320,7 +325,7 @@ Legacy `security.initial_admin_password` and `bootstrap.admin_password_hash` key
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
 │  Middleware (internal/api/middleware)                         │
-│  Logging, JWT/API-key auth, RBAC permissions                  │
+│  Audit forensics, logging, JWT/API-key auth, RBAC permissions │
 └───────────────────────────┬─────────────────────────────────┘
                             │
 ┌───────────────────────────▼─────────────────────────────────┐
@@ -334,14 +339,16 @@ Legacy `security.initial_admin_password` and `bootstrap.admin_password_hash` key
 │  Application DB   │               │  step-ca cert DB      │
 │  (internal/       │               │  Badger under .pki/   │
 │   database)       │               │  via ca.json          │
-│  users, ACME      │               │  issued certs, etc.   │
+│  users, ACME,     │               │  issued certs, etc.   │
+│  audit_logs       │               │                       │
 └───────────────────┘               └───────────────────────┘
 ```
 
 | Package | Responsibility |
 | ------- | -------------- |
 | `internal/api/handlers` | REST endpoints, OCSP, public read-only catalog |
-| `internal/api/middleware` | Authentication, authorization, request logging |
+| `internal/api/middleware` | Immutable audit capture, authentication, authorization, request logging |
+| `internal/db` | Append-only `audit_logs` schema and forensic store |
 | `internal/auth` | JWT, API keys, bootstrap admin, RBAC permissions |
 | `internal/ca` | step-ca wrapper, provisioners, enrollment protocols |
 | `internal/acmeprotocol` | Flat `/acme/*` URLs, JWS middleware, challenge validators |
@@ -405,8 +412,37 @@ Public and authenticated routes are registered in `runServer()`; enrollment prot
 
 Permissions are enforced per-route in middleware (`internal/auth/roles.go`).
 
+## Docker deployment
+
+The root `Dockerfile` builds a production image in two stages:
+
+| Stage | Base | Output |
+| ----- | ---- | ------ |
+| `builder` | `golang:1.22-alpine` | `make build-all` → `build/arx-linux-{amd64,arm64}` and `build/webui-dist.tar.gz` |
+| `runner` | `alpine:3.20` | `/app/arx`, `/app/ui/`, non-root UID 1000 |
+
+Runtime layout:
+
+| Path | Purpose |
+| ---- | ------- |
+| `/app/arx` | CA server binary |
+| `/app/ui/` | Extracted Vue WebUI static assets |
+| `/data` | Named volume — `server.yaml`, `.pki/`, `arx.db` |
+
+The entrypoint runs `arx server start --config /data/server.yaml`. Port **8080** serves the
+API; port **8443** serves the WebUI when `ARX_WEBUI_ENABLED=true`. Health checks call
+`GET /api/v1/ca/info` through `deploy/docker-healthcheck.sh` (admin JWT from environment).
+
+`docker-compose.yml` targets single-node Compose and Docker Swarm (`deploy` block, named
+volume `arx_ca_data`). First boot requires `docker compose run --rm arx-ca server config init
+--config /data/server.yaml`.
+
+Endpoint agents that maintain mTLS sessions should implement CRL self-quarantine per
+[agent_crl_spec.md](agent_crl_spec.md).
+
 ## Related documents
 
 - [cli_reference.md](cli_reference.md) — Operator commands and session files
+- [agent_crl_spec.md](agent_crl_spec.md) — arx-mdm CRL polling and self-quarantine
 - [acme.md](acme.md) — ACME directory and challenge types
 - [../README.md](../README.md) — Quick start and build targets

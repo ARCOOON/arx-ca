@@ -362,7 +362,7 @@ a1b2c3d4...                     active   CN=example.local                2026-07
 ### `arx cert revoke <serial>`
 
 ```bash
-arx cert revoke a1b2c3d4e5f6 --reason "key compromise"
+arx cert revoke a1b2c3d4e5f6 --reason "key compromise" --reason-code 1
 ```
 
 Example output:
@@ -374,7 +374,8 @@ Revoked a1b2c3d4e5f6 at 2026-06-01T15:04:05Z
 | Flag | Description |
 | ---- | ----------- |
 | `--url`, `-u` | Override server URL (persisted when set) |
-| `--reason` | Informational revocation reason |
+| `--reason` | Human-readable revocation reason (optional) |
+| `--reason-code` | RFC 5280 reason code (default `0` Unspecified; `1` KeyCompromise; `5` CessationOfOperation) |
 
 ---
 
@@ -635,7 +636,7 @@ arx
 ├── ui [--url]
 ├── cert
 │   ├── list [--url]
-│   └── revoke <serial> [--url] [--reason]
+│   └── revoke <serial> [--url] [--reason] [--reason-code]
 ├── util
 │   ├── hash <password>
 │   └── update

@@ -2,6 +2,8 @@
 
 Interactive reference for every HTTP endpoint exposed by **arx-ca-server**. Routes are registered in `internal/cmd/arx/server_start.go`. JSON management APIs under `/api/v1` use a standard envelope; ACME, OCSP, CRL, SCEP, and NDES use protocol-specific formats.
 
+**WebUI parity:** Each endpoint's Vue management console mapping is documented in [api_to_ui_matrix.md](api_to_ui_matrix.md).
+
 ## Base URL and Versioning
 
 
@@ -125,8 +127,11 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 | `service_accounts:manage` | SuperAdmin |
 | `acme:eab` | SuperAdmin, CA-Admin |
 | `enrollment:status` | SuperAdmin, CA-Admin, Revocation-Manager, Read-Only |
+| `ssh:sign_user` | SuperAdmin, CA-Admin |
 | `ssh:sign_host` | SuperAdmin, CA-Admin |
 | `ssh:inspect` | SuperAdmin, CA-Admin |
+| `audit:read` | SuperAdmin, CA-Admin, Revocation-Manager, Read-Only |
+| `webhooks:manage` | SuperAdmin, CA-Admin |
 
 ## Table of Contents
 
@@ -140,10 +145,13 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 7. [Provisioners & Enrollment Status](#provisioners--enrollment-status)
 8. [Certificate Templates](#certificate-templates)
 9. [SSH Certificate Authority](#ssh-certificate-authority)
-10. [OCSP Responder](#ocsp-responder)
-11. [ACMEv2 (RFC 8555)](#acmev2-rfc-8555)
-12. [SCEP (optional)](#scep-optional)
-13. [NDES (optional)](#ndes-optional)
+10. [Forensic Audit Log](#forensic-audit-log)
+11. [Real-Time Notification Stream](#real-time-notification-stream)
+12. [Webhook Notifications](#webhook-notifications)
+13. [OCSP Responder](#ocsp-responder)
+14. [ACMEv2 (RFC 8555)](#acmev2-rfc-8555)
+15. [SCEP (optional)](#scep-optional)
+16. [NDES (optional)](#ndes-optional)
 
 ---
 
@@ -292,11 +300,35 @@ The client certificate CN must match the subject CN of `certificate_pem`. No `Au
 
 </details>
 
+On success the response also sets an HttpOnly session cookie (`arx_session`) containing the same JWT. Cookie attributes follow `security.cookie_same_site` (default `lax`) and `security.cookie_secure` (auto: `false` on plain HTTP, `true` when the request is HTTPS or `X-Forwarded-Proto: https`). Browser clients that send `credentials: include` may authenticate via the cookie without an `Authorization` header.
+
 **Error Codes:**
 * `400 Bad Request` — invalid JSON payload.
 * `401 Unauthorized` — invalid email or password.
 * `405 Method Not Allowed` — non-POST request.
 * `500 Internal Server Error` — login failure.
+
+---
+### POST /api/v1/auth/logout
+> Clears the HttpOnly `arx_session` cookie. The JSON body token in the client is unaffected; callers should also discard local storage tokens.
+
+- **Authentication:** Not required
+- **Permissions:** `None`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `status` | string | Yes | Always `logged_out` |
+
+</details>
+
+**Error Codes:**
+* `405 Method Not Allowed` — non-POST request.
 
 ---
 ### POST /api/v1/auth/service-accounts
@@ -602,6 +634,7 @@ The response body is a ZIP archive with exactly these entries:
 | `Content-Type` | `application/pkix-crl` or `application/x-pem-file` |
 | `Content-Disposition` | `attachment; filename="crl.crl"` or `crl.pem` |
 | `Expires` | CRL next-update (RFC1123) |
+| `Cache-Control` | `public, max-age=3600` — clients may cache for one hour |
 
 *(Binary body — no JSON example.)*
 
@@ -1039,7 +1072,7 @@ When the request includes `?format=zip` or `Accept: application/zip`, the server
 
 ---
 ### POST /api/v1/certificates/revoke
-> Revokes a certificate by serial number in the CA database.
+> Revokes a certificate by serial number in the step-ca engine and updates the application `issued_certificates` archive when a matching record exists.
 
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:revoke`
@@ -1052,13 +1085,14 @@ When the request includes `?format=zip` or `Accept: application/zip`, the server
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `serial` | string | Yes | Certificate serial to revoke |
-| `reason` | string | No | Revocation reason string |
-| `reason_code` | int | No | RFC 5280 reason code |
+| `serial_number` | string | Yes | Certificate serial to revoke |
+| `serial` | string | No | Legacy alias for `serial_number` |
+| `reason` | string | No | Human-readable revocation reason (stored in archive) |
+| `reason_code` | int | Yes | RFC 5280 reason code (`0` Unspecified, `1` KeyCompromise, `5` CessationOfOperation, … `10` AACompromise) |
 
 **Example JSON:**
 ```json
-{"serial": "12345678901234567890", "reason": "keyCompromise", "reason_code": 1}
+{"serial_number": "12345678901234567890", "reason": "key compromise", "reason_code": 1}
 ```
 
 </details>
@@ -1085,9 +1119,47 @@ When the request includes `?format=zip` or `Accept: application/zip`, the server
 * `401 Unauthorized` — missing or invalid credentials.
 * `403 Forbidden` — insufficient RBAC permissions.
 * `405 Method Not Allowed` — wrong HTTP method.
-* `400 Bad Request` — missing serial.
+* `400 Bad Request` — missing `serial_number` or `reason_code`.
 * `404 Not Found` — certificate not found.
 * `409 Conflict` — already revoked.
+
+**Side effects:** On success, the step-ca database records passive revocation and regenerates the CRL when configured. If the serial exists in `issued_certificates`, the row is updated with `status = REVOKED`, `revoked_at`, `reason_code`, and `revocation_reason`.
+
+---
+### GET /api/v1/certificates/stats
+> Returns aggregate X.509 certificate inventory metrics from the step-ca database.
+
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `certificates:read`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `total_issued` | int | Yes | Total certificates in the CA store |
+| `expiring_30d` | int | Yes | Non-revoked certificates expiring within the next 30 days |
+| `total_revoked` | int | Yes | Revoked certificates |
+
+**Example JSON (`data`):**
+```json
+{
+  "total_issued": 42,
+  "expiring_30d": 3,
+  "total_revoked": 1
+}
+```
+
+</details>
+
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — stats computation failure.
 
 ---
 ### GET /api/v1/certificates
@@ -1172,7 +1244,10 @@ When the request includes `?format=zip` or `Accept: application/zip`, the server
 | `not_after` | string (RFC3339) | Yes | Validity end (`Expiry Date`) |
 | `requestor_id` | string | Yes | Application user ID or service account ID of the caller |
 | `certificate_pem` | string | Yes | Public certificate PEM |
-| `revoked` | bool | Yes | Whether the serial is revoked in the step-ca database |
+| `revoked` | bool | Yes | Whether the serial is revoked (step-ca or application archive) |
+| `revoked_at` | string (RFC3339) | No | Archive revocation timestamp when `status = REVOKED` |
+| `reason_code` | int | No | RFC 5280 reason code from archive |
+| `revocation_reason` | string | No | Human-readable reason from archive |
 | `has_escrowed_key` | bool | Yes | Whether an AES-256-GCM encrypted private key blob is stored for this serial |
 
 **Example JSON (`data`):**
@@ -1187,6 +1262,9 @@ When the request includes `?format=zip` or `Accept: application/zip`, the server
   "requestor_id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "certificate_pem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
   "revoked": false,
+  "revoked_at": "2026-06-02T11:30:00Z",
+  "reason_code": 1,
+  "revocation_reason": "key compromise",
   "has_escrowed_key": true
 }
 ```
@@ -1897,6 +1975,136 @@ Same authentication model as `POST /api/v1/certificates/renew`: admin JWT with `
 ## SSH Certificate Authority
 
 
+### POST /api/v1/ssh/generate/user
+> Issues a short-lived SSH user certificate with standard interactive extensions (`permit-pty`, `permit-port-forwarding`).
+
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `ssh:sign_user`
+
+#### Request
+<details>
+  <summary><strong>View Request Schema & JSON</strong></summary>
+
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `public_key` | string | Yes | SSH public key (`ssh-ed25519 …` or `ssh-rsa …`) |
+| `principals` | string[] | Yes | Unix usernames allowed to log in (e.g. `root`, `admin`) |
+| `ttl` | string | No | Certificate lifetime (default `4h`) |
+| `provisioner` | string | No | JWK provisioner name (default CA provisioner) |
+
+**Example JSON:**
+```json
+{
+  "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...",
+  "principals": ["root", "admin"],
+  "ttl": "4h"
+}
+```
+
+</details>
+
+#### Response
+<details>
+  <summary><strong>View Response (201 Created)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificate` | string | Yes | OpenSSH certificate string |
+| `certificate_type` | string | Yes | `user` |
+| `key_id` | string | Yes | Certificate key ID |
+| `principals` | string[] | Yes | Allowed principals |
+| `serial` | uint64 | Yes | Certificate serial |
+| `valid_after` | string | Yes | Validity start (RFC3339) |
+| `valid_before` | string | Yes | Validity end (RFC3339) |
+
+**Example JSON (`data`):**
+```json
+{
+  "certificate": "ssh-ed25519-cert-v01@openssh.com AAAAC3NzaC1lZDI1NTE5AAAAI...",
+  "certificate_type": "user",
+  "key_id": "root",
+  "principals": ["root", "admin"],
+  "serial": 42,
+  "valid_after": "2026-06-07T10:00:00Z",
+  "valid_before": "2026-06-07T14:00:00Z"
+}
+```
+
+</details>
+
+**Audit action:** `SSH_USER_CERT_ISSUE`
+
+**Error Codes:**
+* `400 Bad Request` — missing `public_key` or `principals`.
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `500 Internal Server Error` — signing failure.
+
+---
+### POST /api/v1/ssh/generate/host
+> Issues an SSH host certificate for server identity.
+
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `ssh:sign_host`
+
+#### Request
+<details>
+  <summary><strong>View Request Schema & JSON</strong></summary>
+
+**Properties:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `public_key` | string | Yes | SSH public key |
+| `principals` | string[] | Yes | Hostnames and/or IP addresses |
+| `ttl` | string | No | Certificate lifetime (default `8760h`) |
+| `provisioner` | string | No | JWK provisioner name |
+
+**Example JSON:**
+```json
+{
+  "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI...",
+  "principals": ["web-01.example.com", "10.0.0.5"],
+  "ttl": "8760h"
+}
+```
+
+</details>
+
+#### Response
+<details>
+  <summary><strong>View Response (201 Created)</strong></summary>
+
+**Properties (`data`):** same shape as `generate/user`; `certificate_type` is `host`.
+
+**Example JSON (`data`):**
+```json
+{
+  "certificate": "ssh-ed25519-cert-v01@openssh.com AAAAC3NzaC1lZDI1NTE5AAAAI...",
+  "certificate_type": "host",
+  "key_id": "web-01.example.com",
+  "principals": ["web-01.example.com", "10.0.0.5"],
+  "serial": 43,
+  "valid_after": "2026-06-07T10:00:00Z",
+  "valid_before": "2027-06-07T10:00:00Z"
+}
+```
+
+</details>
+
+**Audit action:** `SSH_HOST_CERT_ISSUE`
+
+**Error Codes:**
+* `400 Bad Request` — missing `public_key` or `principals`.
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `500 Internal Server Error` — signing failure.
+
+---
 ### POST /api/v1/ssh/sign-user
 > Issues a short-lived SSH user certificate. Without a body `token`, callers must authenticate so the server can mint an internal sign token.
 
@@ -2099,6 +2307,111 @@ Same authentication model as `POST /api/v1/certificates/renew`: admin JWT with `
 * `400 Bad Request` — missing or invalid certificate.
 
 ---
+### GET /api/v1/ssh/certificates
+> Lists persisted SSH certificates issued through the API, ordered by expiry descending.
+
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `ssh:inspect`
+
+#### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | `50` | Page size (max `500`) |
+| `offset` | int | `0` | Pagination offset |
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `certificates` | array | Yes | Persisted SSH certificate records (see below) |
+| `total` | int | Yes | Total matching records |
+| `limit` | int | Yes | Applied page size |
+| `offset` | int | Yes | Applied offset |
+
+**`certificates[]` Element:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string (UUID) | Yes | Record identifier |
+| `serial` | string | Yes | Certificate serial |
+| `cert_type` | string | Yes | `user` or `host` |
+| `principals` | string[] | Yes | Allowed principals |
+| `fingerprint` | string | Yes | SHA256 fingerprint of the embedded public key |
+| `valid_after` | string (RFC3339) | Yes | Validity start |
+| `valid_before` | string (RFC3339) | Yes | Validity end |
+
+**Example JSON (`data`):**
+```json
+{
+  "certificates": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "serial": "1234567890",
+      "cert_type": "user",
+      "principals": ["admin"],
+      "fingerprint": "SHA256:abc123...",
+      "valid_after": "2026-06-07T12:00:00Z",
+      "valid_before": "2026-06-07T16:00:00Z"
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+</details>
+
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — list failure.
+
+**Side effects:** Records are inserted automatically when SSH certificates are signed via `POST /api/v1/ssh/sign-user`, `POST /api/v1/ssh/sign-host`, `POST /api/v1/ssh/generate/user`, or `POST /api/v1/ssh/generate/host`.
+
+---
+### GET /api/v1/ssh/stats
+> Returns aggregate metrics for persisted SSH certificates.
+
+- **Authentication:** Required (Bearer JWT or X-API-Key)
+- **Permissions:** `Admin | Agent` — requires RBAC `ssh:inspect`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `total_user_certs` | int | Yes | Persisted user certificates |
+| `total_host_certs` | int | Yes | Persisted host certificates |
+| `active_now` | int | Yes | Certificates valid at the current time |
+
+**Example JSON (`data`):**
+```json
+{
+  "total_user_certs": 12,
+  "total_host_certs": 4,
+  "active_now": 10
+}
+```
+
+</details>
+
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — stats computation failure.
+
+---
 ### GET /api/v1/ssh/roots
 > Returns SSH CA public keys for `known_hosts` / `authorized_keys` trust configuration.
 
@@ -2150,6 +2463,429 @@ Same authentication model as `POST /api/v1/certificates/renew`: admin JWT with `
 * `404 Not Found` — SSH CA not configured.
 * `405 Method Not Allowed` — non-GET request.
 * `500 Internal Server Error` — retrieval failure.
+
+---
+
+## Forensic Audit Log
+
+Immutable, append-only audit records are persisted in the application database (`audit_logs` table) for every API request except `GET /api/v1/health` and the long-lived `GET /api/v1/notifications/stream` SSE connection. HTTP middleware captures network context (`request_id`, client IP with `X-Forwarded-For` / `X-Real-IP` precedence, method, path, status code, user-agent). State-changing handlers attach business actions (for example `CERT_ISSUE_CSR`, `AUTH_LOGIN_SUCCESS`, `EAB_GENERATE`, `WEBHOOK_CREATED`).
+
+Canonical webhook-subscribable action constants live in `internal/db/audit_actions.go`: `SYS_START`, `SYS_CONFIG_UPDATE`, `AUTH_LOGIN_SUCCESS`, `AUTH_LOGIN_FAILED`, `CERT_ISSUE_NATIVE`, `CERT_ISSUE_CSR`, `CERT_REVOKE`, `CERT_RENEW`, `EAB_GENERATE`, `EAB_REVOKE`, `SCEP_CHALLENGE_ROTATED`, `SSH_USER_CERT_ISSUE`, `SSH_HOST_CERT_ISSUE`, `WEBHOOK_CREATED`, `WEBHOOK_DELETED`, `WEBHOOK_UPDATED`.
+
+Each response includes `X-Request-ID` for correlation with audit rows.
+
+### GET /api/v1/audit
+> Returns paginated immutable audit log entries ordered by timestamp descending.
+
+- **Authentication:** `Admin | Agent` (JWT session cookie, Bearer JWT, or API key)
+- **Permissions:** `Admin | Agent` — requires RBAC `audit:read`
+
+#### Query Parameters
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `limit` | integer | `50` | Page size (max `500`) |
+| `offset` | integer | `0` | Rows to skip |
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `logs` | array | Yes | Audit log entries (see below) |
+| `total` | integer | Yes | Total rows in `audit_logs` |
+| `limit` | integer | Yes | Applied page size |
+| `offset` | integer | Yes | Applied offset |
+
+**`logs[]` Element:**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `id` | string | Yes | UUID primary key |
+| `timestamp` | string | Yes | UTC RFC3339 timestamp |
+| `request_id` | string | Yes | Correlation ID (matches `X-Request-ID`) |
+| `ip_address` | string | Yes | Client IP (proxy-aware) |
+| `http_method` | string | Yes | HTTP verb |
+| `endpoint` | string | Yes | Request path |
+| `status_code` | integer | Yes | Final HTTP status |
+| `actor_type` | string | Yes | `User`, `ServiceAccount`, `ACME_Client`, or `System` |
+| `actor_id` | string | Yes | JWT subject, service account ID, or `anonymous` |
+| `actor_roles` | string[] | No | RBAC roles at request time |
+| `action` | string | Yes | Business action (e.g. `CERT_ISSUE`, `AUTH_LOGIN`) |
+| `provisioner` | string | No | CA provisioner name when applicable |
+| `fingerprint` | string | No | SHA-256 hex fingerprint of issued X.509 certificate |
+| `metadata` | object | No | Extended context (`user_agent`, serial, error hints) |
+
+**Example JSON (`data`):**
+```json
+{
+  "logs": [
+    {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "timestamp": "2026-06-06T14:22:01.123456Z",
+      "request_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "ip_address": "203.0.113.10",
+      "http_method": "POST",
+      "endpoint": "/api/v1/certificates/issue",
+      "status_code": 201,
+      "actor_type": "ServiceAccount",
+      "actor_id": "sa-ci-runner",
+      "actor_roles": ["CA-Admin"],
+      "action": "CERT_ISSUE",
+      "provisioner": "jwk",
+      "fingerprint": "a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2",
+      "metadata": {
+        "user_agent": "arx-cli/1.0",
+        "serial": "4f3a2b1c"
+      }
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+</details>
+
+**Error Codes:**
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — audit store failure.
+
+---
+
+## Real-Time Notification Stream
+
+Authenticated WebUI clients can subscribe to **Server-Sent Events (SSE)** for a filtered subset of audit actions. The dispatcher elevates only critical state-changing actions to persistent operator notifications and SSE broadcasts; all requests continue to be recorded in the immutable audit log.
+
+**Elevated operator notification actions:** `AUTH_LOGIN_FAILED`, `CERT_ISSUE_NATIVE`, `CERT_ISSUE_CSR`, `CERT_REVOKE`, `CERT_RENEW`, `EAB_GENERATE`, `EAB_REVOKE`.
+
+**Never elevated:** generic HTTP fallback actions (`HTTP_READ`, `HTTP_WRITE`, `HTTP_GET`, etc.), notification housekeeping (`NOTIFICATION_READ`, `NOTIFICATION_READ_ALL`, `NOTIFICATION_DELETE`, `NOTIFICATION_DELETE_ALL`, `NOTIFICATION_ARCHIVE_ALL`), and audit browsing (`AUDIT_LIST`). Outbound webhooks still honor per-endpoint subscriptions from the full [notifiable action catalog](#outbound-payload-shape).
+
+### GET /api/v1/notifications/stream
+> Opens a long-lived Server-Sent Events stream of audit notification payloads.
+
+- **Authentication:** `Admin | Agent` (JWT session cookie, `access_token` query parameter, or Bearer JWT)
+- **Permissions:** `Admin | Agent` — requires RBAC `audit:read`
+
+#### Response headers
+
+| Header | Value |
+| ------ | ----- |
+| `Content-Type` | `text/event-stream` |
+| `Cache-Control` | `no-cache` |
+| `Connection` | `keep-alive` |
+
+#### Event format
+
+Each audit event is emitted as:
+
+```
+event: audit
+data: {"timestamp":"...","action":"CERT_REVOKE",...}
+```
+
+The `data` JSON body matches the [outbound webhook payload shape](#outbound-payload-shape) and includes an optional `notification_id` field when the event was persisted to the operator notification history table.
+
+Browser `EventSource` clients should pass `withCredentials: true` (session cookie) or append `?access_token=<jwt>` when cookies are unavailable.
+
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — streaming unsupported or dispatcher unavailable.
+
+### GET /api/v1/notifications
+> Returns a paginated list of persistent operator notifications with read/unread state. Archived (soft-deleted) notifications are excluded from results.
+
+- **Authentication:** `Admin` (JWT session cookie or Bearer JWT)
+- **Permissions:** `Admin` — requires RBAC `audit:read`
+
+#### Query parameters
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `limit` | integer | `50` | Page size (max `500`) |
+| `offset` | integer | `0` | Pagination offset |
+| `unread` | boolean | `false` | When `true`, return only unread notifications |
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `notifications` | array | Yes | Notification entries (see below) |
+| `total` | integer | Yes | Total non-archived rows matching the filter |
+| `unread_count` | integer | Yes | Global unread count among non-archived rows (ignores `unread` filter) |
+| `limit` | integer | Yes | Applied page size |
+| `offset` | integer | Yes | Applied offset |
+
+**`notifications[]` Element:**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `id` | string | Yes | UUID primary key |
+| `timestamp` | string | Yes | UTC RFC3339Nano timestamp |
+| `action` | string | Yes | Audit action constant |
+| `level` | string | Yes | `info` or `critical` |
+| `message` | string | Yes | Human-readable summary |
+| `is_read` | boolean | Yes | Read state (`false` = unread) |
+| `metadata` | object | No | Audit context (request ID, actor, endpoint, etc.) |
+
+</details>
+
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — notification store failure.
+
+### POST /api/v1/notifications/{id}/read
+> Marks a single notification as read.
+
+- **Authentication:** `Admin` (JWT session cookie or Bearer JWT)
+- **Permissions:** `Admin` — requires RBAC `audit:read`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `id` | string | Yes | Notification UUID |
+| `status` | string | Yes | Always `read` |
+
+</details>
+
+* `400 Bad Request` — missing notification id.
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `404 Not Found` — notification does not exist.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — notification store failure.
+
+### POST /api/v1/notifications/read-all
+> Marks all notifications as read.
+
+- **Authentication:** `Admin` (JWT session cookie or Bearer JWT)
+- **Permissions:** `Admin` — requires RBAC `audit:read`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `updated` | integer | Yes | Number of rows updated |
+
+</details>
+
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — notification store failure.
+
+### POST /api/v1/notifications/archive-all
+> Archives (soft-deletes) all visible notifications. Rows remain in the database with `is_archived = true` and are hidden from the WebUI drawer.
+
+- **Authentication:** `Admin` (JWT session cookie or Bearer JWT)
+- **Permissions:** `Admin` — requires RBAC `audit:read`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `archived` | integer | Yes | Number of rows archived |
+
+</details>
+
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — notification store failure.
+
+### DELETE /api/v1/notifications/{id}
+> Removes a notification from operator history.
+
+- **Authentication:** `Admin` (JWT session cookie or Bearer JWT)
+- **Permissions:** `Admin` — requires RBAC `audit:read`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `id` | string | Yes | Deleted notification UUID |
+| `status` | string | Yes | Always `deleted` |
+
+</details>
+
+* `400 Bad Request` — missing notification id.
+* `401 Unauthorized` — missing or invalid credentials.
+* `403 Forbidden` — insufficient RBAC permissions.
+* `404 Not Found` — notification does not exist.
+* `405 Method Not Allowed` — wrong HTTP method.
+* `500 Internal Server Error` — notification store failure.
+
+---
+
+## Webhook Notifications
+
+Configured webhooks receive asynchronous JSON `POST` deliveries when immutable audit events match a subscribed `action`. The dispatcher runs in a background goroutine after each audit row is persisted; HTTP requests use a **5 second** client timeout with up to **two** retries (500 ms backoff between attempts).
+
+When a `secret_token` is configured, requests include `X-Webhook-Signature: sha256=<hex>` (HMAC-SHA256 over the raw JSON body).
+
+### GET /api/v1/webhooks
+> Lists all configured webhook endpoints.
+
+- **Authentication:** `Admin` (JWT session cookie or Bearer JWT)
+- **Permissions:** `Admin` — requires RBAC `webhooks:manage`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+**Properties (`data`):**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `webhooks` | array | Yes | Webhook definitions (see below) |
+
+**`webhooks[]` Element:**
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `id` | string | Yes | UUID primary key |
+| `url` | string | Yes | HTTPS/HTTP delivery endpoint |
+| `name` | string | Yes | Operator-friendly label |
+| `active` | boolean | Yes | When `false`, dispatch is skipped |
+| `subscribed_events` | string[] | Yes | Audit `action` values (e.g. `CERT_REVOKE`, `AUTH_LOGIN_FAILED`) |
+| `has_secret_token` | boolean | Yes | Whether HMAC signing is configured |
+| `created_at` | string | Yes | UTC RFC3339Nano timestamp |
+| `updated_at` | string | Yes | UTC RFC3339Nano timestamp |
+
+</details>
+
+### GET /api/v1/webhooks/events
+> Returns subscribable audit actions with WebUI labels.
+
+- **Authentication:** `Admin`
+- **Permissions:** `Admin` — requires RBAC `webhooks:manage`
+
+#### Response
+<details>
+  <summary><strong>View Response (200 OK)</strong></summary>
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `events` | array | Yes | `{ action, label, description }` options |
+
+</details>
+
+### POST /api/v1/webhooks
+> Creates a webhook endpoint.
+
+- **Authentication:** `Admin`
+- **Permissions:** `Admin` — requires RBAC `webhooks:manage`
+
+#### Request
+<details>
+  <summary><strong>View Request Schema & JSON</strong></summary>
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `url` | string | Yes | `http://` or `https://` endpoint |
+| `name` | string | Yes | Display name |
+| `secret_token` | string | No | HMAC signing secret |
+| `active` | boolean | No | Default `true` |
+| `subscribed_events` | string[] | Yes | At least one known audit action |
+
+</details>
+
+#### Response
+`201 Created` — `data` is a single webhook object (same shape as list element).
+
+### PUT /api/v1/webhooks/{id}
+> Replaces webhook configuration. Omit `secret_token` or send an empty string to retain the existing secret.
+
+- **Authentication:** `Admin`
+- **Permissions:** `Admin` — requires RBAC `webhooks:manage`
+
+#### Response
+`200 OK` — updated webhook object.
+
+### DELETE /api/v1/webhooks/{id}
+> Removes a webhook.
+
+- **Authentication:** `Admin`
+- **Permissions:** `Admin` — requires RBAC `webhooks:manage`
+
+#### Response
+`200 OK` — `{ "deleted": "<id>" }`.
+
+### POST /api/v1/webhooks/{id}/test
+> Sends a synthetic `WEBHOOK_TEST` payload to verify connectivity.
+
+- **Authentication:** `Admin`
+- **Permissions:** `Admin` — requires RBAC `webhooks:manage`
+
+#### Response
+<details>
+  <summary><strong>View Response</strong></summary>
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `success` | boolean | Yes | `true` when HTTP 2xx received |
+| `status_code` | integer | Yes | Remote HTTP status (0 on transport error) |
+| `latency_ms` | integer | Yes | Round-trip latency in milliseconds |
+| `error` | string | No | Transport or non-2xx detail |
+
+Returns `200 OK` when delivery succeeds; `502 Bad Gateway` when the remote endpoint fails.
+
+</details>
+
+#### Outbound payload shape
+
+Delivered asynchronously to subscribed endpoints:
+
+```json
+{
+  "timestamp": "2026-06-06T14:22:01.123456789Z",
+  "action": "CERT_REVOKE",
+  "actor": {
+    "type": "User",
+    "id": "admin@example.com",
+    "roles": ["SuperAdmin"]
+  },
+  "ip_address": "203.0.113.10",
+  "resource": {
+    "provisioner": "jwk",
+    "fingerprint": "a3b2c1..."
+  },
+  "metadata": {},
+  "request_id": "uuid",
+  "http_method": "POST",
+  "endpoint": "/api/v1/certificates/revoke",
+  "status_code": 200
+}
+```
 
 ---
 
