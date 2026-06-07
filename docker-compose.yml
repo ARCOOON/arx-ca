@@ -1,21 +1,76 @@
+# Production-oriented Compose file for single-node and Docker Swarm deployments.
+#
+# First-time bootstrap (creates /data/server.yaml, .pki/, and arx.db on the named volume):
+#   docker compose run --rm arx-ca server config init --config /data/server.yaml
+#
+# Swarm: docker stack deploy -c docker-compose.yml arx
+
 services:
   arx-ca:
-    image: arx-ca-server:latest
+    image: arx-ca:${ARX_CA_VERSION:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: arx-ca
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - target: 8080
+        published: 8080
+        protocol: tcp
+      - target: 8443
+        published: 8443
+        protocol: tcp
     env_file:
       - path: .env
         required: false
     environment:
-      CA_API_JWT_SECRET: ${CA_API_JWT_SECRET:?Set CA_API_JWT_SECRET in the environment or a .env file}
+      # step-ca symmetric key (required once PKI is initialized; never commit)
+      ARX_CA_PASSWORD: ${ARX_CA_PASSWORD:-}
+      # JWT signing secret (optional when persisted in server.yaml after first boot)
+      CA_API_JWT_SECRET: ${CA_API_JWT_SECRET:-}
       CA_API_JWT_ISSUER: ${CA_API_JWT_ISSUER:-arx-ca}
       CA_API_JWT_EXPIRY: ${CA_API_JWT_EXPIRY:-24h}
-      CA_API_LISTEN_ADDR: ":8080"
-      CA_API_CA_CONFIG: "/app/data/config/ca.json"
+      # Health probe credentials for GET /api/v1/ca/info (see deploy/docker-healthcheck.sh)
+      ARX_HEALTHCHECK_EMAIL: ${ARX_HEALTHCHECK_EMAIL:-admin@arx.local}
+      ARX_HEALTHCHECK_PASSWORD: ${ARX_HEALTHCHECK_PASSWORD:-}
+      ARX_HEALTHCHECK_URL: http://127.0.0.1:8080
+      # WebUI static server (TLS optional; configure cert paths in server.yaml)
+      ARX_WEBUI_ENABLED: "true"
+      ARX_WEBUI_UI_DIR: /app/ui
+      ARX_WEBUI_LISTEN_ADDRESS: ":8443"
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-arx-ca}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE:-true}
     volumes:
-      - ./data/arx-ca:/app/data
+      - arx_ca_data:/data
+    user: "1000:1000"
+    healthcheck:
+      test: ["CMD", "/app/docker-healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+
+volumes:
+  arx_ca_data:
+    driver: local
