@@ -30,8 +30,11 @@ const (
 	PermServiceAccounts    Permission = "service_accounts:manage"
 	PermACMEEAB            Permission = "acme:eab"
 	PermEnrollmentStatus   Permission = "enrollment:status"
+	PermSSHSignUser        Permission = "ssh:sign_user"
 	PermSSHSignHost        Permission = "ssh:sign_host"
 	PermSSHInspect         Permission = "ssh:inspect"
+	PermAuditRead          Permission = "audit:read"
+	PermWebhooksManage     Permission = "webhooks:manage"
 )
 
 var rolePermissions = map[Role][]Permission{
@@ -47,8 +50,11 @@ var rolePermissions = map[Role][]Permission{
 		PermServiceAccounts,
 		PermACMEEAB,
 		PermEnrollmentStatus,
+		PermSSHSignUser,
 		PermSSHSignHost,
 		PermSSHInspect,
+		PermAuditRead,
+		PermWebhooksManage,
 	},
 	RoleCAAdmin: {
 		PermCertificatesIssue,
@@ -60,8 +66,11 @@ var rolePermissions = map[Role][]Permission{
 		PermTemplatesRead,
 		PermACMEEAB,
 		PermEnrollmentStatus,
+		PermSSHSignUser,
 		PermSSHSignHost,
 		PermSSHInspect,
+		PermAuditRead,
+		PermWebhooksManage,
 	},
 	RoleRevocationManager: {
 		PermCertificatesRevoke,
@@ -73,6 +82,7 @@ var rolePermissions = map[Role][]Permission{
 		PermCertificatesRead,
 		PermTemplatesRead,
 		PermEnrollmentStatus,
+		PermAuditRead,
 	},
 }
 
