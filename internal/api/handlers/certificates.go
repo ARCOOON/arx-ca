@@ -522,6 +522,15 @@ func writeCertificateBundleBytes(w http.ResponseWriter, bundle []byte, archiveBa
 	}
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
 func sanitizeDownloadFilename(value string) string {
 	replacer := strings.NewReplacer(
 		" ", "_",
@@ -546,7 +555,13 @@ func (h *CertificateHandler) List() http.Handler {
 			return
 		}
 
-		resp, err := h.engine.ListCertificates(r.Context())
+		filter := models.CertificateListFilter{
+			CommonName:   strings.TrimSpace(r.URL.Query().Get("common_name")),
+			SerialNumber: strings.TrimSpace(firstNonEmpty(r.URL.Query().Get("serial_number"), r.URL.Query().Get("serial"))),
+			Status:       strings.TrimSpace(r.URL.Query().Get("status")),
+		}
+
+		resp, err := h.engine.ListCertificates(r.Context(), filter)
 		if err != nil {
 			status, message := ca.MapCAError(err)
 			if status >= http.StatusInternalServerError {

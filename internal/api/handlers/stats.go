@@ -79,7 +79,7 @@ func (h *StatsHandler) computeCertificateStats(ctx context.Context) (models.Cert
 		return models.CertificateStatsResponse{}, errors.New("CA engine is not initialized")
 	}
 
-	list, err := h.engine.ListCertificates(ctx)
+	list, err := h.engine.ListCertificates(ctx, models.CertificateListFilter{})
 	if err != nil {
 		return models.CertificateStatsResponse{}, err
 	}

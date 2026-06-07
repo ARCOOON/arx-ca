@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/db"
@@ -35,8 +36,22 @@ func (h *AuditHandler) List() http.Handler {
 
 		limit := parseAuditQueryInt(r, "limit", 50)
 		offset := parseAuditQueryInt(r, "offset", 0)
+		filter := db.AuditLogListFilter{
+			Action:    strings.TrimSpace(r.URL.Query().Get("action")),
+			Actor:     strings.TrimSpace(r.URL.Query().Get("actor")),
+			IPAddress: strings.TrimSpace(r.URL.Query().Get("ip")),
+		}
+		if statusRaw := strings.TrimSpace(r.URL.Query().Get("status")); statusRaw != "" {
+			if statusCode, err := strconv.Atoi(statusRaw); err == nil && statusCode > 0 {
+				filter.StatusCode = statusCode
+			}
+		}
 
-		result, err := h.store.List(r.Context(), limit, offset)
+		result, err := h.store.List(r.Context(), db.AuditLogListOptions{
+			Limit:  limit,
+			Offset: offset,
+			Filter: filter,
+		})
 		if err != nil {
 			log.Printf("audit: list: %v", err)
 			api.WriteError(w, http.StatusInternalServerError, "failed to list audit logs")
