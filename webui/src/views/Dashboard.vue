@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { downloadCRL, fetchCRLStatus, type CRLStatus } from '../api/crl'
 import { downloadCABundle, fetchCAInfo, fetchCAProvisioners } from '../api/ca'
 import { fetchHealth } from '../api/health'
 import { listCertificates } from '../api/certificates'
@@ -14,6 +15,9 @@ import {
   shortenFingerprint,
 } from '../utils/ca'
 import StatusBadge from '../components/ui/StatusBadge.vue'
+import { usePreferences } from '../composables/usePreferences'
+
+const { showApiHints } = usePreferences()
 
 const health = ref<HealthReport | null>(null)
 const caInfo = ref<CAInfoResponse | null>(null)
@@ -23,24 +27,46 @@ const isLoading = ref(true)
 const errorMessage = ref('')
 const chainDownloading = ref(false)
 const chainError = ref('')
+const crlStatus = ref<CRLStatus | null>(null)
+const crlDownloading = ref(false)
+const crlError = ref('')
 
 const backendDetails = computed(() => parseBackendDetails(health.value?.ca_backend.message))
+
+const crlStatusLabel = computed(() => {
+  if (!crlStatus.value) {
+    return 'Unknown'
+  }
+  if (!crlStatus.value.available) {
+    return 'Unavailable'
+  }
+  if (crlStatus.value.expiresAt) {
+    return `Available · next update ${crlStatus.value.expiresAt}`
+  }
+  return 'Available'
+})
+
+const crlStatusTone = computed((): 'valid' | 'revoked' | 'neutral' => {
+  return crlStatus.value?.available ? 'valid' : 'revoked'
+})
 
 onMounted(async () => {
   isLoading.value = true
   errorMessage.value = ''
 
   try {
-    const [healthReport, certificateList, caInfoReport, provisionersReport] = await Promise.all([
+    const [healthReport, certificateList, caInfoReport, provisionersReport, crlReport] = await Promise.all([
       fetchHealth(),
       listCertificates(),
       fetchCAInfo(),
       fetchCAProvisioners(),
+      fetchCRLStatus(),
     ])
     health.value = healthReport
     certificateTotal.value = certificateList.total
     caInfo.value = caInfoReport
     caProvisioners.value = provisionersReport.provisioners
+    crlStatus.value = crlReport
   } catch (error) {
     errorMessage.value = extractApiError(error, 'Failed to load dashboard metrics')
   } finally {
@@ -58,6 +84,19 @@ async function handleDownloadCAChain(): Promise<void> {
     chainError.value = extractApiError(error, 'Failed to download CA bundle')
   } finally {
     chainDownloading.value = false
+  }
+}
+
+async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
+  crlDownloading.value = true
+  crlError.value = ''
+
+  try {
+    await downloadCRL(format)
+  } catch (error) {
+    crlError.value = extractApiError(error, 'Failed to download CRL')
+  } finally {
+    crlDownloading.value = false
   }
 }
 
@@ -85,7 +124,7 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
     <div v-if="isLoading" class="text-sm ui-text-muted">Loading server status…</div>
 
     <template v-else-if="health">
-      <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
         <article class="ui-surface-muted px-4 py-3">
           <p class="text-[10px] uppercase tracking-wide ui-text-muted">Uptime</p>
           <p class="mt-1 text-lg font-semibold ui-text-primary">{{ health.uptime.human }}</p>
@@ -132,7 +171,7 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
         <header class="ui-border-b px-4 py-2.5">
           <h2 class="text-sm font-semibold ui-text-primary">Runtime</h2>
         </header>
-        <div class="grid gap-px sm:grid-cols-2 lg:grid-cols-4" style="background-color: var(--border-subtle)">
+        <div class="grid grid-cols-1 gap-px md:grid-cols-2 lg:grid-cols-4" style="background-color: var(--border-subtle)">
           <div class="px-4 py-3" style="background-color: var(--bg-inset)">
             <p class="text-[10px] uppercase tracking-wide ui-text-muted">Heap in use</p>
             <p class="mt-1 text-sm ui-text-secondary">{{ formatBytes(health.memory.heap_inuse_bytes) }}</p>
@@ -152,6 +191,42 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
         </div>
       </section>
 
+      <section class="ui-surface-muted">
+        <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+          <div>
+            <h2 class="text-sm font-semibold ui-text-primary">Certificate Revocation List</h2>
+            <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
+              Public endpoint
+              <code class="ui-code">GET /api/v1/crl</code>
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="ui-btn-secondary"
+              :disabled="crlDownloading"
+              @click="handleDownloadCRL('pem')"
+            >
+              {{ crlDownloading ? 'Downloading…' : 'Download CRL (PEM)' }}
+            </button>
+            <button
+              type="button"
+              class="ui-btn-secondary"
+              :disabled="crlDownloading"
+              @click="handleDownloadCRL('der')"
+            >
+              Download CRL (DER)
+            </button>
+          </div>
+        </header>
+        <div class="flex flex-wrap items-center gap-2 px-4 py-3">
+          <StatusBadge :label="crlStatusLabel" :tone="crlStatusTone" />
+        </div>
+        <p v-if="crlError" class="px-4 pb-3 text-xs" style="color: var(--danger-text)" role="alert">
+          {{ crlError }}
+        </p>
+      </section>
+
       <section v-if="caInfo" class="ui-surface-muted">
         <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
           <h2 class="text-sm font-semibold ui-text-primary">Certificate Authorities</h2>
@@ -167,7 +242,7 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
         <p v-if="chainError" class="px-4 pt-2 text-xs" style="color: var(--danger-text)" role="alert">
           {{ chainError }}
         </p>
-        <div class="grid gap-px lg:grid-cols-2" style="background-color: var(--border-subtle)">
+        <div class="grid grid-cols-1 gap-px lg:grid-cols-2" style="background-color: var(--border-subtle)">
           <article
             v-for="entry in [
               { label: 'Root CA', cert: caInfo.root, filename: 'root_ca.crt' },
@@ -177,7 +252,7 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
             class="px-4 py-3"
             style="background-color: var(--bg-inset)"
           >
-            <div class="flex items-start justify-between gap-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-[10px] uppercase tracking-wide ui-text-muted">{{ entry.label }}</p>
                 <p class="mt-1 truncate text-sm font-medium ui-text-primary" :title="entry.cert.subject.common_name">
@@ -247,7 +322,7 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
         </div>
         <div
           v-else
-          class="grid gap-px sm:grid-cols-2 xl:grid-cols-3"
+          class="grid grid-cols-1 gap-px md:grid-cols-2 xl:grid-cols-3"
           style="background-color: var(--border-subtle)"
         >
           <article
