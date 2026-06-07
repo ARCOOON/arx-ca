@@ -143,13 +143,13 @@ func Audit(store *db.AuditStore, notifier *notifications.Dispatcher, next http.H
 
 		next.ServeHTTP(recorder, r)
 
-		if auditCtx.Skip {
+		if auditCtx.Skip || isReadOnlyHTTPMethod(r.Method) {
 			return
 		}
 
 		action := auditCtx.Action
 		if action == "" {
-			action = defaultActionForRequest(r.Method, r.URL.Path)
+			action = defaultActionForRequest(r.Method)
 		}
 
 		entry := db.AuditLog{
@@ -193,11 +193,18 @@ func shouldSkipAudit(path string) bool {
 	}
 }
 
-func defaultActionForRequest(method, path string) string {
+func isReadOnlyHTTPMethod(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+func defaultActionForRequest(method string) string {
 	method = strings.ToUpper(strings.TrimSpace(method))
 	switch {
-	case method == http.MethodGet:
-		return "HTTP_READ"
 	case method == http.MethodPost:
 		return "HTTP_WRITE"
 	case method == http.MethodPut, method == http.MethodPatch:
