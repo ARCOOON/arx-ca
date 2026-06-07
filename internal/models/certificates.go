@@ -134,6 +134,13 @@ type CertificateSummary struct {
 	Provisioner   string    `json:"provisioner,omitempty"`
 }
 
+// CertificateListFilter narrows certificate inventory queries.
+type CertificateListFilter struct {
+	CommonName   string
+	SerialNumber string
+	Status       string // valid, revoked, expired; empty matches all
+}
+
 // ListCertificatesResponse returns all certificates known to the CA database.
 type ListCertificatesResponse struct {
 	Certificates []CertificateSummary `json:"certificates"`
