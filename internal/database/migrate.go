@@ -3,6 +3,8 @@ package database
 import (
 	"database/sql"
 	"fmt"
+
+	auditdb "github.com/ARCOOON/arx-ca/internal/db"
 )
 
 const usersTableDDL = `
@@ -77,6 +79,42 @@ func Migrate(db *sql.DB) error {
 	}
 	if err := migrateIssuedCertificatesEscrow(db); err != nil {
 		return fmt.Errorf("migrate issued_certificates escrow column: %w", err)
+	}
+	if err := migrateIssuedCertificatesRevocation(db); err != nil {
+		return fmt.Errorf("migrate issued_certificates revocation columns: %w", err)
+	}
+	if err := auditdb.Migrate(db); err != nil {
+		return fmt.Errorf("migrate audit_logs table: %w", err)
+	}
+	return nil
+}
+
+func migrateIssuedCertificatesRevocation(db *sql.DB) error {
+	columns := []struct {
+		name       string
+		columnType string
+	}{
+		{name: "status", columnType: "TEXT NOT NULL DEFAULT 'ACTIVE'"},
+		{name: "revoked_at", columnType: "TEXT"},
+		{name: "reason_code", columnType: "INTEGER"},
+		{name: "revocation_reason", columnType: "TEXT"},
+	}
+
+	for _, column := range columns {
+		if tableColumnExists(db, "issued_certificates", column.name) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`ALTER TABLE issued_certificates ADD COLUMN %s %s`,
+			column.name,
+			column.columnType,
+		)); err != nil {
+			return fmt.Errorf("add %s column: %w", column.name, err)
+		}
+	}
+
+	if _, err := db.Exec(`UPDATE issued_certificates SET status = 'ACTIVE' WHERE status IS NULL OR TRIM(status) = ''`); err != nil {
+		return fmt.Errorf("backfill issued_certificates status: %w", err)
 	}
 	return nil
 }

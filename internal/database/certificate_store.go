@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+const (
+	// CertificateStatusActive indicates an issued certificate that has not been revoked.
+	CertificateStatusActive = "ACTIVE"
+	// CertificateStatusRevoked indicates a certificate revoked in the application archive.
+	CertificateStatusRevoked = "REVOKED"
+)
+
 // IssuedCertificate is a persisted certificate record. Private key material is stored
 // only as AES-256-GCM encrypted bytes when escrow is enabled for native generation.
 type IssuedCertificate struct {
@@ -20,6 +27,10 @@ type IssuedCertificate struct {
 	NotAfter            time.Time
 	RequestorID         string
 	CreatedAt           time.Time
+	Status              string
+	RevokedAt           *time.Time
+	ReasonCode          *int
+	RevocationReason    string
 }
 
 const issuedCertificatesDDL = `
@@ -32,7 +43,11 @@ CREATE TABLE IF NOT EXISTS issued_certificates (
 	not_before TEXT NOT NULL,
 	not_after TEXT NOT NULL,
 	requestor_id TEXT NOT NULL,
-	created_at TEXT NOT NULL
+	created_at TEXT NOT NULL,
+	status TEXT NOT NULL DEFAULT 'ACTIVE',
+	revoked_at TEXT,
+	reason_code INTEGER,
+	revocation_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_issued_certificates_requestor_id ON issued_certificates(requestor_id);
 CREATE INDEX IF NOT EXISTS idx_issued_certificates_not_after ON issued_certificates(not_after);
@@ -73,9 +88,14 @@ func (s *CertificateStore) Save(ctx context.Context, rec IssuedCertificate) erro
 		createdAt = time.Now().UTC()
 	}
 
+	status := strings.TrimSpace(rec.Status)
+	if status == "" {
+		status = CertificateStatusActive
+	}
+
 	query := `INSERT INTO issued_certificates (
-		serial, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at
-	) VALUES (` + s.placeholders(9) + `)
+		serial, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at, status
+	) VALUES (` + s.placeholders(10) + `)
 	ON CONFLICT(serial) DO UPDATE SET
 		common_name = excluded.common_name,
 		subject = excluded.subject,
@@ -84,7 +104,11 @@ func (s *CertificateStore) Save(ctx context.Context, rec IssuedCertificate) erro
 		not_before = excluded.not_before,
 		not_after = excluded.not_after,
 		requestor_id = excluded.requestor_id,
-		created_at = excluded.created_at`
+		created_at = excluded.created_at,
+		status = CASE
+			WHEN issued_certificates.status = '` + CertificateStatusRevoked + `' THEN issued_certificates.status
+			ELSE excluded.status
+		END`
 
 	var encryptedKey any
 	if len(rec.EncryptedPrivateKey) > 0 {
@@ -101,6 +125,7 @@ func (s *CertificateStore) Save(ctx context.Context, rec IssuedCertificate) erro
 		rec.NotAfter.UTC().Format(time.RFC3339),
 		requestorID,
 		createdAt.Format(time.RFC3339),
+		status,
 	)
 	if err != nil {
 		return fmt.Errorf("save issued certificate: %w", err)
@@ -119,7 +144,7 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 		return nil, fmt.Errorf("serial is required")
 	}
 
-	query := `SELECT serial, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at
+	query := `SELECT serial, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at, status, revoked_at, reason_code, revocation_reason
 		FROM issued_certificates WHERE serial = ` + s.placeholder(1)
 
 	var (
@@ -128,6 +153,9 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 		notAfterRaw      string
 		createdAtRaw     string
 		encryptedKeyBlob []byte
+		revokedAtRaw     sql.NullString
+		reasonCodeRaw    sql.NullInt64
+		revocationReason sql.NullString
 	)
 
 	err := s.db.QueryRowContext(ctx, query, serial).Scan(
@@ -140,6 +168,10 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 		&notAfterRaw,
 		&rec.RequestorID,
 		&createdAtRaw,
+		&rec.Status,
+		&revokedAtRaw,
+		&reasonCodeRaw,
+		&revocationReason,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -163,8 +195,66 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 	if len(encryptedKeyBlob) > 0 {
 		rec.EncryptedPrivateKey = append([]byte(nil), encryptedKeyBlob...)
 	}
+	if strings.TrimSpace(rec.Status) == "" {
+		rec.Status = CertificateStatusActive
+	}
+	if revokedAtRaw.Valid && strings.TrimSpace(revokedAtRaw.String) != "" {
+		revokedAt, parseErr := time.Parse(time.RFC3339, revokedAtRaw.String)
+		if parseErr == nil {
+			rec.RevokedAt = &revokedAt
+		}
+	}
+	if reasonCodeRaw.Valid {
+		code := int(reasonCodeRaw.Int64)
+		rec.ReasonCode = &code
+	}
+	if revocationReason.Valid {
+		rec.RevocationReason = revocationReason.String
+	}
 
 	return &rec, nil
+}
+
+// MarkRevoked updates revocation metadata for a persisted certificate record.
+func (s *CertificateStore) MarkRevoked(ctx context.Context, serial string, reasonCode int, reason string, revokedAt time.Time) error {
+	if s == nil || s.db == nil {
+		return fmt.Errorf("certificate store is not initialized")
+	}
+
+	serial = strings.TrimSpace(serial)
+	if serial == "" {
+		return fmt.Errorf("serial is required")
+	}
+	if revokedAt.IsZero() {
+		revokedAt = time.Now().UTC()
+	}
+
+	query := `UPDATE issued_certificates
+		SET status = ` + s.placeholder(1) + `,
+			revoked_at = ` + s.placeholder(2) + `,
+			reason_code = ` + s.placeholder(3) + `,
+			revocation_reason = ` + s.placeholder(4) + `
+		WHERE serial = ` + s.placeholder(5)
+
+	result, err := s.db.ExecContext(ctx, query,
+		CertificateStatusRevoked,
+		revokedAt.UTC().Format(time.RFC3339),
+		reasonCode,
+		strings.TrimSpace(reason),
+		serial,
+	)
+	if err != nil {
+		return fmt.Errorf("mark certificate revoked: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("mark certificate revoked rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("certificate record not found")
+	}
+	return nil
 }
 
 func (s *CertificateStore) placeholder(n int) string {
