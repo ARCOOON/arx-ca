@@ -20,7 +20,7 @@ const (
 // RequireAdmin validates a Bearer JWT and injects the admin username into the request context.
 func RequireAdmin(jwtManager *auth.JWTManager, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token, err := extractBearerToken(r.Header.Get(headerAuthorization))
+		token, err := extractRequestToken(r)
 		if err != nil {
 			api.WriteError(w, http.StatusUnauthorized, "authentication required")
 			return
@@ -45,7 +45,7 @@ func RequireAdmin(jwtManager *auth.JWTManager, next http.Handler) http.Handler {
 // RequireServiceAccountOrAdmin accepts either a valid service-account API key or an admin JWT.
 func RequireServiceAccountOrAdmin(jwtManager *auth.JWTManager, store *auth.APIKeyStore, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if token, err := extractBearerToken(r.Header.Get(headerAuthorization)); err == nil {
+		if token, err := extractRequestToken(r); err == nil {
 			if claims, jwtErr := jwtManager.ValidateToken(token); jwtErr == nil {
 				ctx := auth.WithAdminUsername(r.Context(), claims.Username)
 				roles := claims.Roles
@@ -118,7 +118,7 @@ func RequireServiceAccount(store *auth.APIKeyStore, next http.Handler) http.Hand
 // RequireAdminOrMTLS accepts either a valid admin JWT or a verified mTLS client certificate.
 func RequireAdminOrMTLS(jwtManager *auth.JWTManager, certValidator *ca.ClientCertValidator, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if token, err := extractBearerToken(r.Header.Get(headerAuthorization)); err == nil {
+		if token, err := extractRequestToken(r); err == nil {
 			if claims, jwtErr := jwtManager.ValidateToken(token); jwtErr == nil {
 				ctx := auth.WithAdminUsername(r.Context(), claims.Username)
 				roles := claims.Roles
@@ -142,6 +142,16 @@ func RequireAdminOrMTLS(jwtManager *auth.JWTManager, certValidator *ca.ClientCer
 
 		api.WriteError(w, http.StatusUnauthorized, "authentication required")
 	})
+}
+
+func extractRequestToken(r *http.Request) (string, error) {
+	if token, ok := auth.SessionTokenFromRequest(r); ok {
+		return token, nil
+	}
+	if queryToken := strings.TrimSpace(r.URL.Query().Get("access_token")); queryToken != "" {
+		return queryToken, nil
+	}
+	return extractBearerToken(r.Header.Get(headerAuthorization))
 }
 
 func extractBearerToken(headerValue string) (string, error) {
