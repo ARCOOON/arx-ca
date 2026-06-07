@@ -1,0 +1,110 @@
+# GoReleaser configuration for arx-ca.
+# Triggered by .github/workflows/release.yml on v* tag pushes.
+
+version: 2
+
+project_name: arx-ca
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: arx
+    main: ./cmd/arx
+    binary: arx
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Tag}}
+      - -X main.Commit={{.Commit}}
+    hooks:
+      pre:
+        - npm --prefix webui install
+        - npm --prefix webui run build
+
+  - id: arx-agent
+    main: ./cmd/arx-agent
+    binary: arx-agent
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Tag}}
+      - -X main.Commit={{.Commit}}
+    hooks:
+      pre:
+        - sh -c 'test -f webui/dist/index.html || (npm --prefix webui install && npm --prefix webui run build)'
+
+archives:
+  - id: arx
+    ids:
+      - arx
+    name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
+    formats:
+      - binary
+
+  - id: arx-agent
+    ids:
+      - arx-agent
+    name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
+    formats:
+      - binary
+
+  - id: webui
+    meta: true
+    name_template: webui-dist
+    formats:
+      - tar.gz
+    files:
+      - src: webui/dist/*
+        dst: .
+
+checksum:
+  disable: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^style:'
+      - '^chore\(release\):'
+  groups:
+    - title: Features
+      regexp: '^feat(\(.+\))?!?:'
+      order: 0
+    - title: Fixes
+      regexp: '^fix(\(.+\))?!?:'
+      order: 1
+    - title: Dependency updates
+      regexp: '^chore(\(.+\))?!?:'
+      order: 2
+
+release:
+  github:
+    owner: ARCOOON
+    name: arx-ca
+  mode: replace
