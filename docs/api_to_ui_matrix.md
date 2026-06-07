@@ -57,7 +57,7 @@ authoritative parity checklist for Phase 91 and subsequent UI work.
 | Method | Path | UI Mapping | Status |
 | ------ | ---- | ---------- | ------ |
 | POST | `/api/v1/auth/login` | `Login.vue` → Sign in form | IMPLEMENTED |
-| POST | `/api/v1/auth/service-accounts` | `Settings.vue` → Create Service Account modal + one-time API key alert | NEW/PENDING IMPLEMENTATION → IMPLEMENTED |
+| POST | `/api/v1/auth/service-accounts` | `Settings.vue` → Create Service Account form (roles combobox with canonical RBAC roles) + one-time API key alert | NEW/PENDING IMPLEMENTATION → IMPLEMENTED |
 
 ---
 
@@ -71,7 +71,7 @@ authoritative parity checklist for Phase 91 and subsequent UI work.
 | POST | `/api/v1/certificates/auto` | `Certificates.vue` → Issue modal → Auto Issue tab (SuperAdmin) | NEW/PENDING IMPLEMENTATION → IMPLEMENTED |
 | POST | `/api/v1/certificates/revoke` | `Certificates.vue` → red Revoke button (table + details modal) with serial-prefix / `REVOKE` confirmation | IMPLEMENTED |
 | POST | `/api/v1/certificates/lint` | `Certificates.vue` → Details modal → Lint Certificate button | NEW/PENDING IMPLEMENTATION → IMPLEMENTED |
-| GET | `/api/v1/certificates` | `Dashboard.vue` count; `Certificates.vue` → DataTable | IMPLEMENTED |
+| GET | `/api/v1/certificates` | `Dashboard.vue` count; `Certificates.vue` → collapsible search bar (`common_name`, `serial_number`, `status`, collapsed by default); DataTable | IMPLEMENTED |
 | GET | `/api/v1/certificates/{serial}` | `Certificates.vue` → View Details modal | IMPLEMENTED |
 | GET | `/api/v1/certificates/{serial}/key` | `Certificates.vue` → Details modal → Reveal / Download Key | IMPLEMENTED |
 | GET | `/api/v1/certificates/{serial}/bundle` | `Certificates.vue` → Details modal → Download Bundle | IMPLEMENTED |
@@ -160,7 +160,7 @@ authoritative parity checklist for Phase 91 and subsequent UI work.
 
 | Method | Path | UI Mapping | Status |
 | ------ | ---- | ---------- | ------ |
-| GET | `/api/v1/audit` | `Audit.vue` → `DataTable` with inline `#row-expanded` detail rows; `Pagination.vue` numbered pages (`total`, `limit`, `offset` from API) | IMPLEMENTED |
+| GET | `/api/v1/audit` | `Audit.vue` → collapsible search bar (`action`, `actor`, `ip` query params, collapsed by default); `DataTable` with inline `#row-expanded` detail rows; `Pagination.vue` numbered pages (`total`, `limit`, `offset` from API) | IMPLEMENTED |
 
 State-changing handlers populate `action`, `provisioner`, and `fingerprint` via injected `AuditContext` before the audit middleware persists each row.
 
@@ -179,6 +179,7 @@ State-changing handlers populate `action`, `provisioner`, and `fingerprint` via 
 | --- | ------ | ---------------- | -------- |
 | `arx_ui_notification_style` | `drawer` \| `overlay` | `Settings.vue` → UI Preferences; `NotificationDrawer.vue` | Drawer: full-height right slide-out with solid opaque panel and dimmed backdrop (`bg-black/40`). Overlay: floating card below the top bar with uniform 1rem inset from the right edge and below the chrome bar (`top-20`, `right-4`, `max-h-[70vh]`, `rounded-[var(--radius-surface)]`); no dimmed backdrop (transparent click-catcher only). Both use shadow/border depth instead of backdrop blur. Updates globally in real time via `useNotificationLayout.ts`. |
 | `arx_sidebar_collapsed` | `true` \| `false` | `Settings.vue` → UI Preferences; `AppShell.vue` | Default sidebar collapsed state; requires page reload after save. |
+| `arx_ui_show_api_hints` | `true` \| `false` | `Settings.vue` → UI Preferences; all views via `usePreferences.ts` | When `false` (default), route badges (`GET /api/v1/...`) and markdown doc references (`docs/*.md`) are removed from the DOM. Toggle applies immediately across Dashboard, Audit, Certificates, SSH, Webhooks, Settings, ACME, NDES, SCEP, Provisioners, and Templates. |
 
 ---
 

@@ -1168,6 +1168,16 @@ When the request includes `?format=zip` or `Accept: application/zip`, the server
 - **Authentication:** Required (Bearer JWT or X-API-Key)
 - **Permissions:** `Admin | Agent` — requires RBAC `certificates:read`
 
+#### Query Parameters
+
+| Parameter | Type | Default | Description |
+| --------- | ---- | ------- | ----------- |
+| `common_name` | string | — | Substring match on subject common name |
+| `serial_number` | string | — | Substring match on certificate serial (`serial` alias accepted) |
+| `status` | string | — | Lifecycle filter: `valid`, `expired`, or `revoked` |
+
+`total` reflects the filtered certificate count.
+
 #### Response
 <details>
   <summary><strong>View Response (200 OK)</strong></summary>
@@ -2468,7 +2478,7 @@ Same authentication model as `POST /api/v1/certificates/renew`: admin JWT with `
 
 ## Forensic Audit Log
 
-Immutable, append-only audit records are persisted in the application database (`audit_logs` table) for every API request except `GET /api/v1/health` and the long-lived `GET /api/v1/notifications/stream` SSE connection. HTTP middleware captures network context (`request_id`, client IP with `X-Forwarded-For` / `X-Real-IP` precedence, method, path, status code, user-agent). State-changing handlers attach business actions (for example `CERT_ISSUE_CSR`, `AUTH_LOGIN_SUCCESS`, `EAB_GENERATE`, `WEBHOOK_CREATED`).
+Immutable, append-only audit records are persisted in the application database (`audit_logs` table) for state-changing API requests (`POST`, `PUT`, `PATCH`, `DELETE`) and for paths excluded from read-only suppression: `GET /api/v1/health` and the long-lived `GET /api/v1/notifications/stream` SSE connection are never logged. Generic `GET` and `OPTIONS` dashboard traffic is not persisted. HTTP middleware captures network context (`request_id`, client IP with `X-Forwarded-For` / `X-Real-IP` precedence, method, path, status code, user-agent). State-changing handlers attach business actions (for example `CERT_ISSUE_CSR`, `AUTH_LOGIN_SUCCESS`, `EAB_GENERATE`, `WEBHOOK_CREATED`).
 
 Canonical webhook-subscribable action constants live in `internal/db/audit_actions.go`: `SYS_START`, `SYS_CONFIG_UPDATE`, `AUTH_LOGIN_SUCCESS`, `AUTH_LOGIN_FAILED`, `CERT_ISSUE_NATIVE`, `CERT_ISSUE_CSR`, `CERT_REVOKE`, `CERT_RENEW`, `EAB_GENERATE`, `EAB_REVOKE`, `SCEP_CHALLENGE_ROTATED`, `SSH_USER_CERT_ISSUE`, `SSH_HOST_CERT_ISSUE`, `WEBHOOK_CREATED`, `WEBHOOK_DELETED`, `WEBHOOK_UPDATED`.
 
@@ -2486,6 +2496,12 @@ Each response includes `X-Request-ID` for correlation with audit rows.
 | --------- | ---- | ------- | ----------- |
 | `limit` | integer | `50` | Page size (max `500`) |
 | `offset` | integer | `0` | Rows to skip |
+| `action` | string | — | Exact match on business `action` (e.g. `CERT_ISSUE_CSR`) |
+| `actor` | string | — | Case-sensitive substring match on `actor_id` or `actor_type` |
+| `ip` | string | — | Substring match on `ip_address` |
+| `status` | integer | — | Exact HTTP `status_code` match (e.g. `201`, `403`) |
+
+`total` reflects the filtered row count, not the full `audit_logs` table.
 
 #### Response
 <details>
@@ -2496,7 +2512,7 @@ Each response includes `X-Request-ID` for correlation with audit rows.
 | Field | Type | Required | Description |
 | ----- | ---- | -------- | ----------- |
 | `logs` | array | Yes | Audit log entries (see below) |
-| `total` | integer | Yes | Total rows in `audit_logs` |
+| `total` | integer | Yes | Total rows matching the applied filters |
 | `limit` | integer | Yes | Applied page size |
 | `offset` | integer | Yes | Applied offset |
 
@@ -2565,7 +2581,7 @@ Authenticated WebUI clients can subscribe to **Server-Sent Events (SSE)** for a 
 
 **Elevated operator notification actions:** `AUTH_LOGIN_FAILED`, `CERT_ISSUE_NATIVE`, `CERT_ISSUE_CSR`, `CERT_REVOKE`, `CERT_RENEW`, `EAB_GENERATE`, `EAB_REVOKE`.
 
-**Never elevated:** generic HTTP fallback actions (`HTTP_READ`, `HTTP_WRITE`, `HTTP_GET`, etc.), notification housekeeping (`NOTIFICATION_READ`, `NOTIFICATION_READ_ALL`, `NOTIFICATION_DELETE`, `NOTIFICATION_DELETE_ALL`, `NOTIFICATION_ARCHIVE_ALL`), and audit browsing (`AUDIT_LIST`). Outbound webhooks still honor per-endpoint subscriptions from the full [notifiable action catalog](#outbound-payload-shape).
+**Never elevated:** generic HTTP fallback actions (`HTTP_WRITE`, `HTTP_UPDATE`, `HTTP_DELETE`, `HTTP_GET`, etc.), notification housekeeping (`NOTIFICATION_READ`, `NOTIFICATION_READ_ALL`, `NOTIFICATION_DELETE`, `NOTIFICATION_DELETE_ALL`, `NOTIFICATION_ARCHIVE_ALL`), and audit browsing (`AUDIT_LIST`). Outbound webhooks still honor per-endpoint subscriptions from the full [notifiable action catalog](#outbound-payload-shape).
 
 ### GET /api/v1/notifications/stream
 > Opens a long-lived Server-Sent Events stream of audit notification payloads.

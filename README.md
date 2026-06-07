@@ -18,7 +18,7 @@ The default server deployment needs no external database: application state (adm
 | **Self-installation** | `arx server setup` or `arx server service install` for the CA; `arx-agent service install` for client renewal daemons |
 | **Built-in ACMEv2** | RFC 8555 directory at `/acme/directory` with **HTTP-01**, **DNS-01**, and **TLS-ALPN-01** validation |
 | **REST API** | X.509 issuance, revocation, OCSP, templates, SSH CA, enrollment status |
-| **Immutable audit log** | Append-only `audit_logs` table with HTTP middleware forensics and WebUI dashboard (`GET /api/v1/audit`) |
+| **Immutable audit log** | Append-only `audit_logs` table with HTTP middleware forensics (state-changing requests only) and filterable WebUI dashboard (`GET /api/v1/audit`) |
 | **Webhook notifications** | Asynchronous outbound JSON alerts for subscribed audit actions (Discord, Slack, Gotify); managed via `GET/POST/PUT/DELETE /api/v1/webhooks` and `Webhooks.vue` |
 | **Real-time notification center** | WebUI SSE stream (`GET /api/v1/notifications/stream`) with scrollable priority toasts (`NotificationToaster.vue`) for live audit events |
 | **Persistent notification history** | Stateful `notifications` table with read/unread tracking and soft-delete (`is_archived`); TopBar bell drawer (`NotificationDrawer.vue`) backed by `GET/POST /api/v1/notifications` and `POST /api/v1/notifications/archive-all` |
