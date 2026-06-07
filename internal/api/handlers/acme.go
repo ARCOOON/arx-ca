@@ -7,6 +7,7 @@ import (
 
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/ca"
+	"github.com/ARCOOON/arx-ca/internal/db"
 	"github.com/ARCOOON/arx-ca/internal/models"
 )
 
@@ -38,6 +39,14 @@ func (h *ACMEHandler) CreateEABKey() http.Handler {
 			return
 		}
 
+		recordAuditAction(r, db.ActionEABGenerate)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.SetProvisioner(strings.TrimSpace(req.Provisioner))
+			if req.Reference != "" {
+				ac.PutMetadata("reference", req.Reference)
+			}
+		}
+
 		resp, err := h.engine.CreateACMEEABKey(r.Context(), req)
 		if err != nil {
 			if isACMEEABClientError(err) {
@@ -50,6 +59,11 @@ func (h *ACMEHandler) CreateEABKey() http.Handler {
 			}
 			api.WriteError(w, status, message)
 			return
+		}
+
+		if ac := auditFromRequest(r); ac != nil {
+			ac.SetProvisioner(resp.Provisioner)
+			ac.PutMetadata("eab_key_id", resp.KeyID)
 		}
 
 		api.WriteSuccess(w, http.StatusCreated, resp)
