@@ -10,6 +10,7 @@ import (
 
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/auth"
+	"github.com/ARCOOON/arx-ca/internal/db"
 	"github.com/ARCOOON/arx-ca/internal/logging"
 	"github.com/ARCOOON/arx-ca/internal/models"
 	"github.com/ARCOOON/arx-ca/internal/repository"
@@ -19,17 +20,24 @@ const maxAuthBodyBytes = 1 << 20 // 1 MiB
 
 // AuthHandler serves authentication and service-account management endpoints.
 type AuthHandler struct {
-	jwtManager *auth.JWTManager
-	keyStore   *auth.APIKeyStore
-	userStore  *repository.UserStore
+	jwtManager    *auth.JWTManager
+	keyStore      *auth.APIKeyStore
+	userStore     *repository.UserStore
+	sessionCookie auth.SessionCookieConfig
 }
 
 // NewAuthHandler constructs an AuthHandler.
-func NewAuthHandler(jwtManager *auth.JWTManager, keyStore *auth.APIKeyStore, userStore *repository.UserStore) *AuthHandler {
+func NewAuthHandler(
+	jwtManager *auth.JWTManager,
+	keyStore *auth.APIKeyStore,
+	userStore *repository.UserStore,
+	sessionCookie auth.SessionCookieConfig,
+) *AuthHandler {
 	return &AuthHandler{
-		jwtManager: jwtManager,
-		keyStore:   keyStore,
-		userStore:  userStore,
+		jwtManager:    jwtManager,
+		keyStore:      keyStore,
+		userStore:     userStore,
+		sessionCookie: sessionCookie,
 	}
 }
 
@@ -48,6 +56,10 @@ func (h *AuthHandler) Login() http.Handler {
 			return
 		}
 
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("email", strings.TrimSpace(req.Email))
+		}
+
 		user, reason, err := auth.AuthenticateUser(r.Context(), h.userStore, req.Email, req.Password)
 		if err != nil {
 			if errors.Is(err, auth.ErrInvalidCredentials) {
@@ -56,6 +68,10 @@ func (h *AuthHandler) Login() http.Handler {
 						slog.String("reason", string(reason)),
 						slog.String("email", strings.TrimSpace(req.Email)),
 					)
+				}
+				recordAuditAction(r, db.ActionAuthLoginFailed)
+				if ac := auditFromRequest(r); ac != nil {
+					ac.PutMetadata("result", "failure")
 				}
 				api.WriteError(w, http.StatusUnauthorized, "invalid email or password")
 				return
@@ -81,7 +97,18 @@ func (h *AuthHandler) Login() http.Handler {
 			roleNames[i] = string(role)
 		}
 
+		recordAuditAction(r, db.ActionAuthLoginSuccess)
 		logging.Logger().Debug("auth: login succeeded", slog.String("email", user.Email))
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("result", "success")
+			roleNames := make([]string, len(roles))
+			for i, role := range roles {
+				roleNames[i] = string(role)
+			}
+			ac.SetActor("User", user.Email, roleNames...)
+		}
+
+		auth.SetSessionCookie(w, r, h.sessionCookie, token)
 
 		api.WriteSuccess(w, http.StatusOK, models.LoginResponse{
 			Token:     token,
@@ -89,6 +116,21 @@ func (h *AuthHandler) Login() http.Handler {
 			TokenType: h.jwtManager.TokenType(),
 			Roles:     roleNames,
 		})
+	})
+}
+
+// Logout handles POST /api/v1/auth/logout.
+func (h *AuthHandler) Logout() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			api.WriteError(w, http.StatusMethodNotAllowed, "method not allowed")
+			return
+		}
+
+		recordAuditAction(r, "AUTH_LOGOUT")
+
+		auth.ClearSessionCookie(w, r, h.sessionCookie)
+		api.WriteSuccess(w, http.StatusOK, map[string]string{"status": "logged_out"})
 	})
 }
 
@@ -114,6 +156,11 @@ func (h *AuthHandler) CreateServiceAccount() http.Handler {
 			}
 		}
 
+		recordAuditAction(r, "SERVICE_ACCOUNT_CREATE")
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("service_account_name", strings.TrimSpace(req.Name))
+		}
+
 		account, plaintextKey, err := h.keyStore.CreateServiceAccount(req.Name, roles)
 		if err != nil {
 			switch {
@@ -131,6 +178,10 @@ func (h *AuthHandler) CreateServiceAccount() http.Handler {
 		roleNames := make([]string, len(account.Roles))
 		for i, role := range account.Roles {
 			roleNames[i] = string(role)
+		}
+
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("service_account_id", account.ID)
 		}
 
 		api.WriteSuccess(w, http.StatusCreated, models.ServiceAccountResponse{
