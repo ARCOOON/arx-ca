@@ -2,9 +2,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { fetchScepStatus } from '../api/scep'
 import type { ScepStatus } from '../types/api'
+import { usePreferences } from '../composables/usePreferences'
 import FlatToggle from '../components/ui/FlatToggle.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import { extractApiError } from '../utils/errors'
+
+const { showApiHints } = usePreferences()
 
 const status = ref<ScepStatus | null>(null)
 const isLoading = ref(true)
@@ -52,7 +55,7 @@ onMounted(async () => {
           :label="status.enabled ? 'Enabled' : 'Disabled'"
           :tone="status.enabled ? 'enabled' : 'disabled'"
         />
-        <span class="text-xs ui-text-muted">
+        <span v-if="showApiHints" class="text-xs ui-text-muted">
           Discovery:
           <code class="ui-code">GET /api/v1/scep/status</code>
         </span>
