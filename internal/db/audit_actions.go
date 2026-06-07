@@ -4,6 +4,8 @@ package db
 const (
 	ActionSysStart             = "SYS_START"
 	ActionSysConfigUpdate      = "SYS_CONFIG_UPDATE"
+	ActionSysUpdateAvailable   = "SYS_UPDATE_AVAILABLE"
+	ActionSysUpdateApplied     = "SYS_UPDATE_APPLIED"
 	ActionAuthLoginSuccess     = "AUTH_LOGIN_SUCCESS"
 	ActionAuthLoginFailed      = "AUTH_LOGIN_FAILED"
 	ActionCertIssueNative      = "CERT_ISSUE_NATIVE"
