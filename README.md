@@ -430,6 +430,7 @@ YAML comments in `server.yaml` may be lost when the file is rewritten (standard 
 
 | Document | Contents |
 | -------- | -------- |
+| [wiki/Home.md](wiki/Home.md) | GitHub Wiki — modular operator docs with Mermaid diagrams |
 | [docs/architecture.md](docs/architecture.md) | Split-binary layout, SQLite/CGO, systemd, DDD layers |
 | [docs/cli_reference.md](docs/cli_reference.md) | `arx` and `arx-agent` command reference |
 | [docs/agent.md](docs/agent.md) | `agent.yaml`, API vs ACME renewal |
