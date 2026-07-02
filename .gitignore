@@ -65,6 +65,9 @@ config.local.json
 # Docker Compose persistent PKI volume
 data/
 
+# Local dev data dir (server.yaml, arx.db, .pki) used for running the stack locally
+.dev-data/
+
 # Dev container (tracked); ignore local test database volumes only
 .devcontainer/**/postgres-data/
 .devcontainer/**/pgdata/
