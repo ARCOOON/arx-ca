@@ -14,6 +14,7 @@ import { copyToClipboard } from '../utils/clipboard'
 import { downloadTextFile } from '../utils/download'
 import { extractApiError } from '../utils/errors'
 import { formatBytes } from '../utils/format'
+import { Switch } from '@/components/ui/switch'
 
 const authStore = useAuthStore()
 const { showApiHints, setShowApiHints } = usePreferences()
@@ -252,178 +253,178 @@ function dismissServiceAccountResult(): void {
 
 <template>
   <div class="space-y-4">
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
+    <div v-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
       {{ errorMessage }}
     </div>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">Session</h2>
+    <section class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">Session</h2>
       </header>
       <dl class="ui-divide text-xs">
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Roles</dt>
-          <dd class="ui-text-secondary">
+          <dt class="text-muted-foreground">Roles</dt>
+          <dd class="text-foreground/80">
             {{ authStore.roles.length > 0 ? authStore.roles.join(', ') : 'Administrator' }}
           </dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">JWT</dt>
-          <dd class="font-mono text-[11px] ui-text-muted">
+          <dt class="text-muted-foreground">JWT</dt>
+          <dd class="font-mono text-[11px] text-muted-foreground">
             {{ authStore.token ? `${authStore.token.slice(0, 24)}…` : 'Not authenticated' }}
           </dd>
         </div>
       </dl>
     </section>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">API client</h2>
+    <section class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">API client</h2>
       </header>
       <dl class="ui-divide text-xs">
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Base URL</dt>
-          <dd class="break-all font-mono ui-text-secondary">{{ apiBaseUrl }}</dd>
+          <dt class="text-muted-foreground">Base URL</dt>
+          <dd class="break-all font-mono text-foreground/80">{{ apiBaseUrl }}</dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Origin</dt>
-          <dd class="break-all font-mono ui-text-secondary">{{ appOrigin }}</dd>
+          <dt class="text-muted-foreground">Origin</dt>
+          <dd class="break-all font-mono text-foreground/80">{{ appOrigin }}</dd>
         </div>
       </dl>
     </section>
 
-    <section v-if="!isLoading && health" class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">Server</h2>
+    <section v-if="!isLoading && health" class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">Server</h2>
       </header>
       <dl class="ui-divide text-xs">
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">API status</dt>
-          <dd class="ui-text-secondary">{{ health.api.status }} ({{ health.api.version }})</dd>
+          <dt class="text-muted-foreground">API status</dt>
+          <dd class="text-foreground/80">{{ health.api.status }} ({{ health.api.version }})</dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">CA engine</dt>
-          <dd class="ui-text-secondary">{{ health.ca_backend.engine }} — {{ health.ca_backend.status }}</dd>
+          <dt class="text-muted-foreground">CA engine</dt>
+          <dd class="text-foreground/80">{{ health.ca_backend.engine }} — {{ health.ca_backend.status }}</dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Uptime</dt>
-          <dd class="ui-text-secondary">{{ health.uptime.human }}</dd>
+          <dt class="text-muted-foreground">Uptime</dt>
+          <dd class="text-foreground/80">{{ health.uptime.human }}</dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Heap in use</dt>
-          <dd class="ui-text-secondary">{{ formatBytes(health.memory.heap_inuse_bytes) }}</dd>
+          <dt class="text-muted-foreground">Heap in use</dt>
+          <dd class="text-foreground/80">{{ formatBytes(health.memory.heap_inuse_bytes) }}</dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Goroutines</dt>
-          <dd class="ui-text-secondary">{{ health.memory.goroutines }}</dd>
+          <dt class="text-muted-foreground">Goroutines</dt>
+          <dd class="text-foreground/80">{{ health.memory.goroutines }}</dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Engine initialized</dt>
-          <dd class="ui-text-secondary">{{ health.ca_backend.initialized ? 'Yes' : 'No' }}</dd>
+          <dt class="text-muted-foreground">Engine initialized</dt>
+          <dd class="text-foreground/80">{{ health.ca_backend.initialized ? 'Yes' : 'No' }}</dd>
         </div>
       </dl>
     </section>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">CA Certificates</h2>
-        <p class="mt-0.5 text-xs ui-text-muted">Public PEM downloads for trust store configuration.</p>
+    <section class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">CA Certificates</h2>
+        <p class="mt-0.5 text-xs text-muted-foreground">Public PEM downloads for trust store configuration.</p>
       </header>
       <div class="flex flex-wrap gap-2 px-4 py-3">
-        <button type="button" class="ui-btn-secondary" :disabled="rootDownloading" @click="downloadRootCert">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="rootDownloading" @click="downloadRootCert">
           {{ rootDownloading ? 'Downloading…' : 'Download Root CA (.pem)' }}
         </button>
         <button
           type="button"
-          class="ui-btn-secondary"
+          class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
           :disabled="intermediateDownloading"
           @click="downloadIntermediateCert"
         >
           {{ intermediateDownloading ? 'Downloading…' : 'Download Intermediate CA (.pem)' }}
         </button>
       </div>
-      <p v-if="certDownloadError" class="px-4 pb-3 text-xs" style="color: var(--danger-text)" role="alert">
+      <p v-if="certDownloadError" class="px-4 pb-3 text-xs" role="alert">
         {{ certDownloadError }}
       </p>
     </section>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">Public API</h2>
-        <p class="mt-0.5 text-xs ui-text-muted">Unauthenticated read-only endpoints for agents and clients.</p>
+    <section class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">Public API</h2>
+        <p class="mt-0.5 text-xs text-muted-foreground">Unauthenticated read-only endpoints for agents and clients.</p>
       </header>
       <dl class="ui-divide text-xs">
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Certificate list</dt>
-          <dd class="break-all font-mono ui-text-secondary">{{ publicListUrl }}</dd>
+          <dt class="text-muted-foreground">Certificate list</dt>
+          <dd class="break-all font-mono text-foreground/80">{{ publicListUrl }}</dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Certificate by serial</dt>
-          <dd class="break-all font-mono ui-text-secondary">
+          <dt class="text-muted-foreground">Certificate by serial</dt>
+          <dd class="break-all font-mono text-foreground/80">
             {{ publicListUrl }}/{serial}
           </dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">OCSP responder</dt>
-          <dd class="break-all font-mono ui-text-secondary">{{ appOrigin }}/ocsp</dd>
+          <dt class="text-muted-foreground">OCSP responder</dt>
+          <dd class="break-all font-mono text-foreground/80">{{ appOrigin }}/ocsp</dd>
         </div>
         <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-          <dt class="ui-text-muted">Published certs</dt>
-          <dd class="ui-text-secondary">
+          <dt class="text-muted-foreground">Published certs</dt>
+          <dd class="text-foreground/80">
             <span v-if="publicLoading">Loading…</span>
-            <span v-else-if="publicError" style="color: var(--danger-text)">{{ publicError }}</span>
+            <span v-else-if="publicError">{{ publicError }}</span>
             <span v-else>{{ publicCertTotal ?? '—' }} visible</span>
           </dd>
         </div>
       </dl>
     </section>
 
-    <section v-if="isSuperAdmin" class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">Service Accounts</h2>
-        <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
+    <section v-if="isSuperAdmin" class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">Service Accounts</h2>
+        <p v-if="showApiHints" class="mt-0.5 text-xs text-muted-foreground">
           Create API keys via
-          <code class="ui-code">POST /api/v1/auth/service-accounts</code>
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/auth/service-accounts</code>
         </p>
       </header>
       <div class="space-y-3 px-4 py-3">
-        <div v-if="saError" class="ui-alert-error text-xs" role="alert">{{ saError }}</div>
+        <div v-if="saError" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">{{ saError }}</div>
 
-        <div v-if="saResult" class="ui-alert-warning space-y-3" role="alert">
+        <div v-if="saResult" class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400 space-y-3" role="alert">
           <p class="font-semibold">Save the API key now — it will not be shown again.</p>
           <dl class="space-y-2 text-xs">
             <div>
-              <dt class="font-medium ui-text-muted">Name</dt>
-              <dd class="mt-0.5 ui-text-primary">{{ saResult.name }}</dd>
+              <dt class="font-medium text-muted-foreground">Name</dt>
+              <dd class="mt-0.5 text-foreground">{{ saResult.name }}</dd>
             </div>
             <div>
-              <dt class="font-medium ui-text-muted">ID</dt>
-              <dd class="mt-0.5 font-mono ui-text-primary">{{ saResult.id }}</dd>
+              <dt class="font-medium text-muted-foreground">ID</dt>
+              <dd class="mt-0.5 font-mono text-foreground">{{ saResult.id }}</dd>
             </div>
             <div>
-              <dt class="font-medium ui-text-muted">Roles</dt>
-              <dd class="mt-0.5 ui-text-primary">{{ saResult.roles.join(', ') || 'default' }}</dd>
+              <dt class="font-medium text-muted-foreground">Roles</dt>
+              <dd class="mt-0.5 text-foreground">{{ saResult.roles.join(', ') || 'default' }}</dd>
             </div>
             <div>
-              <dt class="font-medium ui-text-muted">API Key</dt>
-              <dd class="mt-0.5 break-all font-mono text-sm ui-text-primary">{{ saResult.api_key }}</dd>
+              <dt class="font-medium text-muted-foreground">API Key</dt>
+              <dd class="mt-0.5 break-all font-mono text-sm text-foreground">{{ saResult.api_key }}</dd>
             </div>
           </dl>
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-primary" @click="copyApiKey">
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" @click="copyApiKey">
               {{ saCopied ? 'Copied' : 'Copy API Key' }}
             </button>
-            <button type="button" class="ui-btn-secondary" @click="dismissServiceAccountResult">Dismiss</button>
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" @click="dismissServiceAccountResult">Dismiss</button>
           </div>
         </div>
 
         <div class="grid gap-3 sm:grid-cols-2">
           <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="sa-name">Name</label>
-            <input id="sa-name" v-model="saName" type="text" class="ui-input mt-1.5" autocomplete="off" />
+            <label class="block text-xs font-medium text-foreground/80" for="sa-name">Name</label>
+            <input id="sa-name" v-model="saName" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" autocomplete="off" />
           </div>
           <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="sa-roles">
+            <label class="block text-xs font-medium text-foreground/80" for="sa-roles">
               Roles (comma-separated, optional)
             </label>
             <input
@@ -431,7 +432,7 @@ function dismissServiceAccountResult(): void {
               v-model="saRoles"
               type="text"
               list="available-roles"
-              class="ui-input mt-1.5"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
               placeholder="Operator"
               autocomplete="off"
             />
@@ -440,58 +441,53 @@ function dismissServiceAccountResult(): void {
             </datalist>
           </div>
         </div>
-        <button type="button" class="ui-btn-primary" :disabled="saCreating" @click="submitServiceAccount">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="saCreating" @click="submitServiceAccount">
           {{ saCreating ? 'Creating…' : 'Create Service Account' }}
         </button>
       </div>
     </section>
 
-    <section v-if="canManageSettings" class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">Auto-Updater</h2>
-        <p class="mt-0.5 text-xs ui-text-muted">
+    <section v-if="canManageSettings" class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">Auto-Updater</h2>
+        <p class="mt-0.5 text-xs text-muted-foreground">
           Background GitHub release checker. Changes are written to
-          <code class="ui-code">server.yaml</code>
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">server.yaml</code>
           on save.
         </p>
-        <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
-          <code class="ui-code">GET/PUT /api/v1/settings/config</code>
+        <p v-if="showApiHints" class="mt-0.5 text-xs text-muted-foreground">
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET/PUT /api/v1/settings/config</code>
         </p>
       </header>
 
       <div class="ui-divide text-xs">
         <div v-if="updaterError" class="px-4 py-3">
-          <p class="ui-alert-error" role="alert">{{ updaterError }}</p>
+          <p class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{{ updaterError }}</p>
         </div>
         <div v-if="updaterSaved" class="px-4 py-3">
-          <p class="ui-alert-success" role="status">Auto-updater settings saved to server.yaml.</p>
+          <p class="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground" role="status">Auto-updater settings saved to server.yaml.</p>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
-            <p class="font-medium ui-text-secondary">Enable Auto-Updater</p>
-            <p class="mt-0.5 ui-text-muted">Poll GitHub releases on the configured channel and interval.</p>
+            <p class="font-medium text-foreground/80">Enable Auto-Updater</p>
+            <p class="mt-0.5 text-muted-foreground">Poll GitHub releases on the configured channel and interval.</p>
           </div>
-          <button
-            type="button"
-            class="ui-theme-toggle shrink-0"
-            :data-active="updaterEnabled"
-            :aria-pressed="updaterEnabled"
+          <Switch
+            :checked="updaterEnabled"
             :disabled="updaterLoading || updaterSaving"
             aria-label="Enable Auto-Updater"
-            @click="updaterEnabled = !updaterEnabled"
-          >
-            <span class="ui-theme-toggle-thumb" />
-          </button>
+            @update:checked="updaterEnabled = $event"
+          />
         </div>
 
         <div class="grid gap-3 px-4 py-3 sm:grid-cols-2">
           <div>
-            <label class="block font-medium ui-text-secondary" for="updater-channel">Update Channel</label>
+            <label class="block font-medium text-foreground/80" for="updater-channel">Update Channel</label>
             <select
               id="updater-channel"
               v-model="updaterChannel"
-              class="ui-input mt-1.5"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
               :disabled="updaterLoading || updaterSaving"
             >
               <option v-for="channel in UPDATE_CHANNELS" :key="channel" :value="channel">
@@ -500,44 +496,39 @@ function dismissServiceAccountResult(): void {
             </select>
           </div>
           <div>
-            <label class="block font-medium ui-text-secondary" for="updater-interval">Check Interval</label>
+            <label class="block font-medium text-foreground/80" for="updater-interval">Check Interval</label>
             <input
               id="updater-interval"
               v-model="updaterCheckInterval"
               type="text"
-              class="ui-input mt-1.5 font-mono"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 font-mono"
               placeholder="1h"
               :disabled="updaterLoading || updaterSaving"
               autocomplete="off"
             />
-            <p class="mt-1 ui-text-muted">Go duration string, e.g. <code class="ui-code">30m</code>, <code class="ui-code">24h</code>.</p>
+            <p class="mt-1 text-muted-foreground">Go duration string, e.g. <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">30m</code>, <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">24h</code>.</p>
           </div>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
-            <p class="font-medium ui-text-secondary">View Changelog After Update</p>
-            <p class="mt-0.5 ui-text-muted">
+            <p class="font-medium text-foreground/80">View Changelog After Update</p>
+            <p class="mt-0.5 text-muted-foreground">
               Show release notes once on the first administrator visit after a version change.
             </p>
           </div>
-          <button
-            type="button"
-            class="ui-theme-toggle shrink-0"
-            :data-active="updaterViewChangelogAfterUpdate"
-            :aria-pressed="updaterViewChangelogAfterUpdate"
+          <Switch
+            :checked="updaterViewChangelogAfterUpdate"
             :disabled="updaterLoading || updaterSaving"
             aria-label="View Changelog After Update"
-            @click="updaterViewChangelogAfterUpdate = !updaterViewChangelogAfterUpdate"
-          >
-            <span class="ui-theme-toggle-thumb" />
-          </button>
+            @update:checked="updaterViewChangelogAfterUpdate = $event"
+          />
         </div>
 
         <div class="space-y-3 px-4 py-3">
           <div>
-            <p class="font-medium ui-text-secondary">Action on Update</p>
-            <p class="mt-0.5 ui-text-muted">Choose notification-only mode or automatic binary replacement.</p>
+            <p class="font-medium text-foreground/80">Action on Update</p>
+            <p class="mt-0.5 text-muted-foreground">Choose notification-only mode or automatic binary replacement.</p>
           </div>
           <div
             class="grid gap-2 sm:grid-cols-2"
@@ -548,28 +539,28 @@ function dismissServiceAccountResult(): void {
               v-for="option in updateActionOptions"
               :key="String(option.value)"
               type="button"
-              class="rounded-[var(--radius-control)] border px-3 py-2.5 text-left transition-all duration-300"
+              class="rounded-md border px-3 py-2.5 text-left transition-all duration-300"
               :class="
                 updaterNotifyOnly === option.value
-                  ? 'border-[var(--accent-border)] bg-[var(--accent-surface)]'
-                  : 'border-[var(--border-color)] bg-[var(--bg-surface)] hover:border-[var(--border-subtle)]'
+                  ? 'border-primary/30 bg-primary/10'
+                  : 'border-border bg-muted hover:border-border'
               "
               role="radio"
               :aria-checked="updaterNotifyOnly === option.value"
               :disabled="updaterLoading || updaterSaving"
               @click="updaterNotifyOnly = option.value"
             >
-              <span class="block font-medium ui-text-primary">{{ option.label }}</span>
-              <span class="mt-0.5 block ui-text-muted">{{ option.description }}</span>
+              <span class="block font-medium text-foreground">{{ option.label }}</span>
+              <span class="mt-0.5 block text-muted-foreground">{{ option.description }}</span>
             </button>
           </div>
         </div>
       </div>
 
-      <div class="ui-border-t px-4 py-3">
+      <div class="border-t border-border px-4 py-3">
         <button
           type="button"
-          class="ui-btn-primary"
+          class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
           :disabled="updaterLoading || updaterSaving"
           @click="saveUpdaterSettings"
         >
@@ -578,17 +569,17 @@ function dismissServiceAccountResult(): void {
       </div>
     </section>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">UI Preferences</h2>
-        <p class="mt-0.5 text-xs ui-text-muted">Operator layout and notification presentation settings.</p>
+    <section class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">UI Preferences</h2>
+        <p class="mt-0.5 text-xs text-muted-foreground">Operator layout and notification presentation settings.</p>
       </header>
 
       <div class="ui-divide text-xs">
         <div class="space-y-3 px-4 py-3">
           <div>
-            <p class="font-medium ui-text-secondary">Notification Center Layout</p>
-            <p class="mt-0.5 ui-text-muted">
+            <p class="font-medium text-foreground/80">Notification Center Layout</p>
+            <p class="mt-0.5 text-muted-foreground">
               Choose between a full-height side drawer or a compact overlay near the bell icon. Applies
               immediately.
             </p>
@@ -602,61 +593,51 @@ function dismissServiceAccountResult(): void {
               v-for="option in notificationLayoutOptions"
               :key="option.value"
               type="button"
-              class="rounded-[var(--radius-control)] border px-3 py-2.5 text-left transition-all duration-300"
+              class="rounded-md border px-3 py-2.5 text-left transition-all duration-300"
               :class="
                 notificationLayoutStyle === option.value
-                  ? 'border-[var(--accent-border)] bg-[var(--accent-surface)]'
-                  : 'border-[var(--border-color)] bg-[var(--bg-surface)] hover:border-[var(--border-subtle)]'
+                  ? 'border-primary/30 bg-primary/10'
+                  : 'border-border bg-muted hover:border-border'
               "
               role="radio"
               :aria-checked="notificationLayoutStyle === option.value"
               @click="setNotificationLayoutStyle(option.value)"
             >
-              <span class="block font-medium ui-text-primary">{{ option.label }}</span>
-              <span class="mt-0.5 block ui-text-muted">{{ option.description }}</span>
+              <span class="block font-medium text-foreground">{{ option.label }}</span>
+              <span class="mt-0.5 block text-muted-foreground">{{ option.description }}</span>
             </button>
           </div>
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
-            <p class="ui-text-secondary">Show Developer API Hints</p>
-            <p class="mt-0.5 ui-text-muted">
+            <p class="text-foreground/80">Show Developer API Hints</p>
+            <p class="mt-0.5 text-muted-foreground">
               Display route badges and documentation references across all views.
             </p>
           </div>
-          <button
-            type="button"
-            class="ui-theme-toggle shrink-0"
-            :data-active="showApiHints"
-            :aria-pressed="showApiHints"
+          <Switch
+            :checked="showApiHints"
             aria-label="Show Developer API Hints"
-            @click="setShowApiHints(!showApiHints)"
-          >
-            <span class="ui-theme-toggle-thumb" />
-          </button>
+            @update:checked="setShowApiHints($event)"
+          />
         </div>
 
         <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
-            <p class="ui-text-secondary">Collapsed sidebar by default</p>
-            <p class="mt-0.5 ui-text-muted">Stored in local storage; reload applies the layout.</p>
+            <p class="text-foreground/80">Collapsed sidebar by default</p>
+            <p class="mt-0.5 text-muted-foreground">Stored in local storage; reload applies the layout.</p>
           </div>
-          <button
-            type="button"
-            class="ui-theme-toggle shrink-0"
-            :data-active="sidebarCollapsed"
-            :aria-pressed="sidebarCollapsed"
+          <Switch
+            :checked="sidebarCollapsed"
             aria-label="Collapsed sidebar by default"
-            @click="sidebarCollapsed = !sidebarCollapsed"
-          >
-            <span class="ui-theme-toggle-thumb" />
-          </button>
+            @update:checked="sidebarCollapsed = $event"
+          />
         </div>
       </div>
 
-      <div class="ui-border-t px-4 py-3">
-        <button type="button" class="ui-btn-secondary" @click="persistSidebarPreference">
+      <div class="border-t border-border px-4 py-3">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" @click="persistSidebarPreference">
           Save sidebar preference
         </button>
       </div>

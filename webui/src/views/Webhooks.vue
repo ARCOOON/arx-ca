@@ -16,6 +16,7 @@ import { usePreferences } from '../composables/usePreferences'
 import { useToast } from '../composables/useToast'
 import { extractApiError } from '../utils/errors'
 import { formatDateTime } from '../utils/format'
+import { Switch } from '@/components/ui/switch'
 
 const { showToast } = useToast()
 const { showApiHints } = usePreferences()
@@ -247,16 +248,16 @@ function eventSummary(events: string[]): string {
 <template>
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-xs ui-text-muted">
+      <p class="text-xs text-muted-foreground">
         Outbound alerts<template v-if="showApiHints">
           via
-          <code class="ui-code">GET /api/v1/webhooks</code></template>
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/webhooks</code></template>
         — Discord, Slack, Gotify, and custom HTTP receivers.
       </p>
-      <button type="button" class="ui-btn-primary" @click="openCreateModal">Add Webhook</button>
+      <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" @click="openCreateModal">Add Webhook</button>
     </div>
 
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
+    <div v-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
       {{ errorMessage }}
     </div>
 
@@ -271,43 +272,43 @@ function eventSummary(events: string[]): string {
         <StatusBadge :label="row.active ? 'Active' : 'Paused'" :tone="row.active ? 'enabled' : 'disabled'" />
       </template>
       <template #cell-events="{ row }">
-        <span class="ui-text-secondary">{{ eventSummary(row.subscribed_events) }}</span>
+        <span class="text-foreground/80">{{ eventSummary(row.subscribed_events) }}</span>
       </template>
       <template #cell-updated_at="{ row }">
         {{ formatDateTime(row.updated_at) }}
       </template>
       <template #cell-actions="{ row }">
         <div class="flex flex-wrap gap-1.5">
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openEditModal(row)">Edit</button>
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="runTestFromRow(row)">Test</button>
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openDeleteConfirm(row)">Delete</button>
+          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 text-[11px]" @click="openEditModal(row)">Edit</button>
+          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 text-[11px]" @click="runTestFromRow(row)">Test</button>
+          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 text-[11px]" @click="openDeleteConfirm(row)">Delete</button>
         </div>
       </template>
     </DataTable>
 
     <Modal :open="editorOpen" :title="editorTitle" wide @close="closeEditor">
-      <p class="mb-3 text-xs ui-text-muted">
+      <p class="mb-3 text-xs text-muted-foreground">
         Deliver JSON audit payloads when subscribed events occur.<template v-if="showApiHints">
           Optional HMAC signatures use
-          <code class="ui-code">X-Webhook-Signature: sha256=&lt;hex&gt;</code>.</template>
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">X-Webhook-Signature: sha256=&lt;hex&gt;</code>.</template>
       </p>
 
-      <div v-if="editorError" class="mb-3 ui-alert-error text-xs" role="alert">
+      <div v-if="editorError" class="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">
         {{ editorError }}
       </div>
 
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="webhook-name">Name</label>
-          <input id="webhook-name" v-model="editorName" type="text" class="ui-input mt-1.5" autocomplete="off" />
+          <label class="block text-xs font-medium text-foreground/80" for="webhook-name">Name</label>
+          <input id="webhook-name" v-model="editorName" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" autocomplete="off" />
         </div>
         <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="webhook-url">URL endpoint</label>
+          <label class="block text-xs font-medium text-foreground/80" for="webhook-url">URL endpoint</label>
           <input
             id="webhook-url"
             v-model="editorURL"
             type="url"
-            class="ui-input mt-1.5 font-mono text-[11px]"
+            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 font-mono text-[11px]"
             placeholder="https://discord.com/api/webhooks/..."
             autocomplete="off"
           />
@@ -315,44 +316,39 @@ function eventSummary(events: string[]): string {
       </div>
 
       <div class="mt-3">
-        <label class="block text-xs font-medium ui-text-secondary" for="webhook-secret">
+        <label class="block text-xs font-medium text-foreground/80" for="webhook-secret">
           Secret token (optional)
         </label>
         <input
           id="webhook-secret"
           v-model="editorSecret"
           type="password"
-          class="ui-input mt-1.5 font-mono text-[11px]"
+          class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 font-mono text-[11px]"
           :placeholder="editorMode === 'edit' ? 'Leave blank to keep existing secret' : 'HMAC signing key'"
           autocomplete="new-password"
         />
       </div>
 
-      <div class="mt-3 flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[var(--border-color)] px-3 py-2.5">
+      <div class="mt-3 flex items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5">
         <div>
-          <p class="text-xs font-medium ui-text-secondary">Active</p>
-          <p class="mt-0.5 text-[11px] ui-text-muted">Paused webhooks are not dispatched.</p>
+          <p class="text-xs font-medium text-foreground/80">Active</p>
+          <p class="mt-0.5 text-[11px] text-muted-foreground">Paused webhooks are not dispatched.</p>
         </div>
-        <button
-          type="button"
-          class="ui-theme-toggle shrink-0"
-          :data-active="editorActive"
-          :aria-pressed="editorActive"
+        <Switch
+          :checked="editorActive"
           aria-label="Webhook active"
-          @click="editorActive = !editorActive"
-        >
-          <span class="ui-theme-toggle-thumb" />
-        </button>
+          @update:checked="editorActive = $event"
+        />
       </div>
 
       <div class="mt-4">
-        <p class="text-xs font-medium ui-text-secondary">Subscribed events</p>
-        <p class="mt-0.5 text-[11px] ui-text-muted">Select audit actions that should trigger this webhook.</p>
+        <p class="text-xs font-medium text-foreground/80">Subscribed events</p>
+        <p class="mt-0.5 text-[11px] text-muted-foreground">Select audit actions that should trigger this webhook.</p>
         <div class="mt-2 grid gap-2 sm:grid-cols-2">
           <label
             v-for="option in eventOptions"
             :key="option.action"
-            class="flex cursor-pointer items-start gap-2 rounded-[var(--radius-control)] border border-[var(--border-color)] px-3 py-2.5"
+            class="flex cursor-pointer items-start gap-2 rounded-md border border-border px-3 py-2.5"
           >
             <input
               type="checkbox"
@@ -361,9 +357,9 @@ function eventSummary(events: string[]): string {
               @change="toggleEvent(option.action)"
             />
             <span class="min-w-0">
-              <span class="block text-xs font-medium ui-text-primary">{{ option.label }}</span>
-              <span class="mt-0.5 block text-[11px] ui-text-muted">{{ option.description }}</span>
-              <span class="mt-1 block font-mono text-[10px] ui-text-muted">{{ option.action }}</span>
+              <span class="block text-xs font-medium text-foreground">{{ option.label }}</span>
+              <span class="mt-0.5 block text-[11px] text-muted-foreground">{{ option.description }}</span>
+              <span class="mt-1 block font-mono text-[10px] text-muted-foreground">{{ option.action }}</span>
             </span>
           </label>
         </div>
@@ -374,7 +370,7 @@ function eventSummary(events: string[]): string {
           <button
             v-if="editorMode === 'edit'"
             type="button"
-            class="ui-btn-secondary"
+            class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
             :disabled="editorSaving || editorTesting"
             @click="runTestFromEditor"
           >
@@ -382,10 +378,10 @@ function eventSummary(events: string[]): string {
           </button>
           <div v-else />
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-secondary" :disabled="editorSaving" @click="closeEditor">
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="editorSaving" @click="closeEditor">
               Cancel
             </button>
-            <button type="button" class="ui-btn-primary" :disabled="editorSaving" @click="submitEditor">
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="editorSaving" @click="submitEditor">
               {{ editorSaving ? 'Saving…' : editorMode === 'create' ? 'Create Webhook' : 'Save Changes' }}
             </button>
           </div>
@@ -398,17 +394,17 @@ function eventSummary(events: string[]): string {
       title="Delete Webhook"
       @close="closeDeleteConfirm"
     >
-      <p class="text-sm ui-text-secondary">
+      <p class="text-sm text-foreground/80">
         Delete webhook
-        <strong class="ui-text-primary">{{ deletingWebhook?.name }}</strong>?
+        <strong class="text-foreground">{{ deletingWebhook?.name }}</strong>?
         This cannot be undone.
       </p>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <button type="button" class="ui-btn-secondary" :disabled="deleteInProgress" @click="closeDeleteConfirm">
+          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="deleteInProgress" @click="closeDeleteConfirm">
             Cancel
           </button>
-          <button type="button" class="ui-btn-primary" :disabled="deleteInProgress" @click="confirmDelete">
+          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="deleteInProgress" @click="confirmDelete">
             {{ deleteInProgress ? 'Deleting…' : 'Delete' }}
           </button>
         </div>

@@ -23,10 +23,10 @@ const version = ref('')
 const sections = ref<ChangelogSection[]>([])
 
 const sectionToneClass = computed(() => ({
-  breaking: 'text-[var(--status-revoked)]',
-  features: 'text-[var(--accent-text)]',
-  fixes: 'text-[var(--status-valid)]',
-  other: 'ui-text-secondary',
+  breaking: 'text-destructive',
+  features: 'text-primary',
+  fixes: 'text-emerald-600 dark:text-emerald-400',
+  other: 'text-foreground/80',
 }))
 
 function classifySection(title: string): ChangelogSection['kind'] {
@@ -129,27 +129,27 @@ onUnmounted(() => {
   <Teleport to="body">
     <div
       v-if="open"
-      class="ui-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-2 sm:p-4"
+      class="bg-background/80 fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-2 sm:p-4"
       role="presentation"
       @click="handleBackdropClick"
     >
       <div
-        class="ui-elevated ui-dialog flex max-h-[90vh] w-full max-w-[95vw] flex-col sm:max-w-2xl"
+        class="rounded-lg border border-border bg-card overflow-hidden flex max-h-[90vh] w-full max-w-[95vw] flex-col sm:max-w-2xl"
         role="dialog"
         aria-modal="true"
         aria-label="Release notes"
         @click.stop
       >
-        <header class="ui-border-b flex shrink-0 items-start justify-between gap-3 px-4 py-3">
+        <header class="border-b border-border flex shrink-0 items-start justify-between gap-3 px-4 py-3">
           <div class="min-w-0">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">Updated to</p>
-            <h2 class="text-sm font-semibold ui-text-primary">
+            <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Updated to</p>
+            <h2 class="text-sm font-semibold text-foreground">
               {{ version || 'New version' }}
             </h2>
           </div>
           <button
             type="button"
-            class="ui-btn-secondary inline-flex shrink-0 items-center justify-center rounded-[var(--radius-control)] px-3 py-1.5 text-xs"
+            class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 inline-flex shrink-0 items-center justify-center rounded-md px-3 py-1.5 text-xs"
             @click="emit('close')"
           >
             Close
@@ -157,9 +157,9 @@ onUnmounted(() => {
         </header>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          <p v-if="isLoading" class="text-sm ui-text-muted">Loading release notes…</p>
+          <p v-if="isLoading" class="text-sm text-muted-foreground">Loading release notes…</p>
 
-          <p v-else-if="errorMessage" class="ui-alert-error text-sm" role="alert">
+          <p v-else-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-sm" role="alert">
             {{ errorMessage }}
           </p>
 
@@ -175,7 +175,7 @@ onUnmounted(() => {
               >
                 {{ section.title }}
               </h3>
-              <ul class="space-y-1.5 text-sm ui-text-secondary">
+              <ul class="space-y-1.5 text-sm text-foreground/80">
                 <li
                   v-for="(item, index) in section.items"
                   :key="`${section.title}-${index}`"
@@ -184,19 +184,19 @@ onUnmounted(() => {
                   <span
                     class="mt-2 h-1 w-1 shrink-0 rounded-full"
                     :class="{
-                      'bg-[var(--status-revoked)]': section.kind === 'breaking',
-                      'bg-[var(--accent-border)]': section.kind === 'features',
-                      'bg-[var(--status-valid)]': section.kind === 'fixes',
-                      'bg-[var(--border-subtle)]': section.kind === 'other',
+                      'bg-destructive': section.kind === 'breaking',
+                      'bg-primary/30': section.kind === 'features',
+                      'bg-emerald-500': section.kind === 'fixes',
+                      'bg-border': section.kind === 'other',
                     }"
-                    aria-hidden="true"
+                   
                   />
                   <span>{{ item }}</span>
                 </li>
               </ul>
             </section>
 
-            <p v-if="sections.length === 0" class="text-sm ui-text-muted">
+            <p v-if="sections.length === 0" class="text-sm text-muted-foreground">
               No categorized release notes were found for this version.
             </p>
           </div>

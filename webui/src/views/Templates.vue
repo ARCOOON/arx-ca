@@ -116,14 +116,14 @@ async function submitCreate(): Promise<void> {
 <template>
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <p v-if="showApiHints" class="text-xs ui-text-muted">
+      <p v-if="showApiHints" class="text-xs text-muted-foreground">
         Issuance templates from
-        <code class="ui-code">GET /api/v1/templates</code>
+        <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/templates</code>
       </p>
-      <button type="button" class="ui-btn-primary" @click="openCreateModal">Create Template</button>
+      <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" @click="openCreateModal">Create Template</button>
     </div>
 
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
+    <div v-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
       {{ errorMessage }}
     </div>
 
@@ -138,56 +138,56 @@ async function submitCreate(): Promise<void> {
         {{ formatDateTime(row.created_at) }}
       </template>
       <template #cell-actions="{ row }">
-        <button type="button" class="ui-btn-secondary text-[11px]" @click="openTemplateDetail(row)">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 text-[11px]" @click="openTemplateDetail(row)">
           View
         </button>
       </template>
     </DataTable>
 
     <Modal :open="createModalOpen" title="Create Template" wide @close="closeCreateModal">
-      <p v-if="showApiHints" class="mb-3 text-xs ui-text-muted">
+      <p v-if="showApiHints" class="mb-3 text-xs text-muted-foreground">
         Registers a Go text/template body via
-        <code class="ui-code">POST /api/v1/templates</code>.
+        <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/templates</code>.
       </p>
 
-      <div v-if="createError" class="mb-3 ui-alert-error text-xs" role="alert">
+      <div v-if="createError" class="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">
         {{ createError }}
       </div>
-      <div v-if="createSuccess" class="mb-3 ui-alert-success" role="status">
+      <div v-if="createSuccess" class="mb-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground" role="status">
         {{ createSuccess }}
       </div>
 
-      <label class="block text-xs font-medium ui-text-secondary" for="template-name">Name</label>
-      <input id="template-name" v-model="createName" type="text" class="ui-input mt-1.5" autocomplete="off" />
+      <label class="block text-xs font-medium text-foreground/80" for="template-name">Name</label>
+      <input id="template-name" v-model="createName" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" autocomplete="off" />
 
-      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="template-desc">
+      <label class="mt-3 block text-xs font-medium text-foreground/80" for="template-desc">
         Description (optional)
       </label>
       <input
         id="template-desc"
         v-model="createDescription"
         type="text"
-        class="ui-input mt-1.5"
+        class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
         autocomplete="off"
       />
 
-      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="template-body">
+      <label class="mt-3 block text-xs font-medium text-foreground/80" for="template-body">
         Template body
       </label>
       <textarea
         id="template-body"
         v-model="createBody"
         rows="12"
-        class="ui-textarea mt-1.5 font-mono text-[11px]"
+        class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 font-mono text-[11px]"
         placeholder='{"subject": {"commonName": "{{ .CommonName }}"}}'
         spellcheck="false"
       />
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="isCreating" @click="closeCreateModal">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="isCreating" @click="closeCreateModal">
           Cancel
         </button>
-        <button type="button" class="ui-btn-primary" :disabled="isCreating" @click="submitCreate">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="isCreating" @click="submitCreate">
           {{ isCreating ? 'Creating…' : 'Create Template' }}
         </button>
       </template>
@@ -197,34 +197,34 @@ async function submitCreate(): Promise<void> {
       <template v-if="selectedTemplate">
         <dl class="grid gap-3 text-xs sm:grid-cols-2">
           <div>
-            <dt class="font-medium ui-text-muted">ID</dt>
-            <dd class="mt-0.5 font-mono ui-text-primary">{{ selectedTemplate.id }}</dd>
+            <dt class="font-medium text-muted-foreground">ID</dt>
+            <dd class="mt-0.5 font-mono text-foreground">{{ selectedTemplate.id }}</dd>
           </div>
           <div>
-            <dt class="font-medium ui-text-muted">Name</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ selectedTemplate.name }}</dd>
+            <dt class="font-medium text-muted-foreground">Name</dt>
+            <dd class="mt-0.5 text-foreground">{{ selectedTemplate.name }}</dd>
           </div>
           <div v-if="selectedTemplate.description" class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">Description</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ selectedTemplate.description }}</dd>
+            <dt class="font-medium text-muted-foreground">Description</dt>
+            <dd class="mt-0.5 text-foreground">{{ selectedTemplate.description }}</dd>
           </div>
           <div>
-            <dt class="font-medium ui-text-muted">Created</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(selectedTemplate.created_at) }}</dd>
+            <dt class="font-medium text-muted-foreground">Created</dt>
+            <dd class="mt-0.5 text-foreground">{{ formatDateTime(selectedTemplate.created_at) }}</dd>
           </div>
           <div>
-            <dt class="font-medium ui-text-muted">Updated</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(selectedTemplate.updated_at) }}</dd>
+            <dt class="font-medium text-muted-foreground">Updated</dt>
+            <dd class="mt-0.5 text-foreground">{{ formatDateTime(selectedTemplate.updated_at) }}</dd>
           </div>
         </dl>
         <div class="mt-4">
-          <p class="text-xs font-medium ui-text-secondary">Body</p>
-          <pre class="ui-inset mt-1.5 max-h-64 overflow-auto p-3 font-mono text-[10px] ui-text-secondary">{{ selectedTemplate.body }}</pre>
+          <p class="text-xs font-medium text-foreground/80">Body</p>
+          <pre class="rounded-md border border-input bg-muted/30 mt-1.5 max-h-64 overflow-auto p-3 font-mono text-[10px] text-foreground/80">{{ selectedTemplate.body }}</pre>
         </div>
       </template>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" @click="closeTemplateDetail">Close</button>
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" @click="closeTemplateDetail">Close</button>
       </template>
     </Modal>
   </div>

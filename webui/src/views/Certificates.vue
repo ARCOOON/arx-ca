@@ -731,54 +731,54 @@ async function submitAutoIssue(): Promise<void> {
 <template>
   <div class="space-y-4">
     <section class="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Total Issued</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
+      <article class="bg-card border-border-muted px-4 py-3">
+        <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Total Issued</p>
+        <p class="mt-1 text-lg font-semibold text-foreground">
           {{ statsLoading ? '…' : (certStats?.total_issued ?? '—') }}
         </p>
-        <p class="text-xs ui-text-muted">Certificates in the CA store</p>
+        <p class="text-xs text-muted-foreground">Certificates in the CA store</p>
       </article>
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Expiring (&lt; 30d)</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
+      <article class="bg-card border-border-muted px-4 py-3">
+        <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Expiring (&lt; 30d)</p>
+        <p class="mt-1 text-lg font-semibold text-foreground">
           {{ statsLoading ? '…' : (certStats?.expiring_30d ?? '—') }}
         </p>
-        <p class="text-xs ui-text-muted">Active certificates nearing expiry</p>
+        <p class="text-xs text-muted-foreground">Active certificates nearing expiry</p>
       </article>
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Revoked</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
+      <article class="bg-card border-border-muted px-4 py-3">
+        <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Revoked</p>
+        <p class="mt-1 text-lg font-semibold text-foreground">
           {{ statsLoading ? '…' : (certStats?.total_revoked ?? '—') }}
         </p>
-        <p class="text-xs ui-text-muted">Revoked certificates in the CA store</p>
+        <p class="text-xs text-muted-foreground">Revoked certificates in the CA store</p>
       </article>
     </section>
 
-    <p v-if="statsError" class="ui-alert-error rounded-[var(--radius-control)] px-3 py-2 text-xs" role="alert">
+    <p v-if="statsError" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive rounded-md px-3 py-2 text-xs" role="alert">
       {{ statsError }}
     </p>
 
-    <section class="ui-surface-muted px-4 py-3">
+    <section class="bg-card border-border-muted px-4 py-3">
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 class="text-sm font-semibold ui-text-primary">Certificate Revocation List</h2>
-          <p v-if="showApiHints" class="mt-1 text-xs ui-text-muted">
+          <h2 class="text-sm font-semibold text-foreground">Certificate Revocation List</h2>
+          <p v-if="showApiHints" class="mt-1 text-xs text-muted-foreground">
             Published via
-            <code class="ui-code">GET /api/v1/crl</code>
+            <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/crl</code>
             (alias of
-            <code class="ui-code">/api/v1/ca/crl</code>).
+            <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">/api/v1/ca/crl</code>).
           </p>
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge :label="crlStatusLabel" :tone="crlStatusTone" />
           </div>
-          <p v-if="crlError" class="mt-2 text-xs" style="color: var(--danger-text)" role="alert">
+          <p v-if="crlError" class="mt-2 text-xs" role="alert">
             {{ crlError }}
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            class="ui-btn-secondary"
+            class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
             :disabled="crlDownloading"
             @click="handleDownloadCRL('pem')"
           >
@@ -786,7 +786,7 @@ async function submitAutoIssue(): Promise<void> {
           </button>
           <button
             type="button"
-            class="ui-btn-secondary"
+            class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
             :disabled="crlDownloading"
             @click="handleDownloadCRL('der')"
           >
@@ -798,28 +798,28 @@ async function submitAutoIssue(): Promise<void> {
 
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <p v-if="showApiHints" class="text-xs ui-text-muted">
+        <p v-if="showApiHints" class="text-xs text-muted-foreground">
           Inventory from
-          <code class="ui-code">GET /api/v1/certificates</code>
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/certificates</code>
         </p>
       </div>
-      <button type="button" class="ui-btn-primary" @click="openIssueModal">Issue Certificate</button>
+      <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" @click="openIssueModal">Issue Certificate</button>
     </div>
 
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
+    <div v-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
       {{ errorMessage }}
     </div>
 
-    <section class="ui-surface-muted ui-border-b px-4 py-3">
+    <section class="bg-card border-border-muted border-b border-border px-4 py-3">
       <button
         type="button"
-        class="flex w-full items-center gap-2 text-left text-xs font-medium ui-text-secondary"
+        class="flex w-full items-center gap-2 text-left text-xs font-medium text-foreground/80"
         :aria-expanded="filtersOpen"
         @click="filtersOpen = !filtersOpen"
       >
         <Filter class="h-3.5 w-3.5" aria-hidden="true" />
         <span>Search</span>
-        <span v-if="hasActiveFilters" class="ui-text-muted">(active)</span>
+        <span v-if="hasActiveFilters" class="text-muted-foreground">(active)</span>
         <ChevronDown
           class="ml-auto h-4 w-4 transition-transform"
           :class="{ 'rotate-180': filtersOpen }"
@@ -829,17 +829,17 @@ async function submitAutoIssue(): Promise<void> {
 
       <div
         v-show="filtersOpen"
-        class="mt-3 grid gap-3 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3 sm:grid-cols-3"
+        class="mt-3 grid gap-3 rounded-md border border-border p-3 sm:grid-cols-3"
       >
         <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="cert-filter-cn">
+          <label class="block text-xs font-medium text-foreground/80" for="cert-filter-cn">
             Common Name
           </label>
           <input
             id="cert-filter-cn"
             v-model="draftCommonName"
             type="text"
-            class="ui-input mt-1.5 w-full"
+            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 w-full"
             placeholder="www.example.com"
             autocomplete="off"
             @keydown.enter.prevent="applyFilters"
@@ -847,14 +847,14 @@ async function submitAutoIssue(): Promise<void> {
         </div>
 
         <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="cert-filter-serial">
+          <label class="block text-xs font-medium text-foreground/80" for="cert-filter-serial">
             Serial Number
           </label>
           <input
             id="cert-filter-serial"
             v-model="draftSerialNumber"
             type="text"
-            class="ui-input mt-1.5 w-full font-mono text-[11px]"
+            class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 w-full font-mono text-[11px]"
             placeholder="1234567890"
             autocomplete="off"
             @keydown.enter.prevent="applyFilters"
@@ -862,10 +862,10 @@ async function submitAutoIssue(): Promise<void> {
         </div>
 
         <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="cert-filter-status">
+          <label class="block text-xs font-medium text-foreground/80" for="cert-filter-status">
             Status
           </label>
-          <select id="cert-filter-status" v-model="draftStatus" class="ui-input mt-1.5 w-full">
+          <select id="cert-filter-status" v-model="draftStatus" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 w-full">
             <option value="">All statuses</option>
             <option value="valid">Valid</option>
             <option value="expired">Expired</option>
@@ -874,12 +874,12 @@ async function submitAutoIssue(): Promise<void> {
         </div>
 
         <div class="flex flex-wrap items-end gap-2 sm:col-span-3">
-          <button type="button" class="ui-btn-primary" :disabled="isLoading" @click="applyFilters">
+          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="isLoading" @click="applyFilters">
             Apply Search
           </button>
           <button
             type="button"
-            class="ui-btn-secondary"
+            class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
             :disabled="isLoading || !hasActiveFilters"
             @click="clearFilters"
           >
@@ -907,13 +907,13 @@ async function submitAutoIssue(): Promise<void> {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex flex-wrap gap-1">
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openCertificateDetails(row.serial)">
+          <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 text-[11px]" @click="openCertificateDetails(row.serial)">
             Details
           </button>
           <button
             v-if="row.status !== 'revoked'"
             type="button"
-            class="ui-btn-danger text-[11px]"
+            class="inline-flex items-center justify-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-none transition-colors hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50 text-[11px]"
             @click="openRevokeModal(row.serial)"
           >
             Revoke
@@ -923,68 +923,68 @@ async function submitAutoIssue(): Promise<void> {
     </DataTable>
 
     <Modal :open="detailsModalOpen" title="Certificate Details" wide @close="closeDetailsModal">
-      <div v-if="detailsLoading" class="text-sm ui-text-muted">Loading certificate record…</div>
-      <div v-else-if="detailsError" class="ui-alert-error text-xs" role="alert">
+      <div v-if="detailsLoading" class="text-sm text-muted-foreground">Loading certificate record…</div>
+      <div v-else-if="detailsError" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">
         {{ detailsError }}
       </div>
       <template v-else-if="certificateDetail">
         <dl class="grid gap-3 text-xs sm:grid-cols-2">
           <div>
-            <dt class="font-medium ui-text-muted">Serial</dt>
-            <dd class="mt-0.5 font-mono ui-text-primary">{{ certificateDetail.serial }}</dd>
+            <dt class="font-medium text-muted-foreground">Serial</dt>
+            <dd class="mt-0.5 font-mono text-foreground">{{ certificateDetail.serial }}</dd>
           </div>
           <div>
-            <dt class="font-medium ui-text-muted">Requestor ID</dt>
-            <dd class="mt-0.5 font-mono ui-text-primary">{{ certificateDetail.requestor_id }}</dd>
+            <dt class="font-medium text-muted-foreground">Requestor ID</dt>
+            <dd class="mt-0.5 font-mono text-foreground">{{ certificateDetail.requestor_id }}</dd>
           </div>
           <div class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">Subject</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.subject }}</dd>
+            <dt class="font-medium text-muted-foreground">Subject</dt>
+            <dd class="mt-0.5 text-foreground">{{ certificateDetail.subject }}</dd>
           </div>
           <div>
-            <dt class="font-medium ui-text-muted">Issued At</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(certificateDetail.not_before) }}</dd>
+            <dt class="font-medium text-muted-foreground">Issued At</dt>
+            <dd class="mt-0.5 text-foreground">{{ formatDateTime(certificateDetail.not_before) }}</dd>
           </div>
           <div>
-            <dt class="font-medium ui-text-muted">Expires</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(certificateDetail.not_after) }}</dd>
+            <dt class="font-medium text-muted-foreground">Expires</dt>
+            <dd class="mt-0.5 text-foreground">{{ formatDateTime(certificateDetail.not_after) }}</dd>
           </div>
           <div v-if="certificateDetail.revoked">
-            <dt class="font-medium ui-text-muted">Status</dt>
+            <dt class="font-medium text-muted-foreground">Status</dt>
             <dd class="mt-0.5">
               <StatusBadge label="Revoked" tone="revoked" />
             </dd>
           </div>
           <div v-if="certificateDetail.revoked_at">
-            <dt class="font-medium ui-text-muted">Revoked At</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(certificateDetail.revoked_at) }}</dd>
+            <dt class="font-medium text-muted-foreground">Revoked At</dt>
+            <dd class="mt-0.5 text-foreground">{{ formatDateTime(certificateDetail.revoked_at) }}</dd>
           </div>
           <div v-if="certificateDetail.reason_code != null">
-            <dt class="font-medium ui-text-muted">Reason Code</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.reason_code }}</dd>
+            <dt class="font-medium text-muted-foreground">Reason Code</dt>
+            <dd class="mt-0.5 text-foreground">{{ certificateDetail.reason_code }}</dd>
           </div>
           <div v-if="certificateDetail.revocation_reason" class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">Revocation Reason</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.revocation_reason }}</dd>
+            <dt class="font-medium text-muted-foreground">Revocation Reason</dt>
+            <dd class="mt-0.5 text-foreground">{{ certificateDetail.revocation_reason }}</dd>
           </div>
           <div v-if="certificateDetail.dns_names?.length" class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">DNS SANs</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.dns_names.join(', ') }}</dd>
+            <dt class="font-medium text-muted-foreground">DNS SANs</dt>
+            <dd class="mt-0.5 text-foreground">{{ certificateDetail.dns_names.join(', ') }}</dd>
           </div>
           <div v-if="certificateDetail.ip_addresses?.length" class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">IP SANs</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.ip_addresses.join(', ') }}</dd>
+            <dt class="font-medium text-muted-foreground">IP SANs</dt>
+            <dd class="mt-0.5 text-foreground">{{ certificateDetail.ip_addresses.join(', ') }}</dd>
           </div>
         </dl>
         <div class="mt-4">
-          <p class="text-xs font-medium ui-text-secondary">Certificate (PEM)</p>
-          <pre class="ui-inset mt-1.5 max-h-48 overflow-auto p-3 font-mono text-[10px] ui-text-secondary">{{ certificateDetail.certificate_pem }}</pre>
+          <p class="text-xs font-medium text-foreground/80">Certificate (PEM)</p>
+          <pre class="rounded-md border border-input bg-muted/30 mt-1.5 max-h-48 overflow-auto p-3 font-mono text-[10px] text-foreground/80">{{ certificateDetail.certificate_pem }}</pre>
         </div>
 
-        <div v-if="renewError" class="mt-3 ui-alert-error text-xs" role="alert">{{ renewError }}</div>
-        <div v-if="lintError" class="mt-3 ui-alert-error text-xs" role="alert">{{ lintError }}</div>
-        <div v-if="lintResult" class="mt-3 ui-inset p-3 text-xs">
-          <p class="font-medium ui-text-secondary">
+        <div v-if="renewError" class="mt-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">{{ renewError }}</div>
+        <div v-if="lintError" class="mt-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">{{ lintError }}</div>
+        <div v-if="lintResult" class="mt-3 rounded-md border border-input bg-muted/30 p-3 text-xs">
+          <p class="font-medium text-foreground/80">
             Lint summary:
             {{ lintResult.summary.fatals }} fatal,
             {{ lintResult.summary.errors }} error,
@@ -992,34 +992,34 @@ async function submitAutoIssue(): Promise<void> {
             {{ lintResult.summary.notices }} notice
           </p>
           <ul v-if="lintResult.findings.length" class="mt-2 max-h-32 space-y-1 overflow-auto">
-            <li v-for="(finding, index) in lintResult.findings" :key="index" class="ui-text-muted">
+            <li v-for="(finding, index) in lintResult.findings" :key="index" class="text-muted-foreground">
               [{{ finding.severity }}] {{ finding.lint }}: {{ finding.message }}
             </li>
           </ul>
         </div>
         <div
           v-if="isSuperAdmin && certificateDetail.has_escrowed_key"
-          class="mt-4 rounded border border-[var(--border-subtle)] p-3"
+          class="mt-4 rounded border border-border p-3"
         >
-          <p class="text-xs font-medium ui-text-secondary">Escrowed Private Key</p>
-          <p class="mt-1 text-[11px] ui-text-muted">
+          <p class="text-xs font-medium text-foreground/80">Escrowed Private Key</p>
+          <p class="mt-1 text-[11px] text-muted-foreground">
             SuperAdmin access only. Key material is decrypted server-side using the CA master password.
           </p>
-          <div v-if="keyRevealError" class="mt-2 ui-alert-error text-xs" role="alert">
+          <div v-if="keyRevealError" class="mt-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">
             {{ keyRevealError }}
           </div>
           <div v-if="revealedPrivateKey" class="mt-3">
-            <pre class="ui-inset max-h-48 overflow-auto p-3 font-mono text-[10px] ui-text-secondary">{{ revealedPrivateKey }}</pre>
+            <pre class="rounded-md border border-input bg-muted/30 max-h-48 overflow-auto p-3 font-mono text-[10px] text-foreground/80">{{ revealedPrivateKey }}</pre>
           </div>
         </div>
       </template>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" @click="closeDetailsModal">Close</button>
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" @click="closeDetailsModal">Close</button>
         <button
           v-if="certificateDetail && !certificateDetail.revoked"
           type="button"
-          class="ui-btn-danger"
+          class="inline-flex items-center justify-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-none transition-colors hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
           @click="openRevokeModal(certificateDetail.serial)"
         >
           Revoke
@@ -1027,7 +1027,7 @@ async function submitAutoIssue(): Promise<void> {
         <button
           v-if="certificateDetail?.certificate_pem"
           type="button"
-          class="ui-btn-secondary"
+          class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
           :disabled="lintLoading"
           @click="runLint"
         >
@@ -1036,7 +1036,7 @@ async function submitAutoIssue(): Promise<void> {
         <button
           v-if="certificateDetail?.certificate_pem && !certificateDetail.revoked"
           type="button"
-          class="ui-btn-secondary"
+          class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
           :disabled="renewLoading"
           @click="runRenew"
         >
@@ -1045,7 +1045,7 @@ async function submitAutoIssue(): Promise<void> {
         <button
           v-if="certificateDetail?.certificate_pem && !certificateDetail.revoked"
           type="button"
-          class="ui-btn-secondary"
+          class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
           @click="openRekeyModal"
         >
           Rekey
@@ -1053,7 +1053,7 @@ async function submitAutoIssue(): Promise<void> {
         <button
           v-if="isSuperAdmin && certificateDetail?.has_escrowed_key"
           type="button"
-          class="ui-btn-secondary"
+          class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
           :disabled="keyRevealLoading"
           @click="revealPrivateKey"
         >
@@ -1062,7 +1062,7 @@ async function submitAutoIssue(): Promise<void> {
         <button
           v-if="isSuperAdmin && certificateDetail?.has_escrowed_key"
           type="button"
-          class="ui-btn-secondary"
+          class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
           :disabled="keyRevealLoading"
           @click="downloadEscrowedKey"
         >
@@ -1071,7 +1071,7 @@ async function submitAutoIssue(): Promise<void> {
         <button
           v-if="isSuperAdmin && certificateDetail?.has_escrowed_key"
           type="button"
-          class="ui-btn-primary"
+          class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
           :disabled="keyRevealLoading"
           @click="downloadEscrowedBundle"
         >
@@ -1079,7 +1079,7 @@ async function submitAutoIssue(): Promise<void> {
         </button>
         <button
           type="button"
-          class="ui-btn-primary"
+          class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
           :disabled="!certificateDetail?.certificate_pem"
           @click="downloadCertificateCRT"
         >
@@ -1092,24 +1092,24 @@ async function submitAutoIssue(): Promise<void> {
       <div class="mb-4 flex flex-wrap gap-2">
         <button
           type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'csr' }"
+          class="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          :class="{ 'border-primary bg-primary/15 text-foreground': issueMode === 'csr' }"
           @click="setIssueMode('csr')"
         >
           Paste CSR
         </button>
         <button
           type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'native' }"
+          class="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          :class="{ 'border-primary bg-primary/15 text-foreground': issueMode === 'native' }"
           @click="setIssueMode('native')"
         >
           Native Generation
         </button>
         <button
           type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'token' }"
+          class="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          :class="{ 'border-primary bg-primary/15 text-foreground': issueMode === 'token' }"
           @click="setIssueMode('token')"
         >
           Provisioner Token
@@ -1117,77 +1117,77 @@ async function submitAutoIssue(): Promise<void> {
         <button
           v-if="isSuperAdmin"
           type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'auto' }"
+          class="rounded-md border border-input bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          :class="{ 'border-primary bg-primary/15 text-foreground': issueMode === 'auto' }"
           @click="setIssueMode('auto')"
         >
           Auto Issue
         </button>
       </div>
 
-      <p v-if="issueMode === 'csr'" class="mb-3 text-xs ui-text-muted">
+      <p v-if="issueMode === 'csr'" class="mb-3 text-xs text-muted-foreground">
         Signs a PEM CSR<template v-if="showApiHints">
           via
-          <code class="ui-code">POST /api/v1/certificates/issue</code></template>.
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/certificates/issue</code></template>.
         The private key never leaves your client.
       </p>
-      <p v-else-if="issueMode === 'token'" class="mb-3 text-xs ui-text-muted">
+      <p v-else-if="issueMode === 'token'" class="mb-3 text-xs text-muted-foreground">
         Signs a CSR using a provisioner token<template v-if="showApiHints">
           via
-          <code class="ui-code">POST /api/v1/certificates/issue-with-token</code></template>.
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/certificates/issue-with-token</code></template>.
       </p>
-      <p v-else-if="issueMode === 'auto'" class="mb-3 text-xs ui-text-muted">
+      <p v-else-if="issueMode === 'auto'" class="mb-3 text-xs text-muted-foreground">
         Generates key pair and certificate in one step<template v-if="showApiHints">
           via
-          <code class="ui-code">POST /api/v1/certificates/auto</code></template>
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/certificates/auto</code></template>
         (SuperAdmin).
       </p>
-      <p v-else class="mb-3 text-xs ui-text-muted">
+      <p v-else class="mb-3 text-xs text-muted-foreground">
         Generates a key pair and signs the certificate<template v-if="showApiHints">
           via
-          <code class="ui-code">POST /api/v1/certificates/generate</code></template>.
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/certificates/generate</code></template>.
         The private key is returned immediately in a ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) and escrowed encrypted at rest for SuperAdmin retrieval. Download the CA chain separately from the Dashboard.
       </p>
 
-      <div v-if="issueError" class="mb-3 ui-alert-error text-xs" role="alert">
+      <div v-if="issueError" class="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">
         {{ issueError }}
       </div>
 
-      <div v-if="issueSuccess" class="mb-3 ui-alert-success" role="status">
+      <div v-if="issueSuccess" class="mb-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground" role="status">
         {{ issueSuccess }}
       </div>
 
       <template v-if="issueMode === 'csr'">
-        <label class="block text-xs font-medium ui-text-secondary" for="csr-input">
+        <label class="block text-xs font-medium text-foreground/80" for="csr-input">
           Certificate signing request
         </label>
         <textarea
           id="csr-input"
           v-model="csrInput"
           rows="10"
-          class="ui-textarea mt-1.5"
+          class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
           placeholder="-----BEGIN CERTIFICATE REQUEST-----&#10;...&#10;-----END CERTIFICATE REQUEST-----"
           spellcheck="false"
         />
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="ttl-input">
+        <label class="mt-3 block text-xs font-medium text-foreground/80" for="ttl-input">
           TTL (optional)
         </label>
-        <input id="ttl-input" v-model="ttlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
+        <input id="ttl-input" v-model="ttlInput" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 max-w-xs" placeholder="720h" />
       </template>
 
       <template v-else-if="issueMode === 'native'">
-        <label class="block text-xs font-medium ui-text-secondary" for="cn-input">Common Name</label>
+        <label class="block text-xs font-medium text-foreground/80" for="cn-input">Common Name</label>
         <input
           id="cn-input"
           v-model="nativeCommonName"
           type="text"
-          class="ui-input mt-1.5"
+          class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
           placeholder="www.example.com"
           autocomplete="off"
         />
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="sans-input">
+        <label class="mt-3 block text-xs font-medium text-foreground/80" for="sans-input">
           Subject Alternative Names
         </label>
         <TagInput
@@ -1195,79 +1195,79 @@ async function submitAutoIssue(): Promise<void> {
           v-model="nativeSansTags"
           placeholder="api.example.com or 203.0.113.10"
         />
-        <p class="mt-1 text-[11px] ui-text-muted">
+        <p class="mt-1 text-[11px] text-muted-foreground">
           Press Enter, Space, or comma to add each DNS name or IP address.
         </p>
 
         <div class="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="key-algo-select">
+            <label class="block text-xs font-medium text-foreground/80" for="key-algo-select">
               Key algorithm
             </label>
-            <select id="key-algo-select" v-model="nativeKeyAlgo" class="ui-input mt-1.5">
+            <select id="key-algo-select" v-model="nativeKeyAlgo" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5">
               <option value="RSA2048">RSA 2048</option>
               <option value="ECDSA256">ECDSA P-256</option>
             </select>
           </div>
           <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="native-ttl-input">
+            <label class="block text-xs font-medium text-foreground/80" for="native-ttl-input">
               TTL / validity
             </label>
             <input
               id="native-ttl-input"
               v-model="nativeTtlInput"
               type="text"
-              class="ui-input mt-1.5"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
               placeholder="720h"
             />
           </div>
         </div>
 
-        <details class="mt-4 ui-inset" :open="nativeAdvancedOpen" @toggle="nativeAdvancedOpen = ($event.target as HTMLDetailsElement).open">
-          <summary class="cursor-pointer px-4 py-3 text-xs font-medium ui-text-secondary">
+        <details class="mt-4 rounded-md border border-input bg-muted/30" :open="nativeAdvancedOpen" @toggle="nativeAdvancedOpen = ($event.target as HTMLDetailsElement).open">
+          <summary class="cursor-pointer px-4 py-3 text-xs font-medium text-foreground/80">
             Advanced Subject Options
           </summary>
-          <div class="space-y-3 border-t border-[var(--border-subtle)] px-4 py-3">
+          <div class="space-y-3 border-t border-border px-4 py-3">
             <div class="grid gap-3 sm:grid-cols-2">
               <div>
-                <label class="block text-xs font-medium ui-text-secondary" for="org-input">Organization (O)</label>
-                <input id="org-input" v-model="nativeOrganization" type="text" class="ui-input mt-1.5" autocomplete="organization" />
+                <label class="block text-xs font-medium text-foreground/80" for="org-input">Organization (O)</label>
+                <input id="org-input" v-model="nativeOrganization" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" autocomplete="organization" />
               </div>
               <div>
-                <label class="block text-xs font-medium ui-text-secondary" for="ou-input">Organizational Unit (OU)</label>
-                <input id="ou-input" v-model="nativeOrganizationalUnit" type="text" class="ui-input mt-1.5" />
+                <label class="block text-xs font-medium text-foreground/80" for="ou-input">Organizational Unit (OU)</label>
+                <input id="ou-input" v-model="nativeOrganizationalUnit" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" />
               </div>
               <div>
-                <label class="block text-xs font-medium ui-text-secondary" for="country-input">Country (C)</label>
-                <input id="country-input" v-model="nativeCountry" type="text" class="ui-input mt-1.5" maxlength="2" placeholder="US" />
+                <label class="block text-xs font-medium text-foreground/80" for="country-input">Country (C)</label>
+                <input id="country-input" v-model="nativeCountry" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" maxlength="2" placeholder="US" />
               </div>
               <div>
-                <label class="block text-xs font-medium ui-text-secondary" for="state-input">State / Province (ST)</label>
-                <input id="state-input" v-model="nativeState" type="text" class="ui-input mt-1.5" />
+                <label class="block text-xs font-medium text-foreground/80" for="state-input">State / Province (ST)</label>
+                <input id="state-input" v-model="nativeState" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" />
               </div>
             </div>
             <div>
-              <label class="block text-xs font-medium ui-text-secondary" for="locality-input">Locality (L)</label>
-              <input id="locality-input" v-model="nativeLocality" type="text" class="ui-input mt-1.5" />
+              <label class="block text-xs font-medium text-foreground/80" for="locality-input">Locality (L)</label>
+              <input id="locality-input" v-model="nativeLocality" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" />
             </div>
           </div>
         </details>
 
         <div class="mt-3 space-y-3">
-          <p class="text-xs leading-relaxed ui-text-muted">
+          <p class="text-xs leading-relaxed text-muted-foreground">
             Recommended key-usage profiles for common issuance paths:
             <span class="mt-1.5 block">
-              <span class="font-medium ui-text-secondary">Webserver / ACME:</span>
+              <span class="font-medium text-foreground/80">Webserver / ACME:</span>
               Digital Signature, Key Encipherment, Server Authentication.
             </span>
             <span class="mt-1 block">
-              <span class="font-medium ui-text-secondary">MDM / SCEP:</span>
+              <span class="font-medium text-foreground/80">MDM / SCEP:</span>
               Digital Signature, Client Authentication.
             </span>
           </p>
 
           <div class="space-y-2">
-            <p class="text-xs font-medium ui-text-secondary">Standard Key Usage</p>
+            <p class="text-xs font-medium text-foreground/80">Standard Key Usage</p>
             <FlatToggle
               label="Digital Signature"
               :enabled="nativeDigitalSignature"
@@ -1281,7 +1281,7 @@ async function submitAutoIssue(): Promise<void> {
           </div>
 
           <div class="space-y-2">
-            <p class="text-xs font-medium ui-text-secondary">Extended Key Usage</p>
+            <p class="text-xs font-medium text-foreground/80">Extended Key Usage</p>
             <FlatToggle
               label="Server Authentication"
               :enabled="nativeServerAuth"
@@ -1297,48 +1297,48 @@ async function submitAutoIssue(): Promise<void> {
       </template>
 
       <template v-else-if="issueMode === 'token'">
-        <label class="block text-xs font-medium ui-text-secondary" for="token-input">Provisioner token</label>
-        <input id="token-input" v-model="tokenInput" type="text" class="ui-input mt-1.5 font-mono text-[11px]" autocomplete="off" />
+        <label class="block text-xs font-medium text-foreground/80" for="token-input">Provisioner token</label>
+        <input id="token-input" v-model="tokenInput" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 font-mono text-[11px]" autocomplete="off" />
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="token-csr-input">
+        <label class="mt-3 block text-xs font-medium text-foreground/80" for="token-csr-input">
           Certificate signing request
         </label>
         <textarea
           id="token-csr-input"
           v-model="tokenCsrInput"
           rows="10"
-          class="ui-textarea mt-1.5"
+          class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
           placeholder="-----BEGIN CERTIFICATE REQUEST-----"
           spellcheck="false"
         />
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="token-ttl-input">
+        <label class="mt-3 block text-xs font-medium text-foreground/80" for="token-ttl-input">
           TTL (optional)
         </label>
-        <input id="token-ttl-input" v-model="tokenTtlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
+        <input id="token-ttl-input" v-model="tokenTtlInput" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 max-w-xs" placeholder="720h" />
       </template>
 
       <template v-else-if="issueMode === 'auto'">
-        <label class="block text-xs font-medium ui-text-secondary" for="auto-cn-input">Common Name</label>
-        <input id="auto-cn-input" v-model="autoCommonName" type="text" class="ui-input mt-1.5" autocomplete="off" />
+        <label class="block text-xs font-medium text-foreground/80" for="auto-cn-input">Common Name</label>
+        <input id="auto-cn-input" v-model="autoCommonName" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" autocomplete="off" />
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary">DNS SANs</label>
+        <label class="mt-3 block text-xs font-medium text-foreground/80">DNS SANs</label>
         <TagInput v-model="autoDnsSans" placeholder="api.example.com" />
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary">IP SANs</label>
+        <label class="mt-3 block text-xs font-medium text-foreground/80">IP SANs</label>
         <TagInput v-model="autoIpSans" placeholder="10.0.0.1" />
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="auto-ttl-input">
+        <label class="mt-3 block text-xs font-medium text-foreground/80" for="auto-ttl-input">
           TTL (optional)
         </label>
-        <input id="auto-ttl-input" v-model="autoTtlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
+        <input id="auto-ttl-input" v-model="autoTtlInput" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 max-w-xs" placeholder="720h" />
       </template>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="isIssuing" @click="closeIssueModal">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="isIssuing" @click="closeIssueModal">
           Cancel
         </button>
-        <button type="button" class="ui-btn-primary" :disabled="isIssuing" @click="submitIssue">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="isIssuing" @click="submitIssue">
           {{
             isIssuing
               ? 'Working…'
@@ -1355,55 +1355,55 @@ async function submitAutoIssue(): Promise<void> {
     </Modal>
 
     <Modal :open="revokeModalOpen" title="Revoke Certificate" @close="closeRevokeModal">
-      <div class="mb-3 ui-alert-error text-xs" role="alert">
+      <div class="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">
         This action is irreversible. The certificate will be added to the CRL and clients must reject it.
       </div>
 
-      <p class="mb-3 text-xs ui-text-muted">
+      <p class="mb-3 text-xs text-muted-foreground">
         Permanently revokes serial
-        <code class="ui-code">{{ revokeTargetSerial }}</code><template v-if="showApiHints">
+        <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">{{ revokeTargetSerial }}</code><template v-if="showApiHints">
           via
-          <code class="ui-code">POST /api/v1/certificates/revoke</code></template>.
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/certificates/revoke</code></template>.
       </p>
 
-      <div v-if="revokeError" class="mb-3 ui-alert-error text-xs" role="alert">{{ revokeError }}</div>
+      <div v-if="revokeError" class="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">{{ revokeError }}</div>
 
-      <label class="block text-xs font-medium ui-text-secondary" for="revoke-confirm-input">
+      <label class="block text-xs font-medium text-foreground/80" for="revoke-confirm-input">
         Confirmation
       </label>
       <input
         id="revoke-confirm-input"
         v-model="revokeConfirmInput"
         type="text"
-        class="ui-input mt-1.5 font-mono"
+        class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 font-mono"
         :placeholder="`Type ${revokeSerialPrefix || 'serial prefix'} or REVOKE`"
         autocomplete="off"
         spellcheck="false"
       />
-      <p class="mt-1 text-[11px] ui-text-muted">
-        Enter the first 8 characters of the serial number (<code class="ui-code">{{ revokeSerialPrefix }}</code>)
-        or type <code class="ui-code">REVOKE</code> to enable confirmation.
+      <p class="mt-1 text-[11px] text-muted-foreground">
+        Enter the first 8 characters of the serial number (<code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">{{ revokeSerialPrefix }}</code>)
+        or type <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">REVOKE</code> to enable confirmation.
       </p>
 
-      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="revoke-reason-code">Reason code</label>
-      <select id="revoke-reason-code" v-model.number="revokeReasonCode" class="ui-input mt-1.5">
+      <label class="mt-3 block text-xs font-medium text-foreground/80" for="revoke-reason-code">Reason code</label>
+      <select id="revoke-reason-code" v-model.number="revokeReasonCode" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5">
         <option v-for="reason in REVOKE_REASONS" :key="reason.code" :value="reason.code">
           {{ reason.label }} ({{ reason.code }})
         </option>
       </select>
 
-      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="revoke-reason-text">
+      <label class="mt-3 block text-xs font-medium text-foreground/80" for="revoke-reason-text">
         Reason text (optional)
       </label>
-      <input id="revoke-reason-text" v-model="revokeReasonText" type="text" class="ui-input mt-1.5" autocomplete="off" />
+      <input id="revoke-reason-text" v-model="revokeReasonText" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" autocomplete="off" />
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="revokeLoading" @click="closeRevokeModal">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="revokeLoading" @click="closeRevokeModal">
           Cancel
         </button>
         <button
           type="button"
-          class="ui-btn-danger"
+          class="inline-flex items-center justify-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground shadow-none transition-colors hover:bg-destructive/90 disabled:pointer-events-none disabled:opacity-50"
           :disabled="revokeLoading || !canConfirmRevoke"
           @click="submitRevoke"
         >
@@ -1413,31 +1413,31 @@ async function submitAutoIssue(): Promise<void> {
     </Modal>
 
     <Modal :open="rekeyModalOpen" title="Rekey Certificate" wide @close="closeRekeyModal">
-      <p v-if="showApiHints" class="mb-3 text-xs ui-text-muted">
+      <p v-if="showApiHints" class="mb-3 text-xs text-muted-foreground">
         Submit a new CSR via
-        <code class="ui-code">POST /api/v1/certificates/rekey</code>.
+        <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/certificates/rekey</code>.
       </p>
 
-      <div v-if="rekeyError" class="mb-3 ui-alert-error text-xs" role="alert">{{ rekeyError }}</div>
-      <div v-if="rekeySuccess" class="mb-3 ui-alert-success text-xs" role="status">{{ rekeySuccess }}</div>
+      <div v-if="rekeyError" class="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">{{ rekeyError }}</div>
+      <div v-if="rekeySuccess" class="mb-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-foreground text-xs" role="status">{{ rekeySuccess }}</div>
 
-      <label class="block text-xs font-medium ui-text-secondary" for="rekey-csr-input">
+      <label class="block text-xs font-medium text-foreground/80" for="rekey-csr-input">
         New certificate signing request
       </label>
       <textarea
         id="rekey-csr-input"
         v-model="rekeyCsrInput"
         rows="10"
-        class="ui-textarea mt-1.5"
+        class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
         placeholder="-----BEGIN CERTIFICATE REQUEST-----"
         spellcheck="false"
       />
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="rekeyLoading" @click="closeRekeyModal">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="rekeyLoading" @click="closeRekeyModal">
           Cancel
         </button>
-        <button type="button" class="ui-btn-primary" :disabled="rekeyLoading" @click="submitRekey">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="rekeyLoading" @click="submitRekey">
           {{ rekeyLoading ? 'Rekeying…' : 'Submit Rekey' }}
         </button>
       </template>

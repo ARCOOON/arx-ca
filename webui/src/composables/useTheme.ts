@@ -20,7 +20,8 @@ export function applyTheme(theme: ThemeMode): void {
     return
   }
 
-  document.documentElement.setAttribute('data-theme', theme)
+  document.documentElement.classList.toggle('dark', theme === 'dark')
+  document.documentElement.removeAttribute('data-theme')
   localStorage.setItem(STORAGE_KEY, theme)
 }
 

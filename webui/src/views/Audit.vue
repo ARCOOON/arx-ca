@@ -195,52 +195,52 @@ onMounted(() => {
 
 <template>
   <div class="space-y-4">
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
+    <div v-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
       {{ errorMessage }}
     </div>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+    <section class="bg-card border-border">
+      <header class="border-b border-border flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
         <div>
-          <h2 class="text-sm font-semibold ui-text-primary">Immutable Audit Log</h2>
-          <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
+          <h2 class="text-sm font-semibold text-foreground">Immutable Audit Log</h2>
+          <p v-if="showApiHints" class="mt-0.5 text-xs text-muted-foreground">
             Forensic request trail from
-            <code class="ui-code">GET /api/v1/audit</code>
+            <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/audit</code>
           </p>
         </div>
-        <div class="flex items-center gap-2 text-xs ui-text-muted">
+        <div class="flex items-center gap-2 text-xs text-muted-foreground">
           <span>{{ total }} entries</span>
           <span>·</span>
           <span>Page {{ currentPage }} / {{ totalPages }}</span>
         </div>
       </header>
 
-      <div class="ui-border-b px-4 py-3">
+      <div class="border-b border-border px-4 py-3">
         <button
           type="button"
-          class="flex w-full items-center gap-2 text-left text-xs font-medium ui-text-secondary"
+          class="flex w-full items-center gap-2 text-left text-xs font-medium text-foreground/80"
           :aria-expanded="filtersOpen"
           @click="filtersOpen = !filtersOpen"
         >
-          <Filter class="h-3.5 w-3.5" aria-hidden="true" />
+          <Filter class="h-3.5 w-3.5" />
           <span>Search</span>
-          <span v-if="hasActiveFilters" class="ui-text-muted">(active)</span>
+          <span v-if="hasActiveFilters" class="text-muted-foreground">(active)</span>
           <ChevronDown
             class="ml-auto h-4 w-4 transition-transform"
             :class="{ 'rotate-180': filtersOpen }"
-            aria-hidden="true"
+           
           />
         </button>
 
         <div
           v-show="filtersOpen"
-          class="mt-3 grid gap-3 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3 sm:grid-cols-3"
+          class="mt-3 grid gap-3 rounded-md border border-border p-3 sm:grid-cols-3"
         >
           <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="audit-filter-action">
+            <label class="block text-xs font-medium text-foreground/80" for="audit-filter-action">
               Action
             </label>
-            <select id="audit-filter-action" v-model="draftAction" class="ui-input mt-1.5 w-full">
+            <select id="audit-filter-action" v-model="draftAction" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 w-full">
               <option value="">All actions</option>
               <option v-for="action in AUDIT_ACTIONS" :key="action" :value="action">
                 {{ action }}
@@ -249,14 +249,14 @@ onMounted(() => {
           </div>
 
           <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="audit-filter-actor">
+            <label class="block text-xs font-medium text-foreground/80" for="audit-filter-actor">
               Actor
             </label>
             <input
               id="audit-filter-actor"
               v-model="draftActor"
               type="text"
-              class="ui-input mt-1.5 w-full"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 w-full"
               placeholder="User ID or type"
               autocomplete="off"
               @keydown.enter.prevent="applyFilters"
@@ -264,14 +264,14 @@ onMounted(() => {
           </div>
 
           <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="audit-filter-ip">
+            <label class="block text-xs font-medium text-foreground/80" for="audit-filter-ip">
               IP
             </label>
             <input
               id="audit-filter-ip"
               v-model="draftIP"
               type="text"
-              class="ui-input mt-1.5 w-full"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5 w-full"
               placeholder="203.0.113.10"
               autocomplete="off"
               @keydown.enter.prevent="applyFilters"
@@ -279,12 +279,12 @@ onMounted(() => {
           </div>
 
           <div class="flex flex-wrap items-end gap-2 sm:col-span-3">
-            <button type="button" class="ui-btn-primary" :disabled="isLoading" @click="applyFilters">
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="isLoading" @click="applyFilters">
               Apply Search
             </button>
             <button
               type="button"
-              class="ui-btn-secondary"
+              class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
               :disabled="isLoading || !hasActiveFilters"
               @click="clearFilters"
             >
@@ -304,13 +304,13 @@ onMounted(() => {
         <template #cell-expand="{ row }">
           <button
             type="button"
-            class="ui-btn-secondary inline-flex h-7 w-7 items-center justify-center p-0"
+            class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 inline-flex h-7 w-7 items-center justify-center p-0"
             :aria-expanded="isExpanded(row.id)"
             :aria-label="isExpanded(row.id) ? 'Collapse details' : 'Expand details'"
             @click="toggleExpanded(row.id)"
           >
-            <ChevronDown v-if="isExpanded(row.id)" class="h-4 w-4" aria-hidden="true" />
-            <ChevronRight v-else class="h-4 w-4" aria-hidden="true" />
+            <ChevronDown v-if="isExpanded(row.id)" class="h-4 w-4" />
+            <ChevronRight v-else class="h-4 w-4" />
           </button>
         </template>
 
@@ -319,7 +319,7 @@ onMounted(() => {
         </template>
 
         <template #cell-actor="{ row }">
-          <span class="ui-text-primary">{{ actorLabel(row) }}</span>
+          <span class="text-foreground">{{ actorLabel(row) }}</span>
         </template>
 
         <template #cell-status_code="{ row }">
@@ -331,21 +331,21 @@ onMounted(() => {
         </template>
 
         <template #row-expanded="{ row, columns }">
-          <tr v-if="isExpanded(row.id)" class="ui-table-row">
+          <tr v-if="isExpanded(row.id)" class="hover:bg-muted/50">
             <td :colspan="columns.length" class="px-4 py-3">
               <div class="grid gap-3 md:grid-cols-2">
                 <div class="space-y-1 text-xs">
-                  <p class="font-medium ui-text-primary">Request ID</p>
-                  <p class="break-all font-mono ui-text-secondary">{{ row.request_id }}</p>
+                  <p class="font-medium text-foreground">Request ID</p>
+                  <p class="break-all font-mono text-foreground/80">{{ row.request_id }}</p>
                 </div>
                 <div class="space-y-1 text-xs">
-                  <p class="font-medium ui-text-primary">User-Agent</p>
-                  <p class="break-all ui-text-secondary">{{ userAgent(row) }}</p>
+                  <p class="font-medium text-foreground">User-Agent</p>
+                  <p class="break-all text-foreground/80">{{ userAgent(row) }}</p>
                 </div>
               </div>
               <div class="mt-3 space-y-1 text-xs">
-                <p class="font-medium ui-text-primary">Metadata</p>
-                <pre class="ui-inset max-h-64 overflow-auto p-3 font-mono text-[10px] ui-text-secondary">{{ metadataPreview(row) }}</pre>
+                <p class="font-medium text-foreground">Metadata</p>
+                <pre class="rounded-md border border-input bg-muted/30 max-h-64 overflow-auto p-3 font-mono text-[10px] text-foreground/80">{{ metadataPreview(row) }}</pre>
               </div>
             </td>
           </tr>
@@ -354,9 +354,9 @@ onMounted(() => {
 
       <footer
         v-if="total > 0"
-        class="ui-border-t flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+        class="border-t border-border flex flex-wrap items-center justify-between gap-3 px-4 py-3"
       >
-        <p class="text-xs ui-text-muted">
+        <p class="text-xs text-muted-foreground">
           Showing {{ offset + 1 }}–{{ Math.min(offset + PAGE_SIZE, total) }} of {{ total }}
         </p>
         <Pagination

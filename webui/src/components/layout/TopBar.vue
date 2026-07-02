@@ -7,10 +7,12 @@ import Menu from 'lucide-vue-next/dist/esm/icons/menu.js'
 import Moon from 'lucide-vue-next/dist/esm/icons/moon.js'
 import Sun from 'lucide-vue-next/dist/esm/icons/sun.js'
 import UserRound from 'lucide-vue-next/dist/esm/icons/user-round.js'
+import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import NotificationDrawer from '../NotificationDrawer.vue'
 import { useNotifications } from '../../composables/useNotifications'
 import { useAuthStore } from '../../store/auth'
-import { applyTheme, resolveInitialTheme, type ThemeMode, toggleTheme } from '../../composables/useTheme'
+import { applyTheme, resolveInitialTheme, type ThemeMode } from '../../composables/useTheme'
 
 const emit = defineEmits<{
   logout: []
@@ -40,7 +42,13 @@ const roleLabel = computed(() => {
   return 'Administrator'
 })
 
-const isDark = computed(() => theme.value === 'dark')
+const isDark = computed({
+  get: () => theme.value === 'dark',
+  set: (value: boolean) => {
+    theme.value = value ? 'dark' : 'light'
+    applyTheme(theme.value)
+  },
+})
 
 const badgeLabel = computed(() => {
   const count = unreadCount.value
@@ -49,20 +57,6 @@ const badgeLabel = computed(() => {
   }
   return count > 99 ? '99+' : String(count)
 })
-
-function onThemeToggle(): void {
-  theme.value = toggleTheme(theme.value)
-}
-
-function setLightTheme(): void {
-  theme.value = 'light'
-  applyTheme('light')
-}
-
-function setDarkTheme(): void {
-  theme.value = 'dark'
-  applyTheme('dark')
-}
 
 function toggleDrawer(): void {
   drawerOpen.value = !drawerOpen.value
@@ -74,77 +68,72 @@ function closeDrawer(): void {
 </script>
 
 <template>
-  <header class="ui-border-b ui-chrome-bar flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-5">
+  <header class="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:gap-3 sm:px-5">
     <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-      <button
-        type="button"
-        class="ui-btn-secondary inline-flex h-8 w-8 shrink-0 items-center justify-center p-0 md:hidden"
+      <Button
+        variant="outline"
+        size="icon-sm"
+        class="md:hidden"
         aria-label="Open navigation menu"
         @click="emit('toggle-mobile-nav')"
       >
-        <Menu class="h-4 w-4" aria-hidden="true" />
-      </button>
+        <Menu class="h-4 w-4" />
+      </Button>
 
       <div class="min-w-0">
-        <h1 class="truncate text-base font-semibold ui-text-primary">{{ pageTitle }}</h1>
-        <p v-if="pageSubtitle" class="truncate text-xs ui-text-muted">{{ pageSubtitle }}</p>
+        <h1 class="truncate text-base font-semibold text-foreground">{{ pageTitle }}</h1>
+        <p v-if="pageSubtitle" class="truncate text-xs text-muted-foreground">{{ pageSubtitle }}</p>
       </div>
     </div>
 
     <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
       <div class="hidden items-center gap-2 sm:flex">
         <span class="sr-only">Color theme</span>
-        <Sun v-if="isDark" class="h-3.5 w-3.5 ui-text-muted" aria-hidden="true" />
-        <Moon v-else class="h-3.5 w-3.5 ui-text-muted" aria-hidden="true" />
-        <button
-          type="button"
-          class="ui-theme-toggle"
-          :data-active="isDark"
+        <Sun v-if="isDark" class="h-3.5 w-3.5 text-muted-foreground" />
+        <Moon v-else class="h-3.5 w-3.5 text-muted-foreground" />
+        <Switch
+          :checked="isDark"
           :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
-          @click="onThemeToggle"
-          @keydown.home.prevent="setLightTheme"
-          @keydown.end.prevent="setDarkTheme"
-        >
-          <span class="ui-theme-toggle-thumb" />
-        </button>
+          @update:checked="isDark = $event"
+        />
       </div>
 
-      <button
-        type="button"
-        class="ui-topbar-control ui-btn-secondary relative inline-flex h-8 w-8 shrink-0 items-center justify-center p-0"
+      <Button
+        variant="outline"
+        size="icon-sm"
+        class="relative"
         :aria-label="unreadCount > 0 ? `${unreadCount} unread notifications` : 'Open notifications'"
         @click="toggleDrawer"
       >
-        <Bell class="h-4 w-4" aria-hidden="true" />
+        <Bell class="h-4 w-4" />
         <span
           v-if="unreadCount > 0"
-          class="absolute -top-1 -right-1 inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-[var(--radius-pill)] bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
-          aria-hidden="true"
+          class="absolute -top-1 -right-1 inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground"
+         
         >
           {{ badgeLabel }}
         </span>
-      </button>
+      </Button>
 
-      <div class="ui-topbar-user-badge hidden sm:flex" aria-label="Signed in user">
-        <UserRound class="h-3.5 w-3.5 shrink-0 ui-text-muted" aria-hidden="true" />
+      <div
+        class="hidden items-center gap-2 rounded-md border border-input bg-background px-3 sm:flex"
+        aria-label="Signed in user"
+      >
+        <UserRound class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         <div class="flex min-w-0 flex-col items-end justify-center text-right">
-          <span class="whitespace-nowrap text-[10px] font-medium uppercase leading-tight tracking-wide ui-text-muted">
+          <span class="whitespace-nowrap text-[10px] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
             Signed in
           </span>
-          <span class="mt-0.5 max-w-[12rem] truncate whitespace-nowrap text-xs leading-tight ui-text-secondary">
+          <span class="mt-0.5 max-w-[12rem] truncate whitespace-nowrap text-xs leading-tight text-foreground/80">
             {{ roleLabel }}
           </span>
         </div>
       </div>
 
-      <button
-        type="button"
-        class="ui-topbar-control ui-btn-secondary inline-flex shrink-0 items-center gap-1.5"
-        @click="emit('logout')"
-      >
-        <LogOut class="h-3.5 w-3.5" aria-hidden="true" />
+      <Button variant="outline" class="shrink-0 gap-1.5" @click="emit('logout')">
+        <LogOut class="h-3.5 w-3.5" />
         Logout
-      </button>
+      </Button>
     </div>
   </header>
 

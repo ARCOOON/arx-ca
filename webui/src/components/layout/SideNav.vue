@@ -16,6 +16,8 @@ import ShieldCheck from 'lucide-vue-next/dist/esm/icons/shield-check.js'
 import Webhook from 'lucide-vue-next/dist/esm/icons/webhook.js'
 import Terminal from 'lucide-vue-next/dist/esm/icons/terminal.js'
 import X from 'lucide-vue-next/dist/esm/icons/x.js'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   collapsed: boolean
@@ -49,7 +51,7 @@ const navItems: NavItem[] = [
   { label: 'Settings', to: '/settings', icon: Settings },
 ]
 
-const sidebarWidthClass = computed(() => (props.collapsed ? 'w-14' : 'w-52'))
+const sidebarWidthClass = computed(() => (props.collapsed ? 'w-14' : 'w-56'))
 
 const mobileDrawerClass = computed(() =>
   props.mobileOpen
@@ -58,7 +60,7 @@ const mobileDrawerClass = computed(() =>
 )
 
 function isActive(path: string): boolean {
-  return route.path === path
+  return route.path === path || route.path.startsWith(`${path}/`)
 }
 
 function toggleCollapsed(): void {
@@ -72,58 +74,64 @@ function handleNavClick(): void {
 
 <template>
   <aside
-    class="ui-border-r ui-surface fixed inset-y-0 left-0 z-40 flex h-full shrink-0 flex-col transition-[transform,width] duration-150 md:relative md:z-auto"
-    :class="[sidebarWidthClass, mobileDrawerClass]"
+    :class="cn(
+      'fixed inset-y-0 left-0 z-40 flex h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[transform,width] duration-150 md:relative md:z-auto',
+      sidebarWidthClass,
+      mobileDrawerClass,
+    )"
   >
     <div
-      class="ui-border-b flex items-center px-3 py-3"
+      class="flex items-center border-b border-sidebar-border px-3 py-4"
       :class="collapsed ? 'justify-center' : 'gap-2.5'"
     >
-      <div class="ui-brand-icon flex h-8 w-8 shrink-0 items-center justify-center">
-        <ShieldCheck class="h-4 w-4" style="color: var(--accent-color)" aria-hidden="true" />
+      <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent">
+        <ShieldCheck class="h-4 w-4 text-primary" />
       </div>
       <div v-if="!collapsed" class="min-w-0 flex-1">
-        <p class="truncate text-sm font-semibold ui-text-primary">Arx CA</p>
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Management</p>
+        <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Arx CA</p>
+        <p class="font-heading text-sm font-semibold tracking-tight">Management</p>
       </div>
-      <button
-        type="button"
-        class="ui-btn-secondary inline-flex h-7 w-7 shrink-0 items-center justify-center p-0 md:hidden"
+      <Button
+        variant="outline"
+        size="icon-sm"
+        class="md:hidden"
         aria-label="Close navigation menu"
         @click="emit('close-mobile')"
       >
-        <X class="h-4 w-4" aria-hidden="true" />
-      </button>
+        <X class="h-4 w-4" />
+      </Button>
     </div>
 
-    <nav class="custom-scrollbar flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
+    <nav class="custom-scrollbar flex-1 space-y-1 overflow-y-auto p-3">
       <RouterLink
         v-for="item in navItems"
         :key="item.to"
         :to="item.to"
-        class="ui-nav-link flex items-center text-xs"
-        :class="[
-          collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-2.5 py-2',
-          isActive(item.to) ? 'ui-nav-link-active' : '',
-        ]"
+        :class="cn(
+          'flex items-center rounded-md border-l-4 px-3 py-2 text-sm transition-colors',
+          collapsed ? 'justify-center px-0' : 'gap-3',
+          isActive(item.to)
+            ? 'border-primary bg-primary/15 font-semibold text-foreground'
+            : 'border-transparent font-medium text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+        )"
         :title="collapsed ? item.label : undefined"
         @click="handleNavClick"
       >
-        <component :is="item.icon" class="h-4 w-4 shrink-0" aria-hidden="true" />
+        <component :is="item.icon" class="h-4 w-4 shrink-0" />
         <span v-if="!collapsed">{{ item.label }}</span>
       </RouterLink>
     </nav>
 
-    <div class="ui-border-t hidden p-2 md:block">
-      <button
-        type="button"
-        class="ui-btn-secondary flex w-full items-center justify-center py-2"
+    <div class="hidden border-t border-sidebar-border p-2 md:block">
+      <Button
+        variant="outline"
+        class="w-full"
         :aria-label="collapsed ? 'Expand navigation' : 'Collapse navigation'"
         @click="toggleCollapsed"
       >
-        <ChevronRight v-if="collapsed" class="h-4 w-4" aria-hidden="true" />
-        <ChevronLeft v-else class="h-4 w-4" aria-hidden="true" />
-      </button>
+        <ChevronRight v-if="collapsed" class="h-4 w-4" />
+        <ChevronLeft v-else class="h-4 w-4" />
+      </Button>
     </div>
   </aside>
 </template>

@@ -297,53 +297,53 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
 <template>
   <div class="space-y-4">
     <section class="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">User Certificates</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
+      <article class="bg-card border-border-muted px-4 py-3">
+        <p class="text-[10px] uppercase tracking-wide text-muted-foreground">User Certificates</p>
+        <p class="mt-1 text-lg font-semibold text-foreground">
           {{ statsLoading ? '…' : (stats?.total_user_certs ?? '—') }}
         </p>
-        <p class="text-xs ui-text-muted">Persisted user certificate records</p>
+        <p class="text-xs text-muted-foreground">Persisted user certificate records</p>
       </article>
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Host Certificates</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
+      <article class="bg-card border-border-muted px-4 py-3">
+        <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Host Certificates</p>
+        <p class="mt-1 text-lg font-semibold text-foreground">
           {{ statsLoading ? '…' : (stats?.total_host_certs ?? '—') }}
         </p>
-        <p class="text-xs ui-text-muted">Persisted host certificate records</p>
+        <p class="text-xs text-muted-foreground">Persisted host certificate records</p>
       </article>
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Currently Active</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
+      <article class="bg-card border-border-muted px-4 py-3">
+        <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Currently Active</p>
+        <p class="mt-1 text-lg font-semibold text-foreground">
           {{ statsLoading ? '…' : (stats?.active_now ?? '—') }}
         </p>
-        <p class="text-xs ui-text-muted">Valid at the current time</p>
+        <p class="text-xs text-muted-foreground">Valid at the current time</p>
       </article>
     </section>
 
-    <p v-if="statsError" class="ui-alert-error rounded-[var(--radius-control)] px-3 py-2 text-xs" role="alert">
+    <p v-if="statsError" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive rounded-md px-3 py-2 text-xs" role="alert">
       {{ statsError }}
     </p>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
+    <section class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 class="text-sm font-semibold ui-text-primary">SSH Certificate Inventory</h2>
-            <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
+            <h2 class="text-sm font-semibold text-foreground">SSH Certificate Inventory</h2>
+            <p v-if="showApiHints" class="mt-0.5 text-xs text-muted-foreground">
               Issued certificates persisted for auditing via
-              <code class="ui-code">GET /api/v1/ssh/certificates</code>.
+              <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/ssh/certificates</code>.
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-primary" @click="openUserModal">New User Cert</button>
-            <button type="button" class="ui-btn-secondary" @click="openHostModal">New Host Cert</button>
-            <button type="button" class="ui-btn-secondary" @click="openInspectModal">Inspect Key</button>
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" @click="openUserModal">New User Cert</button>
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" @click="openHostModal">New Host Cert</button>
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" @click="openInspectModal">Inspect Key</button>
           </div>
         </div>
       </header>
 
       <div class="px-4 py-3">
-        <div v-if="tableError" class="mb-3 ui-alert-error rounded-[var(--radius-control)] text-xs" role="alert">
+        <div v-if="tableError" class="mb-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive rounded-md text-xs" role="alert">
           {{ tableError }}
         </div>
 
@@ -359,7 +359,7 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
           </template>
 
           <template #cell-principals="{ row }">
-            <span class="text-xs ui-text-secondary">{{ row.principals.join(', ') || '—' }}</span>
+            <span class="text-xs text-foreground/80">{{ row.principals.join(', ') || '—' }}</span>
           </template>
 
           <template #cell-fingerprint="{ row }">
@@ -389,10 +389,10 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
       </div>
     </section>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">SSH CA Roots</h2>
-        <p class="mt-0.5 text-xs ui-text-muted">
+    <section class="bg-card border-border-muted">
+      <header class="border-b border-border px-4 py-2.5">
+        <h2 class="text-sm font-semibold text-foreground">SSH CA Roots</h2>
+        <p class="mt-0.5 text-xs text-muted-foreground">
           Trust anchors for client and server configuration.<template v-if="showApiHints">
             See
             <a
@@ -405,11 +405,11 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
         </p>
       </header>
 
-      <div v-if="rootsLoading" class="px-4 py-3 text-sm ui-text-muted">Loading SSH roots…</div>
-      <div v-else-if="rootsError" class="px-4 py-3 ui-alert-error text-xs" role="alert">
+      <div v-if="rootsLoading" class="px-4 py-3 text-sm text-muted-foreground">Loading SSH roots…</div>
+      <div v-else-if="rootsError" class="px-4 py-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">
         {{ rootsError }}
       </div>
-      <div v-else class="grid grid-cols-1 gap-px lg:grid-cols-2" style="background-color: var(--border-subtle)">
+      <div v-else class="grid grid-cols-1 gap-px lg:grid-cols-2">
         <article
           v-for="section in [
             { title: 'User CA', keys: userRoots, prefix: 'ssh-user-ca' },
@@ -417,26 +417,25 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
           ]"
           :key="section.title"
           class="px-4 py-3"
-          style="background-color: var(--bg-inset)"
         >
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">{{ section.title }}</p>
-          <div v-if="section.keys.length === 0" class="mt-2 text-xs ui-text-muted">No keys configured.</div>
+          <p class="text-[10px] uppercase tracking-wide text-muted-foreground">{{ section.title }}</p>
+          <div v-if="section.keys.length === 0" class="mt-2 text-xs text-muted-foreground">No keys configured.</div>
           <ul v-else class="mt-2 space-y-2">
             <li
               v-for="(key, index) in section.keys"
               :key="`${section.prefix}-${index}`"
-              class="rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-2 text-xs"
+              class="rounded-md border border-border p-2 text-xs"
             >
               <div class="flex flex-wrap items-start justify-between gap-2">
                 <div class="min-w-0">
                   <StatusBadge :label="key.key_type" tone="neutral" />
-                  <p class="mt-1 truncate font-mono ui-text-secondary" :title="key.fingerprint">
+                  <p class="mt-1 truncate font-mono text-foreground/80" :title="key.fingerprint">
                     {{ key.fingerprint }}
                   </p>
                 </div>
                 <button
                   type="button"
-                  class="ui-btn-secondary shrink-0 text-[11px]"
+                  class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 shrink-0 text-[11px]"
                   @click="downloadRootKey(key, `${section.prefix}-${index + 1}.pub`)"
                 >
                   Download .pub
@@ -450,15 +449,15 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
 
     <Modal :open="userModalOpen" title="New User Certificate" wide @close="closeUserModal">
       <div class="space-y-3">
-        <p v-if="showApiHints" class="text-xs ui-text-muted">
-          <code class="ui-code">POST /api/v1/ssh/generate/user</code>
+        <p v-if="showApiHints" class="text-xs text-muted-foreground">
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/ssh/generate/user</code>
         </p>
 
-        <div v-if="userError" class="ui-alert-error rounded-[var(--radius-control)] text-xs" role="alert">
+        <div v-if="userError" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive rounded-md text-xs" role="alert">
           {{ userError }}
         </div>
 
-        <label class="block text-xs font-medium ui-text-secondary">SSH public key</label>
+        <label class="block text-xs font-medium text-foreground/80">SSH public key</label>
         <textarea
           v-model="userPublicKey"
           rows="4"
@@ -469,42 +468,42 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label class="block text-xs font-medium ui-text-secondary">Principals</label>
+            <label class="block text-xs font-medium text-foreground/80">Principals</label>
             <input
               v-model="userPrincipals"
               type="text"
-              class="ui-input mt-1.5"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
               placeholder="root, admin"
               autocomplete="off"
             />
-            <p class="mt-1 text-[10px] ui-text-muted">Comma-separated Unix usernames.</p>
+            <p class="mt-1 text-[10px] text-muted-foreground">Comma-separated Unix usernames.</p>
           </div>
           <div>
-            <label class="block text-xs font-medium ui-text-secondary">TTL / validity</label>
-            <input v-model="userTtl" type="text" class="ui-input mt-1.5" placeholder="4h" />
+            <label class="block text-xs font-medium text-foreground/80">TTL / validity</label>
+            <input v-model="userTtl" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" placeholder="4h" />
           </div>
         </div>
 
-        <div v-if="userResult" class="space-y-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3">
+        <div v-if="userResult" class="space-y-2 rounded-md border border-border p-3">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <p class="text-xs ui-text-secondary">
+            <p class="text-xs text-foreground/80">
               Signed {{ userResult.certificate_type }} certificate (serial {{ userResult.serial }}).
             </p>
             <button
               type="button"
-              class="ui-btn-secondary text-[11px]"
+              class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 text-[11px]"
               @click="downloadCertificate(userResult, 'ssh-user-cert.pub')"
             >
               Download .pub
             </button>
           </div>
-          <pre class="ui-inset max-h-48 overflow-auto rounded-[var(--radius-control)] p-3 font-mono text-[10px] ui-text-secondary">{{ userResult.certificate }}</pre>
+          <pre class="rounded-md border border-input bg-muted/30 max-h-48 overflow-auto rounded-md p-3 font-mono text-[10px] text-foreground/80">{{ userResult.certificate }}</pre>
         </div>
       </div>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="userLoading" @click="closeUserModal">Cancel</button>
-        <button type="button" class="ui-btn-primary" :disabled="userLoading" @click="submitUserCertificate">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="userLoading" @click="closeUserModal">Cancel</button>
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="userLoading" @click="submitUserCertificate">
           {{ userLoading ? 'Generating…' : 'Generate User Certificate' }}
         </button>
       </template>
@@ -512,15 +511,15 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
 
     <Modal :open="hostModalOpen" title="New Host Certificate" wide @close="closeHostModal">
       <div class="space-y-3">
-        <p v-if="showApiHints" class="text-xs ui-text-muted">
-          <code class="ui-code">POST /api/v1/ssh/generate/host</code>
+        <p v-if="showApiHints" class="text-xs text-muted-foreground">
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/ssh/generate/host</code>
         </p>
 
-        <div v-if="hostError" class="ui-alert-error rounded-[var(--radius-control)] text-xs" role="alert">
+        <div v-if="hostError" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive rounded-md text-xs" role="alert">
           {{ hostError }}
         </div>
 
-        <label class="block text-xs font-medium ui-text-secondary">SSH public key</label>
+        <label class="block text-xs font-medium text-foreground/80">SSH public key</label>
         <textarea
           v-model="hostPublicKey"
           rows="4"
@@ -531,42 +530,42 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
 
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label class="block text-xs font-medium ui-text-secondary">Principals</label>
+            <label class="block text-xs font-medium text-foreground/80">Principals</label>
             <input
               v-model="hostPrincipals"
               type="text"
-              class="ui-input mt-1.5"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
               placeholder="web-01.example.com, 10.0.0.5"
               autocomplete="off"
             />
-            <p class="mt-1 text-[10px] ui-text-muted">Comma-separated hostnames or IP addresses.</p>
+            <p class="mt-1 text-[10px] text-muted-foreground">Comma-separated hostnames or IP addresses.</p>
           </div>
           <div>
-            <label class="block text-xs font-medium ui-text-secondary">TTL / validity</label>
-            <input v-model="hostTtl" type="text" class="ui-input mt-1.5" placeholder="8760h" />
+            <label class="block text-xs font-medium text-foreground/80">TTL / validity</label>
+            <input v-model="hostTtl" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" placeholder="8760h" />
           </div>
         </div>
 
-        <div v-if="hostResult" class="space-y-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3">
+        <div v-if="hostResult" class="space-y-2 rounded-md border border-border p-3">
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <p class="text-xs ui-text-secondary">
+            <p class="text-xs text-foreground/80">
               Signed {{ hostResult.certificate_type }} certificate (serial {{ hostResult.serial }}).
             </p>
             <button
               type="button"
-              class="ui-btn-secondary text-[11px]"
+              class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 text-[11px]"
               @click="downloadCertificate(hostResult, 'ssh-host-cert.pub')"
             >
               Download .pub
             </button>
           </div>
-          <pre class="ui-inset max-h-48 overflow-auto rounded-[var(--radius-control)] p-3 font-mono text-[10px] ui-text-secondary">{{ hostResult.certificate }}</pre>
+          <pre class="rounded-md border border-input bg-muted/30 max-h-48 overflow-auto rounded-md p-3 font-mono text-[10px] text-foreground/80">{{ hostResult.certificate }}</pre>
         </div>
       </div>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="hostLoading" @click="closeHostModal">Cancel</button>
-        <button type="button" class="ui-btn-primary" :disabled="hostLoading" @click="submitHostCertificate">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="hostLoading" @click="closeHostModal">Cancel</button>
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="hostLoading" @click="submitHostCertificate">
           {{ hostLoading ? 'Generating…' : 'Generate Host Certificate' }}
         </button>
       </template>
@@ -574,15 +573,15 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
 
     <Modal :open="inspectModalOpen" title="Inspect SSH Certificate" wide @close="closeInspectModal">
       <div class="space-y-3">
-        <p v-if="showApiHints" class="text-xs ui-text-muted">
-          <code class="ui-code">POST /api/v1/ssh/inspect</code>
+        <p v-if="showApiHints" class="text-xs text-muted-foreground">
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/ssh/inspect</code>
         </p>
 
-        <div v-if="inspectError" class="ui-alert-error rounded-[var(--radius-control)] text-xs" role="alert">
+        <div v-if="inspectError" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive rounded-md text-xs" role="alert">
           {{ inspectError }}
         </div>
 
-        <label class="block text-xs font-medium ui-text-secondary">SSH certificate</label>
+        <label class="block text-xs font-medium text-foreground/80">SSH certificate</label>
         <textarea
           v-model="inspectCertificate"
           rows="6"
@@ -591,45 +590,45 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
           spellcheck="false"
         />
 
-        <div v-if="inspectResult" class="space-y-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3 text-xs">
+        <div v-if="inspectResult" class="space-y-2 rounded-md border border-border p-3 text-xs">
           <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
-              <dt class="ui-text-muted">Type</dt>
-              <dd class="ui-text-secondary">{{ inspectResult.certificate_type }}</dd>
+              <dt class="text-muted-foreground">Type</dt>
+              <dd class="text-foreground/80">{{ inspectResult.certificate_type }}</dd>
             </div>
             <div>
-              <dt class="ui-text-muted">Serial</dt>
-              <dd class="font-mono ui-text-secondary">{{ inspectResult.serial }}</dd>
+              <dt class="text-muted-foreground">Serial</dt>
+              <dd class="font-mono text-foreground/80">{{ inspectResult.serial }}</dd>
             </div>
             <div>
-              <dt class="ui-text-muted">Key ID</dt>
-              <dd class="ui-text-secondary">{{ inspectResult.key_id }}</dd>
+              <dt class="text-muted-foreground">Key ID</dt>
+              <dd class="text-foreground/80">{{ inspectResult.key_id }}</dd>
             </div>
             <div>
-              <dt class="ui-text-muted">Public key type</dt>
-              <dd class="ui-text-secondary">{{ inspectResult.public_key_type }}</dd>
+              <dt class="text-muted-foreground">Public key type</dt>
+              <dd class="text-foreground/80">{{ inspectResult.public_key_type }}</dd>
             </div>
             <div>
-              <dt class="ui-text-muted">Valid after</dt>
-              <dd class="ui-text-secondary">{{ formatDateTime(inspectResult.valid_after) }}</dd>
+              <dt class="text-muted-foreground">Valid after</dt>
+              <dd class="text-foreground/80">{{ formatDateTime(inspectResult.valid_after) }}</dd>
             </div>
             <div>
-              <dt class="ui-text-muted">Valid before</dt>
-              <dd class="ui-text-secondary">{{ formatDateTime(inspectResult.valid_before) }}</dd>
+              <dt class="text-muted-foreground">Valid before</dt>
+              <dd class="text-foreground/80">{{ formatDateTime(inspectResult.valid_before) }}</dd>
             </div>
             <div class="sm:col-span-2">
-              <dt class="ui-text-muted">Principals</dt>
-              <dd class="ui-text-secondary">{{ inspectResult.principals.join(', ') || '—' }}</dd>
+              <dt class="text-muted-foreground">Principals</dt>
+              <dd class="text-foreground/80">{{ inspectResult.principals.join(', ') || '—' }}</dd>
             </div>
           </dl>
         </div>
       </div>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="inspectLoading" @click="closeInspectModal">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" :disabled="inspectLoading" @click="closeInspectModal">
           Close
         </button>
-        <button type="button" class="ui-btn-primary" :disabled="inspectLoading" @click="submitInspect">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" :disabled="inspectLoading" @click="submitInspect">
           {{ inspectLoading ? 'Inspecting…' : 'Inspect Certificate' }}
         </button>
       </template>

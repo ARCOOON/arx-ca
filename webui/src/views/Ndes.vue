@@ -49,11 +49,11 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-4">
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
+    <div v-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
       {{ errorMessage }}
     </div>
 
-    <div v-if="isLoading" class="text-sm ui-text-muted">Loading NDES configuration…</div>
+    <div v-if="isLoading" class="text-sm text-muted-foreground">Loading NDES configuration…</div>
 
     <template v-else-if="status">
       <section class="flex flex-wrap items-center gap-3">
@@ -66,39 +66,39 @@ onMounted(async () => {
           label="AD CS compatible"
           tone="valid"
         />
-        <span v-if="showApiHints" class="text-xs ui-text-muted">
+        <span v-if="showApiHints" class="text-xs text-muted-foreground">
           Discovery:
-          <code class="ui-code">GET /api/v1/ndes/status</code>
+          <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/ndes/status</code>
         </span>
       </section>
 
       <FlatToggle label="NDES enrollment" :enabled="status.enabled" readonly />
 
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Endpoints</h2>
+      <section class="bg-card border-border">
+        <header class="border-b border-border px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-foreground">Endpoints</h2>
         </header>
         <dl class="ui-divide text-xs">
           <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">SCEP endpoint</dt>
-            <dd class="break-all font-mono ui-text-secondary">{{ scepEndpoint }}</dd>
+            <dt class="text-muted-foreground">SCEP endpoint</dt>
+            <dd class="break-all font-mono text-foreground/80">{{ scepEndpoint }}</dd>
           </div>
           <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Admin endpoint</dt>
-            <dd class="break-all font-mono ui-text-secondary">{{ adminEndpoint }}</dd>
+            <dt class="text-muted-foreground">Admin endpoint</dt>
+            <dd class="break-all font-mono text-foreground/80">{{ adminEndpoint }}</dd>
           </div>
         </dl>
       </section>
 
-      <section v-if="status.connectors?.length" class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Connectors</h2>
+      <section v-if="status.connectors?.length" class="bg-card border-border">
+        <header class="border-b border-border px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-foreground">Connectors</h2>
         </header>
         <ul class="ui-divide px-4 py-3 text-xs">
           <li
             v-for="connector in status.connectors"
             :key="connector"
-            class="py-1.5 font-mono ui-text-secondary"
+            class="py-1.5 font-mono text-foreground/80"
           >
             {{ connector }}
           </li>

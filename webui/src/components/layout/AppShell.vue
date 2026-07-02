@@ -6,7 +6,6 @@ import { useUpdater } from '../../composables/useUpdater'
 import { useAuthStore } from '../../store/auth'
 import PostUpdateChangelogModal from '../modals/PostUpdateChangelogModal.vue'
 import NotificationToaster from '../NotificationToaster.vue'
-import ToastHost from '../ui/ToastHost.vue'
 import SideNav from './SideNav.vue'
 import TopBar from './TopBar.vue'
 
@@ -73,12 +72,12 @@ watch(
 </script>
 
 <template>
-  <div class="ui-shell flex h-screen w-screen overflow-hidden">
+  <div class="bg-background flex h-screen w-screen overflow-hidden">
     <div
       v-if="mobileNavOpen"
-      class="ui-mobile-nav-backdrop fixed inset-0 z-30 md:hidden"
+      class="bg-background/80 fixed inset-0 z-30 md:hidden"
       role="presentation"
-      aria-hidden="true"
+     
       @click="closeMobileNav"
     />
 
@@ -100,7 +99,6 @@ watch(
     </div>
 
     <NotificationToaster />
-    <ToastHost />
     <PostUpdateChangelogModal
       :open="triggerChangelogModal"
       @close="dismissChangelogModal"

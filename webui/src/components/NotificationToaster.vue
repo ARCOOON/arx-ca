@@ -11,11 +11,11 @@ const { notifications, remove, clearAll } = useNotifications()
 function cardClass(tone: 'critical' | 'info' | 'success'): string {
   switch (tone) {
     case 'critical':
-      return 'border-red-500/60 bg-[var(--bg-elevated)]'
+      return 'border-red-500/60 bg-card'
     case 'success':
-      return 'border-emerald-500/50 bg-[var(--bg-elevated)]'
+      return 'border-emerald-500/50 bg-card'
     default:
-      return 'border-sky-500/50 bg-[var(--bg-elevated)]'
+      return 'border-sky-500/50 bg-card'
   }
 }
 
@@ -40,7 +40,7 @@ function iconClass(tone: 'critical' | 'info' | 'success'): string {
     <button
       v-if="notifications.length > 1"
       type="button"
-      class="ui-btn-secondary self-end px-2 py-1 text-[10px]"
+      class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 self-end px-2 py-1 text-[10px]"
       @click="clearAll"
     >
       Clear All
@@ -50,7 +50,7 @@ function iconClass(tone: 'critical' | 'info' | 'success'): string {
       <article
         v-for="item in notifications"
         :key="item.id"
-        class="flex items-start gap-2 rounded-[var(--radius-control)] border px-3 py-2.5 shadow-lg"
+        class="flex items-start gap-2 rounded-md border px-3 py-2.5 shadow-lg"
         :class="cardClass(item.tone)"
         role="status"
       >
@@ -58,20 +58,20 @@ function iconClass(tone: 'critical' | 'info' | 'success'): string {
           :is="item.tone === 'critical' ? OctagonAlert : item.tone === 'success' ? CircleCheck : Bell"
           class="mt-0.5 h-4 w-4 shrink-0"
           :class="iconClass(item.tone)"
-          aria-hidden="true"
+         
         />
         <div class="min-w-0 flex-1">
-          <p class="text-xs font-medium ui-text-primary">{{ item.message }}</p>
-          <p class="mt-0.5 font-mono text-[10px] ui-text-muted">{{ item.action }}</p>
-          <p class="mt-1 text-[10px] ui-text-muted">{{ formatDateTime(item.timestamp) }}</p>
+          <p class="text-xs font-medium text-foreground">{{ item.message }}</p>
+          <p class="mt-0.5 font-mono text-[10px] text-muted-foreground">{{ item.action }}</p>
+          <p class="mt-1 text-[10px] text-muted-foreground">{{ formatDateTime(item.timestamp) }}</p>
         </div>
         <button
           type="button"
-          class="ui-btn-secondary inline-flex h-6 w-6 shrink-0 items-center justify-center p-0"
+          class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 inline-flex h-6 w-6 shrink-0 items-center justify-center p-0"
           aria-label="Dismiss notification"
           @click="remove(item.id)"
         >
-          <X class="h-3.5 w-3.5" aria-hidden="true" />
+          <X class="h-3.5 w-3.5" />
         </button>
       </article>
     </TransitionGroup>

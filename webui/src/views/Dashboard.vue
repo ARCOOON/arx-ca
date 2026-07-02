@@ -115,95 +115,95 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
   <div class="space-y-4">
     <div
       v-if="errorMessage"
-      class="ui-alert-error"
+      class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
       role="alert"
     >
       {{ errorMessage }}
     </div>
 
-    <div v-if="isLoading" class="text-sm ui-text-muted">Loading server status…</div>
+    <div v-if="isLoading" class="text-sm text-muted-foreground">Loading server status…</div>
 
     <template v-else-if="health">
       <section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <article class="ui-surface-muted px-4 py-3">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">Uptime</p>
-          <p class="mt-1 text-lg font-semibold ui-text-primary">{{ health.uptime.human }}</p>
-          <p class="text-xs ui-text-muted">{{ health.uptime.seconds }} seconds</p>
+        <article class="bg-card border-border-muted px-4 py-3">
+          <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Uptime</p>
+          <p class="mt-1 text-lg font-semibold text-foreground">{{ health.uptime.human }}</p>
+          <p class="text-xs text-muted-foreground">{{ health.uptime.seconds }} seconds</p>
         </article>
 
-        <article class="ui-surface-muted px-4 py-3">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">API</p>
+        <article class="bg-card border-border-muted px-4 py-3">
+          <p class="text-[10px] uppercase tracking-wide text-muted-foreground">API</p>
           <div class="mt-2 flex items-center gap-2">
             <StatusBadge :label="health.api.status" :tone="backendTone(health.api.status)" />
-            <span class="text-xs ui-text-muted">v{{ health.api.version }}</span>
+            <span class="text-xs text-muted-foreground">v{{ health.api.version }}</span>
           </div>
         </article>
 
-        <article class="ui-surface-muted px-4 py-3">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">CA Backend</p>
+        <article class="bg-card border-border-muted px-4 py-3">
+          <p class="text-[10px] uppercase tracking-wide text-muted-foreground">CA Backend</p>
           <div class="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge :label="health.ca_backend.status" :tone="backendTone(health.ca_backend.status)" />
-            <span class="text-xs ui-text-muted">{{ health.ca_backend.engine }}</span>
+            <span class="text-xs text-muted-foreground">{{ health.ca_backend.engine }}</span>
           </div>
           <dl
             v-if="backendDetails.length > 0"
             class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs"
           >
             <template v-for="detail in backendDetails" :key="detail.label">
-              <dt class="ui-text-muted">{{ detail.label }}</dt>
-              <dd class="truncate font-mono ui-text-secondary" :title="detail.value">
+              <dt class="text-muted-foreground">{{ detail.label }}</dt>
+              <dd class="truncate font-mono text-foreground/80" :title="detail.value">
                 {{ detail.value }}
               </dd>
             </template>
           </dl>
         </article>
 
-        <article class="ui-surface-muted px-4 py-3">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">Certificates</p>
-          <p class="mt-1 text-lg font-semibold ui-text-primary">
+        <article class="bg-card border-border-muted px-4 py-3">
+          <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Certificates</p>
+          <p class="mt-1 text-lg font-semibold text-foreground">
             {{ certificateTotal ?? '—' }}
           </p>
-          <p class="text-xs ui-text-muted">Issued in database</p>
+          <p class="text-xs text-muted-foreground">Issued in database</p>
         </article>
       </section>
 
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Runtime</h2>
+      <section class="bg-card border-border-muted">
+        <header class="border-b border-border px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-foreground">Runtime</h2>
         </header>
-        <div class="grid grid-cols-1 gap-px md:grid-cols-2 lg:grid-cols-4" style="background-color: var(--border-subtle)">
-          <div class="px-4 py-3" style="background-color: var(--bg-inset)">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">Heap in use</p>
-            <p class="mt-1 text-sm ui-text-secondary">{{ formatBytes(health.memory.heap_inuse_bytes) }}</p>
+        <div class="grid grid-cols-1 gap-px md:grid-cols-2 lg:grid-cols-4">
+          <div class="px-4 py-3">
+            <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Heap in use</p>
+            <p class="mt-1 text-sm text-foreground/80">{{ formatBytes(health.memory.heap_inuse_bytes) }}</p>
           </div>
-          <div class="px-4 py-3" style="background-color: var(--bg-inset)">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">Goroutines</p>
-            <p class="mt-1 text-sm ui-text-secondary">{{ health.memory.goroutines }}</p>
+          <div class="px-4 py-3">
+            <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Goroutines</p>
+            <p class="mt-1 text-sm text-foreground/80">{{ health.memory.goroutines }}</p>
           </div>
-          <div class="px-4 py-3" style="background-color: var(--bg-inset)">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">GC cycles</p>
-            <p class="mt-1 text-sm ui-text-secondary">{{ health.memory.num_gc }}</p>
+          <div class="px-4 py-3">
+            <p class="text-[10px] uppercase tracking-wide text-muted-foreground">GC cycles</p>
+            <p class="mt-1 text-sm text-foreground/80">{{ health.memory.num_gc }}</p>
           </div>
-          <div class="px-4 py-3" style="background-color: var(--bg-inset)">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">Engine initialized</p>
-            <p class="mt-1 text-sm ui-text-secondary">{{ health.ca_backend.initialized ? 'Yes' : 'No' }}</p>
+          <div class="px-4 py-3">
+            <p class="text-[10px] uppercase tracking-wide text-muted-foreground">Engine initialized</p>
+            <p class="mt-1 text-sm text-foreground/80">{{ health.ca_backend.initialized ? 'Yes' : 'No' }}</p>
           </div>
         </div>
       </section>
 
-      <section class="ui-surface-muted">
-        <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+      <section class="bg-card border-border-muted">
+        <header class="border-b border-border flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
           <div>
-            <h2 class="text-sm font-semibold ui-text-primary">Certificate Revocation List</h2>
-            <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
+            <h2 class="text-sm font-semibold text-foreground">Certificate Revocation List</h2>
+            <p v-if="showApiHints" class="mt-0.5 text-xs text-muted-foreground">
               Public endpoint
-              <code class="ui-code">GET /api/v1/crl</code>
+              <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/crl</code>
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
-              class="ui-btn-secondary"
+              class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
               :disabled="crlDownloading"
               @click="handleDownloadCRL('pem')"
             >
@@ -211,7 +211,7 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
             </button>
             <button
               type="button"
-              class="ui-btn-secondary"
+              class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
               :disabled="crlDownloading"
               @click="handleDownloadCRL('der')"
             >
@@ -222,27 +222,27 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
         <div class="flex flex-wrap items-center gap-2 px-4 py-3">
           <StatusBadge :label="crlStatusLabel" :tone="crlStatusTone" />
         </div>
-        <p v-if="crlError" class="px-4 pb-3 text-xs" style="color: var(--danger-text)" role="alert">
+        <p v-if="crlError" class="px-4 pb-3 text-xs" role="alert">
           {{ crlError }}
         </p>
       </section>
 
-      <section v-if="caInfo" class="ui-surface-muted">
-        <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Certificate Authorities</h2>
+      <section v-if="caInfo" class="bg-card border-border-muted">
+        <header class="border-b border-border flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-foreground">Certificate Authorities</h2>
           <button
             type="button"
-            class="ui-btn-secondary"
+            class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
             :disabled="chainDownloading"
             @click="handleDownloadCAChain"
           >
             {{ chainDownloading ? 'Downloading…' : 'Download CA Bundle (.zip)' }}
           </button>
         </header>
-        <p v-if="chainError" class="px-4 pt-2 text-xs" style="color: var(--danger-text)" role="alert">
+        <p v-if="chainError" class="px-4 pt-2 text-xs" role="alert">
           {{ chainError }}
         </p>
-        <div class="grid grid-cols-1 gap-px lg:grid-cols-2" style="background-color: var(--border-subtle)">
+        <div class="grid grid-cols-1 gap-px lg:grid-cols-2">
           <article
             v-for="entry in [
               { label: 'Root CA', cert: caInfo.root, filename: 'root_ca.crt' },
@@ -250,18 +250,17 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
             ]"
             :key="entry.label"
             class="px-4 py-3"
-            style="background-color: var(--bg-inset)"
           >
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0">
-                <p class="text-[10px] uppercase tracking-wide ui-text-muted">{{ entry.label }}</p>
-                <p class="mt-1 truncate text-sm font-medium ui-text-primary" :title="entry.cert.subject.common_name">
+                <p class="text-[10px] uppercase tracking-wide text-muted-foreground">{{ entry.label }}</p>
+                <p class="mt-1 truncate text-sm font-medium text-foreground" :title="entry.cert.subject.common_name">
                   {{ entry.cert.subject.common_name }}
                 </p>
               </div>
               <button
                 type="button"
-                class="ui-btn-secondary shrink-0"
+                class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 shrink-0"
                 @click="downloadCertificate(entry.filename, entry.cert.pem)"
               >
                 Download .crt
@@ -269,37 +268,37 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
             </div>
             <dl class="mt-3 space-y-1.5 text-xs">
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Expires</dt>
-                <dd class="ui-text-secondary">{{ formatCertDate(entry.cert.not_after) }}</dd>
+                <dt class="text-muted-foreground">Expires</dt>
+                <dd class="text-foreground/80">{{ formatCertDate(entry.cert.not_after) }}</dd>
               </div>
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Serial</dt>
+                <dt class="text-muted-foreground">Serial</dt>
                 <dd
-                  class="truncate font-mono ui-text-secondary"
+                  class="truncate font-mono text-foreground/80"
                   :title="entry.cert.serial_number"
                 >
                   {{ entry.cert.serial_number || '—' }}
                 </dd>
               </div>
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Signature</dt>
-                <dd class="ui-text-secondary">{{ entry.cert.signature_algorithm || '—' }}</dd>
+                <dt class="text-muted-foreground">Signature</dt>
+                <dd class="text-foreground/80">{{ entry.cert.signature_algorithm || '—' }}</dd>
               </div>
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Key usage</dt>
-                <dd class="ui-text-secondary">{{ formatUsageList(entry.cert.key_usages) }}</dd>
+                <dt class="text-muted-foreground">Key usage</dt>
+                <dd class="text-foreground/80">{{ formatUsageList(entry.cert.key_usages) }}</dd>
               </div>
               <div
                 v-if="entry.cert.ext_key_usages && entry.cert.ext_key_usages.length > 0"
                 class="grid grid-cols-[5.5rem_1fr] gap-2"
               >
-                <dt class="ui-text-muted">Ext key usage</dt>
-                <dd class="ui-text-secondary">{{ formatUsageList(entry.cert.ext_key_usages) }}</dd>
+                <dt class="text-muted-foreground">Ext key usage</dt>
+                <dd class="text-foreground/80">{{ formatUsageList(entry.cert.ext_key_usages) }}</dd>
               </div>
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Fingerprint</dt>
+                <dt class="text-muted-foreground">Fingerprint</dt>
                 <dd
-                  class="truncate font-mono ui-text-secondary"
+                  class="truncate font-mono text-foreground/80"
                   :title="entry.cert.fingerprint"
                 >
                   {{ shortenFingerprint(entry.cert.fingerprint) }}
@@ -310,30 +309,28 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
         </div>
       </section>
 
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Active Provisioners</h2>
+      <section class="bg-card border-border-muted">
+        <header class="border-b border-border px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-foreground">Active Provisioners</h2>
         </header>
         <div
           v-if="caProvisioners.length === 0"
-          class="px-4 py-3 text-xs ui-text-muted"
+          class="px-4 py-3 text-xs text-muted-foreground"
         >
           No provisioners configured in ca.json.
         </div>
         <div
           v-else
           class="grid grid-cols-1 gap-px md:grid-cols-2 xl:grid-cols-3"
-          style="background-color: var(--border-subtle)"
         >
           <article
             v-for="prov in caProvisioners"
             :key="`${prov.type}-${prov.name}`"
             class="px-4 py-3"
-            style="background-color: var(--bg-inset)"
           >
             <div class="flex items-center gap-2">
               <StatusBadge :label="prov.type" tone="neutral" />
-              <p class="truncate text-sm font-medium ui-text-primary" :title="prov.name">
+              <p class="truncate text-sm font-medium text-foreground" :title="prov.name">
                 {{ prov.name }}
               </p>
             </div>
@@ -342,12 +339,12 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
               class="mt-3 space-y-1.5 text-xs"
             >
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">EAB required</dt>
-                <dd class="ui-text-secondary">{{ prov.require_eab ? 'Yes' : 'No' }}</dd>
+                <dt class="text-muted-foreground">EAB required</dt>
+                <dd class="text-foreground/80">{{ prov.require_eab ? 'Yes' : 'No' }}</dd>
               </div>
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Challenges</dt>
-                <dd class="ui-text-secondary">{{ formatUsageList(prov.challenges) }}</dd>
+                <dt class="text-muted-foreground">Challenges</dt>
+                <dd class="text-foreground/80">{{ formatUsageList(prov.challenges) }}</dd>
               </div>
             </dl>
             <dl
@@ -355,8 +352,8 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
               class="mt-3 space-y-1.5 text-xs"
             >
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Challenge</dt>
-                <dd class="ui-text-secondary">{{ prov.challenge || 'not configured' }}</dd>
+                <dt class="text-muted-foreground">Challenge</dt>
+                <dd class="text-foreground/80">{{ prov.challenge || 'not configured' }}</dd>
               </div>
             </dl>
           </article>

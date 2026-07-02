@@ -96,19 +96,19 @@ function goNext(): void {
   >
     <button
       type="button"
-      class="ui-btn-secondary inline-flex h-8 w-8 items-center justify-center p-0"
+      class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 inline-flex h-8 w-8 items-center justify-center p-0"
       :disabled="disabled || !hasPrevious"
       aria-label="Previous page"
       @click="goPrevious"
     >
-      <ChevronLeft class="h-4 w-4" aria-hidden="true" />
+      <ChevronLeft class="h-4 w-4" />
     </button>
 
     <template v-for="(item, index) in pageItems" :key="`${item}-${index}`">
       <span
         v-if="item === 'ellipsis'"
-        class="inline-flex h-8 min-w-8 items-center justify-center px-1 text-xs ui-text-muted"
-        aria-hidden="true"
+        class="inline-flex h-8 min-w-8 items-center justify-center px-1 text-xs text-muted-foreground"
+       
       >
         …
       </span>
@@ -118,8 +118,8 @@ function goNext(): void {
         class="inline-flex h-8 min-w-8 items-center justify-center px-2 text-xs"
         :class="
           item === currentPage
-            ? 'ui-tab ui-tab-active font-medium'
-            : 'ui-btn-secondary'
+            ? 'rounded-md border border-input bg-background px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground border-primary bg-primary/15 text-foreground font-medium'
+            : 'inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50'
         "
         :aria-current="item === currentPage ? 'page' : undefined"
         :disabled="disabled"
@@ -131,12 +131,12 @@ function goNext(): void {
 
     <button
       type="button"
-      class="ui-btn-secondary inline-flex h-8 w-8 items-center justify-center p-0"
+      class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50 inline-flex h-8 w-8 items-center justify-center p-0"
       :disabled="disabled || !hasNext"
       aria-label="Next page"
       @click="goNext"
     >
-      <ChevronRight class="h-4 w-4" aria-hidden="true" />
+      <ChevronRight class="h-4 w-4" />
     </button>
   </nav>
 </template>

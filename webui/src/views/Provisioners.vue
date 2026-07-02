@@ -85,19 +85,19 @@ function dismissTokenResult(): void {
 
 <template>
   <div class="space-y-4">
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
+    <div v-if="errorMessage" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
       {{ errorMessage }}
     </div>
 
-    <div v-if="isLoading" class="text-sm ui-text-muted">Loading provisioner configuration…</div>
+    <div v-if="isLoading" class="text-sm text-muted-foreground">Loading provisioner configuration…</div>
 
     <template v-else>
-      <section v-if="k8sStatus" class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Kubernetes Provisioner</h2>
-          <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
+      <section v-if="k8sStatus" class="bg-card border-border">
+        <header class="border-b border-border px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-foreground">Kubernetes Provisioner</h2>
+          <p v-if="showApiHints" class="mt-0.5 text-xs text-muted-foreground">
             Status from
-            <code class="ui-code">GET /api/v1/k8s/status</code>
+            <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">GET /api/v1/k8s/status</code>
           </p>
         </header>
         <div class="flex flex-wrap items-center gap-3 px-4 py-3">
@@ -108,12 +108,12 @@ function dismissTokenResult(): void {
         </div>
         <dl class="ui-divide text-xs">
           <div v-if="k8sStatus.provisioner" class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Provisioner</dt>
-            <dd class="font-mono ui-text-secondary">{{ k8sStatus.provisioner }}</dd>
+            <dt class="text-muted-foreground">Provisioner</dt>
+            <dd class="font-mono text-foreground/80">{{ k8sStatus.provisioner }}</dd>
           </div>
           <div v-if="k8sStatus.review_mode" class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Review mode</dt>
-            <dd class="ui-text-secondary">{{ k8sStatus.review_mode }}</dd>
+            <dt class="text-muted-foreground">Review mode</dt>
+            <dd class="text-foreground/80">{{ k8sStatus.review_mode }}</dd>
           </div>
           <div class="px-4 py-3 space-y-2">
             <FlatToggle label="Public keys configured" :enabled="k8sStatus.has_public_keys" readonly />
@@ -122,95 +122,95 @@ function dismissTokenResult(): void {
         </dl>
       </section>
 
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Mint Provisioner Token</h2>
-          <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
+      <section class="bg-card border-border">
+        <header class="border-b border-border px-4 py-2.5">
+          <h2 class="text-sm font-semibold text-foreground">Mint Provisioner Token</h2>
+          <p v-if="showApiHints" class="mt-0.5 text-xs text-muted-foreground">
             Single-use JWK signing token via
-            <code class="ui-code">POST /api/v1/provisioners/token</code>
+            <code class="rounded-md border border-border bg-muted px-1 font-mono text-xs text-foreground">POST /api/v1/provisioners/token</code>
           </p>
         </header>
         <div class="space-y-3 px-4 py-3">
-          <div v-if="tokenError" class="ui-alert-error text-xs" role="alert">
+          <div v-if="tokenError" class="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive text-xs" role="alert">
             {{ tokenError }}
           </div>
 
-          <div v-if="tokenResult" class="ui-alert-warning space-y-3" role="alert">
+          <div v-if="tokenResult" class="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-400 space-y-3" role="alert">
             <p class="font-semibold">Save the token now — it will not be shown again.</p>
             <dl class="space-y-2 text-xs">
               <div>
-                <dt class="font-medium ui-text-muted">Provisioner</dt>
-                <dd class="mt-0.5 font-mono ui-text-primary">
+                <dt class="font-medium text-muted-foreground">Provisioner</dt>
+                <dd class="mt-0.5 font-mono text-foreground">
                   {{ tokenResult.provisioner }} ({{ tokenResult.provisioner_type }})
                 </dd>
               </div>
               <div>
-                <dt class="font-medium ui-text-muted">Expires in</dt>
-                <dd class="mt-0.5 ui-text-primary">{{ tokenResult.expires_in }} seconds</dd>
+                <dt class="font-medium text-muted-foreground">Expires in</dt>
+                <dd class="mt-0.5 text-foreground">{{ tokenResult.expires_in }} seconds</dd>
               </div>
               <div>
-                <dt class="font-medium ui-text-muted">Audience</dt>
-                <dd class="mt-0.5 break-all font-mono ui-text-primary">{{ tokenResult.audience }}</dd>
+                <dt class="font-medium text-muted-foreground">Audience</dt>
+                <dd class="mt-0.5 break-all font-mono text-foreground">{{ tokenResult.audience }}</dd>
               </div>
               <div>
-                <dt class="font-medium ui-text-muted">Token</dt>
-                <dd class="mt-0.5 break-all font-mono text-[10px] ui-text-primary">{{ tokenResult.token }}</dd>
+                <dt class="font-medium text-muted-foreground">Token</dt>
+                <dd class="mt-0.5 break-all font-mono text-[10px] text-foreground">{{ tokenResult.token }}</dd>
               </div>
             </dl>
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="ui-btn-primary" @click="copyToken">
+              <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50" @click="copyToken">
                 {{ tokenCopied ? 'Copied' : 'Copy Token' }}
               </button>
-              <button type="button" class="ui-btn-secondary" @click="dismissTokenResult">Dismiss</button>
+              <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50" @click="dismissTokenResult">Dismiss</button>
             </div>
           </div>
 
           <div class="grid gap-3 sm:grid-cols-2">
             <div>
-              <label class="block text-xs font-medium ui-text-secondary" for="token-provisioner">
+              <label class="block text-xs font-medium text-foreground/80" for="token-provisioner">
                 Provisioner (optional)
               </label>
               <input
                 id="token-provisioner"
                 v-model="tokenProvisioner"
                 type="text"
-                class="ui-input mt-1.5"
+                class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
                 autocomplete="off"
               />
             </div>
             <div>
-              <label class="block text-xs font-medium ui-text-secondary" for="token-ttl">
+              <label class="block text-xs font-medium text-foreground/80" for="token-ttl">
                 Token TTL
               </label>
-              <input id="token-ttl" v-model="tokenTtl" type="text" class="ui-input mt-1.5" placeholder="5m" />
+              <input id="token-ttl" v-model="tokenTtl" type="text" class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5" placeholder="5m" />
             </div>
           </div>
 
           <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="token-cn">Common Name</label>
+            <label class="block text-xs font-medium text-foreground/80" for="token-cn">Common Name</label>
             <input
               id="token-cn"
               v-model="tokenCommonName"
               type="text"
-              class="ui-input mt-1.5"
+              class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-none outline-none focus-visible:ring-1 focus-visible:ring-ring mt-1.5"
               placeholder="pod.example.svc"
               autocomplete="off"
             />
           </div>
 
           <div>
-            <label class="block text-xs font-medium ui-text-secondary">DNS SANs</label>
+            <label class="block text-xs font-medium text-foreground/80">DNS SANs</label>
             <TagInput v-model="tokenDnsSans" placeholder="api.example.com" />
           </div>
 
           <div>
-            <label class="block text-xs font-medium ui-text-secondary">IP SANs</label>
+            <label class="block text-xs font-medium text-foreground/80">IP SANs</label>
             <TagInput v-model="tokenIpSans" placeholder="10.0.0.1" />
           </div>
 
           <button
             type="button"
-            class="ui-btn-primary"
+            class="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-none transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
             :disabled="tokenGenerating"
             @click="submitTokenGeneration"
           >
