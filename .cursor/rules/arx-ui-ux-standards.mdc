@@ -1,0 +1,51 @@
+---
+description: Enforces global UI/UX standards, abstract design tokens, and a comprehensive set of UX laws for all frontend code generation.
+globs: *.{html,css,js,ts,jsx,tsx,svelte,vue}
+---
+
+# Universal UI/UX Architecture & Styling Standards
+
+When generating or modifying frontend code (HTML, CSS, JS, or Web Components), you MUST strictly enforce the following design principles based on the Laws of UX. Rely on abstract design tokens (CSS variables) and functional logic rather than hardcoded pixel, color, or font values.
+
+## 1. Technical & Architectural Constraints
+* **Language:** ALL code, variables, HTML attributes, and inline comments MUST be in English.
+* **Completeness:** Always implement full components. No placeholders, no "TODOs", no simulations.
+* **Dumb Frontend:** The UI contains zero business logic. It strictly acts as a presentation layer consuming APIs.
+* **Zero Dependencies:** Build the UI to be self-contained. Do NOT use external CDNs for fonts, scripts, or styles.
+
+## 2. Aesthetic Constraints (Token-Driven Design)
+* **Aesthetic:** Minimalist, data-dense, and highly functional (enterprise dashboard aesthetic).
+* **Geometry & Spacing:** Avoid hardcoded pixel values. Use consistent, project-defined spacing and border-radii via CSS variables (e.g., `var(--spacing-md)`, `var(--radius-sm)`).
+* **Semantic Colors:** Never hardcode specific brand colors. Use a logical semantic layer:
+  * **Primary/Brand:** For the main interactive elements and active states.
+  * **Success:** For online/allowed/completed states.
+  * **Error/Destructive:** For offline/blocked/delete actions.
+  * **Surface/Background:** For layered card designs and modal backgrounds.
+* **State Layers:** Interaction states (hover/active/focus) should be represented by subtle opacity shifts, brightness adjustments, or structural outlines, not by exaggerated scaling.
+* **Depth:** Avoid gradients. Drop shadows are strictly reserved for floating context menus, tooltips, or active modals to create elevation. The main layout canvas remains completely flat.
+
+## 3. Cognitive UX Laws (Actionable Directives)
+
+### Heuristics & Decision Making
+* **Hick’s Law (Progressive Disclosure):** The time it takes to make a decision increases with the number of choices. Only render the absolute minimum required form fields. Hide complex parameters inside an "Advanced Settings" container.
+* **Choice Overload:** Too many options cause decision paralysis. For long lists of settings, categorize them into distinct tabs or utilize step-by-step wizards rather than a single monolithic form.
+* **Jakob’s Law (Predictability):** Use standard enterprise layouts: vertical sidebars for global navigation, top-right for global status, and top-right of table containers for search/filters.
+* **Occam’s Razor (KISS):** Remove all unnecessary visual elements. If a border, background, or text label does not add direct functional value or clarify a state, remove it.
+* **Tesler’s Law (Conservation of Complexity):** Shift the burden of complexity entirely to the backend. The UI should remain "dumb" and only render data.
+
+### Interaction & Performance
+* **Doherty Threshold (Sub-400ms):** Implement Optimistic UI updates. When a user toggles a state, update the visual UI instantly before the API call returns. Use skeleton loaders over blocking full-page spinners.
+* **Fitts’s Law (Target Size):** Ensure interactive targets (buttons, links) have accessible hit areas. Place primary actions in highly accessible areas (e.g., bottom-right of a form).
+* **Postel’s Law (Robustness/Forgiving Inputs):** Ensure input fields automatically sanitize formats (trimming whitespace, fixing standard delimiters) before submitting to the backend.
+
+### Visual Grouping (Gestalt Principles)
+* **Law of Common Region:** Elements within a bounded area are perceived as grouped. Group related data strictly inside visual Cards with consistent internal padding and distinct surface backgrounds.
+* **Law of Proximity:** Place labels directly adjacent to their inputs. Keep related action buttons close to each other, but separate from unrelated metrics.
+* **Law of Similarity:** Enforce strict semantic coloring. All primary action buttons must look identical in shape and style across the entire application.
+* **Law of Uniform Connectedness:** When rendering network topologies or traffic flows, use clear SVG connector lines to indicate active relationships between nodes or identities.
+
+### Memory & Cognitive Biases
+* **Peak-End Rule:** Users judge an experience largely based on how they felt at its peak and at its end. Ensure that destructive actions have clear warnings, and successful actions (e.g., node deployed, config saved) yield highly satisfying, clear visual feedback.
+* **Zeigarnik Effect (Goal-Gradient):** People remember uncompleted tasks better. Use horizontal Steppers/Progress Bars for complex provisioning flows to provide a clear sense of progression and closure.
+* **Miller’s Law:** The average person can only keep 7 (±2) items in their working memory. Chunk information logically. Do not display raw lists of 50 items without robust pagination, filtering, or search capabilities.
+* **Von Restorff Effect (Isolation Effect):** A view or modal MUST only have ONE visually dominant "Primary Action". All secondary actions ("Cancel", "Reset") MUST be visually muted (e.g., outlined or ghost buttons).
