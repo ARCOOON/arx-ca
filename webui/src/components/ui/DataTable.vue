@@ -17,9 +17,9 @@ defineProps<{
 </script>
 
 <template>
-  <div class="ui-table-wrap overflow-x-auto">
-    <table class="min-w-full text-left text-xs">
-      <thead class="ui-table-head">
+  <div class="overflow-x-auto rounded-lg border border-border">
+    <table class="min-w-full text-left text-sm">
+      <thead class="border-b border-border bg-muted/50 text-[10px] uppercase tracking-wide text-muted-foreground">
         <tr>
           <th
             v-for="column in columns"
@@ -31,21 +31,21 @@ defineProps<{
           </th>
         </tr>
       </thead>
-      <tbody class="ui-table-body ui-table-divide">
+      <tbody class="bg-card [&>tr+tr]:border-t [&>tr+tr]:border-border">
         <tr v-if="loading">
-          <td :colspan="columns.length" class="px-3 py-6 text-sm ui-text-muted">Loading…</td>
+          <td :colspan="columns.length" class="px-3 py-6 text-sm text-muted-foreground">Loading…</td>
         </tr>
         <tr v-else-if="rows.length === 0">
-          <td :colspan="columns.length" class="px-3 py-6 text-sm ui-text-muted">
+          <td :colspan="columns.length" class="px-3 py-6 text-sm text-muted-foreground">
             {{ emptyMessage ?? 'No records found.' }}
           </td>
         </tr>
         <template v-for="row in rows" v-else :key="rowKey(row)">
-          <tr class="ui-table-row">
+          <tr class="hover:bg-muted/50">
             <td
               v-for="column in columns"
               :key="column.key"
-              class="px-3 py-2 ui-text-secondary"
+              class="px-3 py-2 text-foreground/80"
               :class="column.cellClass"
             >
               <slot :name="`cell-${column.key}`" :row="row">

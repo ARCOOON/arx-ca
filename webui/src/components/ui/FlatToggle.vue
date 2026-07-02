@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
+
 defineProps<{
   enabled: boolean
   label: string
@@ -11,19 +14,13 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="ui-inset flex items-center justify-between gap-4 px-4 py-3">
-    <span class="text-sm ui-text-secondary">{{ label }}</span>
-    <button
-      type="button"
-      class="ui-theme-toggle"
-      :data-active="enabled"
+  <div class="flex items-center justify-between gap-4 rounded-md border border-input bg-muted/30 px-4 py-3">
+    <Label class="text-sm text-foreground/80">{{ label }}</Label>
+    <Switch
+      :checked="enabled"
       :disabled="readonly"
-      :aria-pressed="enabled"
       :aria-label="`${label}: ${enabled ? 'enabled' : 'disabled'}`"
-      :class="readonly ? 'cursor-default' : 'cursor-pointer'"
-      @click="!readonly && emit('toggle')"
-    >
-      <span class="ui-theme-toggle-thumb" />
-    </button>
+      @update:checked="!readonly && emit('toggle')"
+    />
   </div>
 </template>

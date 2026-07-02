@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 const props = withDefaults(
   defineProps<{
@@ -77,30 +79,33 @@ function onPaste(event: ClipboardEvent): void {
 
 <template>
   <div
-    class="ui-tag-input mt-1.5 flex min-h-[2.5rem] flex-wrap items-center gap-1.5 px-2 py-1.5"
-    :class="{ 'opacity-60': disabled }"
+    :class="cn(
+      'mt-1.5 flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5',
+      disabled && 'opacity-60',
+    )"
   >
-    <span
+    <Badge
       v-for="(tag, index) in tags"
       :key="`${tag}-${index}`"
-      class="ui-tag-pill inline-flex items-center gap-1 px-2 py-0.5 text-[11px]"
+      variant="secondary"
+      class="gap-1 font-mono text-[11px]"
     >
-      <span class="font-mono">{{ tag }}</span>
+      {{ tag }}
       <button
         type="button"
-        class="ui-tag-remove leading-none"
+        class="leading-none text-muted-foreground hover:text-foreground"
         :disabled="disabled"
         :aria-label="`Remove ${tag}`"
         @click="removeTag(index)"
       >
         ×
       </button>
-    </span>
+    </Badge>
     <input
       :id="id"
       v-model="draft"
       type="text"
-      class="min-w-[8rem] flex-1 border-0 bg-transparent p-0 text-xs outline-none"
+      class="min-w-32 flex-1 border-0 bg-transparent p-0 text-xs outline-none"
       :placeholder="tags.length === 0 ? placeholder : ''"
       :disabled="disabled"
       spellcheck="false"
@@ -111,27 +116,3 @@ function onPaste(event: ClipboardEvent): void {
     />
   </div>
 </template>
-
-<style scoped>
-.ui-tag-input {
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-control);
-  background: var(--surface-elevated);
-}
-
-.ui-tag-pill {
-  border-radius: var(--radius-pill);
-  background: var(--surface-muted);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-subtle);
-}
-
-.ui-tag-remove {
-  border-radius: var(--radius-pill);
-  color: var(--text-muted);
-}
-
-.ui-tag-remove:hover:not(:disabled) {
-  color: var(--text-primary);
-}
-</style>
