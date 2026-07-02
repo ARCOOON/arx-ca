@@ -11,11 +11,11 @@ const { notifications, remove, clearAll } = useNotifications()
 function cardClass(tone: 'critical' | 'info' | 'success'): string {
   switch (tone) {
     case 'critical':
-      return 'border-red-500/60 bg-[var(--bg-elevated)]'
+      return 'border-destructive/40 bg-card'
     case 'success':
-      return 'border-emerald-500/50 bg-[var(--bg-elevated)]'
+      return 'border-primary/30 bg-card'
     default:
-      return 'border-sky-500/50 bg-[var(--bg-elevated)]'
+      return 'border-border bg-card'
   }
 }
 
@@ -50,7 +50,7 @@ function iconClass(tone: 'critical' | 'info' | 'success'): string {
       <article
         v-for="item in notifications"
         :key="item.id"
-        class="flex items-start gap-2 rounded-[var(--radius-control)] border px-3 py-2.5 shadow-lg"
+        class="flex items-start gap-2 rounded-md border px-3 py-2.5"
         :class="cardClass(item.tone)"
         role="status"
       >

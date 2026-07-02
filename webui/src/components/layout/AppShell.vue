@@ -73,10 +73,10 @@ watch(
 </script>
 
 <template>
-  <div class="ui-shell flex h-screen w-screen overflow-hidden">
+  <div class="flex h-screen w-screen overflow-hidden bg-background text-foreground">
     <div
       v-if="mobileNavOpen"
-      class="ui-mobile-nav-backdrop fixed inset-0 z-30 md:hidden"
+      class="fixed inset-0 z-30 bg-background/80 backdrop-blur-sm md:hidden"
       role="presentation"
       aria-hidden="true"
       @click="closeMobileNav"

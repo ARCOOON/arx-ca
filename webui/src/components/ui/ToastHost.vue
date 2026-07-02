@@ -14,7 +14,7 @@ const { toasts, dismissToast } = useToast()
     <div
       v-for="toast in toasts"
       :key="toast.id"
-      class="pointer-events-auto flex items-start gap-2 px-3 py-2.5 text-xs shadow-lg"
+      class="pointer-events-auto flex items-start gap-2 rounded-lg border px-3 py-2.5 text-xs"
       :class="toast.tone === 'success' ? 'ui-alert-success' : 'ui-alert-error'"
       role="status"
     >

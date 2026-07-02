@@ -1,9 +1,9 @@
-import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import path from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
+import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vite'
 
-const srcDir = fileURLToPath(new URL('./src', import.meta.url))
+const srcDir = path.resolve(__dirname, './src')
 
 export default defineConfig({
   plugins: [
@@ -30,6 +30,21 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    rollupOptions: {
+      onwarn(warning, defaultHandler) {
+        if (
+          warning.code === 'INVALID_ANNOTATION' &&
+          warning.message.includes('@vueuse/core')
+        ) {
+          return
+        }
+        defaultHandler(warning)
       },
     },
   },

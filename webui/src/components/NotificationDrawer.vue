@@ -39,12 +39,12 @@ const isOverlay = computed(() => layoutStyle.value === 'overlay')
 const panelTransitionName = computed(() => (isDrawer.value ? 'drawer-panel' : 'overlay-panel'))
 
 const backdropClass = computed(() =>
-  isOverlay.value ? 'bg-transparent' : 'ui-overlay',
+  isOverlay.value ? 'bg-transparent' : 'bg-background/80 backdrop-blur-sm',
 )
 
 const panelClass = computed(() => {
   const panelBase =
-    'ui-surface-muted flex flex-col text-[color:var(--text-primary)] shadow-2xl transition-all duration-300'
+    'flex flex-col rounded-lg border border-border bg-card text-foreground transition-all duration-300'
 
   if (isDrawer.value) {
     return `${panelBase} fixed top-0 right-0 z-50 h-full w-96 rounded-none border-y-0 border-r-0`

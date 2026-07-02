@@ -72,6 +72,7 @@ Host-specific variants (Debian, Proxmox VE, RHEL) are documented in the [Wiki â†
 - Immutable audit log with WebUI forensics dashboard
 - Webhook + SSE notification engine
 - Embedded SQLite â€” optional PostgreSQL for enterprise scale
+- Operator WebUI aligned with the ARX ecosystem (`arx-dns`): Tailwind v4, Shadcn Vue, flat dark/light theming
 
 ---
 

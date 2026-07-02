@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 
 export type BadgeTone = 'valid' | 'revoked' | 'expired' | 'neutral' | 'enabled' | 'disabled'
 
@@ -8,28 +10,28 @@ const props = defineProps<{
   tone?: BadgeTone
 }>()
 
-const toneClass = computed(() => {
+const badgeClass = computed(() => {
   switch (props.tone ?? 'neutral') {
     case 'valid':
     case 'enabled':
-      return 'ui-badge-valid'
+      return 'border-primary/30 bg-primary/10 text-foreground'
     case 'revoked':
-      return 'ui-badge-revoked'
+      return 'border-destructive/40 bg-destructive/10 text-destructive'
     case 'expired':
-      return 'ui-badge-expired'
+      return 'border-chart-4/40 bg-chart-4/10 text-foreground'
     case 'disabled':
-      return 'ui-badge-neutral opacity-60'
+      return 'opacity-60'
     default:
-      return 'ui-badge-neutral'
+      return ''
   }
 })
 </script>
 
 <template>
-  <span
-    class="inline-flex items-center px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide"
-    :class="toneClass"
+  <Badge
+    variant="outline"
+    :class="cn('text-[11px] font-medium uppercase tracking-wide', badgeClass)"
   >
     {{ label }}
-  </span>
+  </Badge>
 </template>
