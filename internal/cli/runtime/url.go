@@ -13,7 +13,7 @@ import (
 )
 
 // ErrServerURLNotConfigured is returned when no server URL can be resolved.
-var ErrServerURLNotConfigured = errors.New("Server URL not configured. Please run 'arx login --url <URL>' first, or provide the --url flag.")
+var ErrServerURLNotConfigured = errors.New("Server URL not configured. Please run 'arx-ca-cli login --url <URL>' first, or provide the --url flag.")
 
 // URLResolveOptions configures server URL resolution for CLI commands.
 type URLResolveOptions struct {
@@ -27,8 +27,8 @@ type URLResolveOptions struct {
 
 // ResolveServerURL resolves the target server URL in priority order:
 //  1. Non-empty --url flag (optionally persisted when PersistFlag is true)
-//  2. server_url from ~/.arx/cli.yaml (Viper)
-//  3. server_url from ~/.arx/config.json (saved at login)
+//  2. server_url from ~/.arx-ca/cli.yaml (Viper)
+//  3. server_url from ~/.arx-ca/config.json (saved at login)
 //  4. api_url from ~/.arx-cert-service/config.json when UseAgentState is true
 func ResolveServerURL(opts URLResolveOptions) (string, error) {
 	if url := strings.TrimSpace(opts.FlagOverride); url != "" {
@@ -66,7 +66,7 @@ func ResolveServerURL(opts URLResolveOptions) (string, error) {
 	return "", ErrServerURLNotConfigured
 }
 
-// PersistServerURL stores the server URL in ~/.arx/cli.yaml and ~/.arx/config.json.
+// PersistServerURL stores the server URL in ~/.arx-ca/cli.yaml and ~/.arx-ca/config.json.
 // When includeAgentState is true, ~/.arx-cert-service/config.json is updated as well.
 func PersistServerURL(url string, includeAgentState bool) error {
 	url = normalizeURL(url)

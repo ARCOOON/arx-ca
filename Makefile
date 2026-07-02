@@ -1,14 +1,17 @@
 # arx-ca unified build and development targets.
 .DEFAULT_GOAL := help
 
-.PHONY: help all build build-agent build-all build-arx-cross build-agent-cross \
+.PHONY: help all build build-agent build-cli build-all build-arx-ca-cross build-arx-ca-cli-cross build-agent-cross \
 	webui clean test docker-build docker-up docker-down build-fips \
-	build-arx-linux-amd64 build-arx-linux-arm64 \
-	build-arx-darwin-amd64 build-arx-darwin-arm64 \
-	build-arx-windows-amd64 \
-	build-arx-agent-linux-amd64 build-arx-agent-linux-arm64 \
-	build-arx-agent-darwin-amd64 build-arx-agent-darwin-arm64 \
-	build-arx-agent-windows-amd64 \
+	build-arx-ca-linux-amd64 build-arx-ca-linux-arm64 \
+	build-arx-ca-darwin-amd64 build-arx-ca-darwin-arm64 \
+	build-arx-ca-windows-amd64 \
+	build-arx-ca-cli-linux-amd64 build-arx-ca-cli-linux-arm64 \
+	build-arx-ca-cli-darwin-amd64 build-arx-ca-cli-darwin-arm64 \
+	build-arx-ca-cli-windows-amd64 \
+	build-arx-ca-agent-linux-amd64 build-arx-ca-agent-linux-arm64 \
+	build-arx-ca-agent-darwin-amd64 build-arx-ca-agent-darwin-arm64 \
+	build-arx-ca-agent-windows-amd64 \
 	build-linux build-linux-agent build-windows build-windows-agent
 
 VERSION ?= v0.0.0-dev
@@ -18,28 +21,37 @@ BUILD_DIR := build
 WEBUI_DIST := $(BUILD_DIR)/webui-dist.tar.gz
 LDFLAGS := -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -s -w
 
-BINARY := arx
-AGENT_BINARY := arx-agent
-PKG := ./cmd/arx
-AGENT_PKG := ./cmd/arx-agent
+SERVER_BINARY := arx-ca
+CLI_BINARY := arx-ca-cli
+AGENT_BINARY := arx-ca-agent
+SERVER_PKG := ./cmd/arx-ca
+CLI_PKG := ./cmd/arx-ca-cli
+AGENT_PKG := ./cmd/arx-ca-agent
 DOCKER_IMAGE := arx-ca:latest
 COMPOSE := docker compose
 GOFLAGS := -buildvcs=false
 export GOFLAGS
 
-CROSS_ARX_TARGETS := \
-	build-arx-linux-amd64 \
-	build-arx-linux-arm64 \
-	build-arx-darwin-amd64 \
-	build-arx-darwin-arm64 \
-	build-arx-windows-amd64
+CROSS_SERVER_TARGETS := \
+	build-arx-ca-linux-amd64 \
+	build-arx-ca-linux-arm64 \
+	build-arx-ca-darwin-amd64 \
+	build-arx-ca-darwin-arm64 \
+	build-arx-ca-windows-amd64
+
+CROSS_CLI_TARGETS := \
+	build-arx-ca-cli-linux-amd64 \
+	build-arx-ca-cli-linux-arm64 \
+	build-arx-ca-cli-darwin-amd64 \
+	build-arx-ca-cli-darwin-arm64 \
+	build-arx-ca-cli-windows-amd64
 
 CROSS_AGENT_TARGETS := \
-	build-arx-agent-linux-amd64 \
-	build-arx-agent-linux-arm64 \
-	build-arx-agent-darwin-amd64 \
-	build-arx-agent-darwin-arm64 \
-	build-arx-agent-windows-amd64
+	build-arx-ca-agent-linux-amd64 \
+	build-arx-ca-agent-linux-arm64 \
+	build-arx-ca-agent-darwin-amd64 \
+	build-arx-ca-agent-darwin-arm64 \
+	build-arx-ca-agent-windows-amd64
 
 ##@ General
 
@@ -50,66 +62,88 @@ all: build-all ## Alias for build-all
 
 ##@ Local development (native host)
 
-build: ## Build arx and arx-agent for the current OS/arch into bin/
+build: ## Build arx-ca, arx-ca-cli, and arx-ca-agent for the current OS/arch into bin/
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) $(PKG)
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/$(SERVER_BINARY) $(SERVER_PKG)
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/$(CLI_BINARY) $(CLI_PKG)
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/$(AGENT_BINARY) $(AGENT_PKG)
 
-build-agent: ## Build arx-agent only for the current OS/arch into bin/
+build-agent: ## Build arx-ca-agent only for the current OS/arch into bin/
 	@mkdir -p $(BIN_DIR)
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/$(AGENT_BINARY) $(AGENT_PKG)
 
-build-fips: ## Build arx with GOEXPERIMENT=boringcrypto (local bin/)
+build-cli: ## Build arx-ca-cli only for the current OS/arch into bin/
 	@mkdir -p $(BIN_DIR)
-	GOEXPERIMENT=boringcrypto go build -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) $(PKG)
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/$(CLI_BINARY) $(CLI_PKG)
+
+build-fips: ## Build arx-ca with GOEXPERIMENT=boringcrypto (local bin/)
+	@mkdir -p $(BIN_DIR)
+	GOEXPERIMENT=boringcrypto go build -ldflags="$(LDFLAGS)" -o $(BIN_DIR)/$(SERVER_BINARY) $(SERVER_PKG)
 
 test: ## Run all Go tests
 	go test ./...
 
 ##@ Cross-compilation (release binaries in build/)
 
-build-arx-cross: $(CROSS_ARX_TARGETS) ## Build arx for all supported OS/arch combinations
+build-arx-ca-cross: $(CROSS_SERVER_TARGETS) ## Build arx-ca for all supported OS/arch combinations
 
-build-agent-cross: $(CROSS_AGENT_TARGETS) ## Build arx-agent for all supported OS/arch combinations
+build-arx-ca-cli-cross: $(CROSS_CLI_TARGETS) ## Build arx-ca-cli for all supported OS/arch combinations
 
-build-arx-linux-amd64: ## Cross-compile arx for Linux amd64
-	@$(call cross_go_build,linux,amd64,$(BINARY),$(PKG))
+build-agent-cross: $(CROSS_AGENT_TARGETS) ## Build arx-ca-agent for all supported OS/arch combinations
 
-build-arx-linux-arm64: ## Cross-compile arx for Linux arm64
-	@$(call cross_go_build,linux,arm64,$(BINARY),$(PKG))
+build-arx-ca-linux-amd64: ## Cross-compile arx-ca for Linux amd64
+	@$(call cross_go_build,linux,amd64,$(SERVER_BINARY),$(SERVER_PKG))
 
-build-arx-darwin-amd64: ## Cross-compile arx for Darwin amd64
-	@$(call cross_go_build,darwin,amd64,$(BINARY),$(PKG))
+build-arx-ca-linux-arm64: ## Cross-compile arx-ca for Linux arm64
+	@$(call cross_go_build,linux,arm64,$(SERVER_BINARY),$(SERVER_PKG))
 
-build-arx-darwin-arm64: ## Cross-compile arx for Darwin arm64
-	@$(call cross_go_build,darwin,arm64,$(BINARY),$(PKG))
+build-arx-ca-darwin-amd64: ## Cross-compile arx-ca for Darwin amd64
+	@$(call cross_go_build,darwin,amd64,$(SERVER_BINARY),$(SERVER_PKG))
 
-build-arx-windows-amd64: ## Cross-compile arx for Windows amd64
-	@$(call cross_go_build,windows,amd64,$(BINARY),$(PKG))
+build-arx-ca-darwin-arm64: ## Cross-compile arx-ca for Darwin arm64
+	@$(call cross_go_build,darwin,arm64,$(SERVER_BINARY),$(SERVER_PKG))
 
-build-arx-agent-linux-amd64: ## Cross-compile arx-agent for Linux amd64
+build-arx-ca-windows-amd64: ## Cross-compile arx-ca for Windows amd64
+	@$(call cross_go_build,windows,amd64,$(SERVER_BINARY),$(SERVER_PKG))
+
+build-arx-ca-cli-linux-amd64: ## Cross-compile arx-ca-cli for Linux amd64
+	@$(call cross_go_build,linux,amd64,$(CLI_BINARY),$(CLI_PKG))
+
+build-arx-ca-cli-linux-arm64: ## Cross-compile arx-ca-cli for Linux arm64
+	@$(call cross_go_build,linux,arm64,$(CLI_BINARY),$(CLI_PKG))
+
+build-arx-ca-cli-darwin-amd64: ## Cross-compile arx-ca-cli for Darwin amd64
+	@$(call cross_go_build,darwin,amd64,$(CLI_BINARY),$(CLI_PKG))
+
+build-arx-ca-cli-darwin-arm64: ## Cross-compile arx-ca-cli for Darwin arm64
+	@$(call cross_go_build,darwin,arm64,$(CLI_BINARY),$(CLI_PKG))
+
+build-arx-ca-cli-windows-amd64: ## Cross-compile arx-ca-cli for Windows amd64
+	@$(call cross_go_build,windows,amd64,$(CLI_BINARY),$(CLI_PKG))
+
+build-arx-ca-agent-linux-amd64: ## Cross-compile arx-ca-agent for Linux amd64
 	@$(call cross_go_build,linux,amd64,$(AGENT_BINARY),$(AGENT_PKG))
 
-build-arx-agent-linux-arm64: ## Cross-compile arx-agent for Linux arm64
+build-arx-ca-agent-linux-arm64: ## Cross-compile arx-ca-agent for Linux arm64
 	@$(call cross_go_build,linux,arm64,$(AGENT_BINARY),$(AGENT_PKG))
 
-build-arx-agent-darwin-amd64: ## Cross-compile arx-agent for Darwin amd64
+build-arx-ca-agent-darwin-amd64: ## Cross-compile arx-ca-agent for Darwin amd64
 	@$(call cross_go_build,darwin,amd64,$(AGENT_BINARY),$(AGENT_PKG))
 
-build-arx-agent-darwin-arm64: ## Cross-compile arx-agent for Darwin arm64
+build-arx-ca-agent-darwin-arm64: ## Cross-compile arx-ca-agent for Darwin arm64
 	@$(call cross_go_build,darwin,arm64,$(AGENT_BINARY),$(AGENT_PKG))
 
-build-arx-agent-windows-amd64: ## Cross-compile arx-agent for Windows amd64
+build-arx-ca-agent-windows-amd64: ## Cross-compile arx-ca-agent for Windows amd64
 	@$(call cross_go_build,windows,amd64,$(AGENT_BINARY),$(AGENT_PKG))
 
 # Backward-compatible shorthand targets (Linux/Windows amd64 only).
-build-linux: build-arx-linux-amd64 ## Alias: arx Linux amd64
+build-linux: build-arx-ca-linux-amd64 ## Alias: arx-ca Linux amd64
 
-build-linux-agent: build-arx-agent-linux-amd64 ## Alias: arx-agent Linux amd64
+build-linux-agent: build-arx-ca-agent-linux-amd64 ## Alias: arx-ca-agent Linux amd64
 
-build-windows: build-arx-windows-amd64 ## Alias: arx Windows amd64
+build-windows: build-arx-ca-windows-amd64 ## Alias: arx-ca Windows amd64
 
-build-windows-agent: build-arx-agent-windows-amd64 ## Alias: arx-agent Windows amd64
+build-windows-agent: build-arx-ca-agent-windows-amd64 ## Alias: arx-ca-agent Windows amd64
 
 define cross_go_build
 	@mkdir -p $(BUILD_DIR)
@@ -126,7 +160,7 @@ webui: ## Install deps, build WebUI, and package webui-dist.tar.gz
 	@tar -czf $(WEBUI_DIST) -C webui/dist .
 	@echo "WebUI built and packaged to $(WEBUI_DIST)"
 
-build-all: build-arx-cross build-agent-cross webui ## Full release suite: all cross binaries + WebUI tarball
+build-all: build-arx-ca-cross build-arx-ca-cli-cross build-agent-cross webui ## Full release suite: all cross binaries + WebUI tarball
 
 ##@ Cleanup and Docker
 

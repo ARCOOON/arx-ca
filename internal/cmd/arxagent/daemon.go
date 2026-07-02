@@ -33,7 +33,7 @@ func newRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run the renewal daemon (alias for daemon)",
-		Long: `Same as arx-agent daemon. Intended for systemd ExecStart and production service units.
+		Long: `Same as arx-ca-agent daemon. Intended for systemd ExecStart and production service units.
 Supports API and ACME renewal protocols configured per managed_certs entry.`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return runAgentDaemon(configPath)

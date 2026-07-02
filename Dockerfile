@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Stage 1: compile arx release binaries and the Vue WebUI distribution.
+# Stage 1: compile arx-ca release binaries and the Vue WebUI distribution.
 FROM golang:1.22-alpine AS builder
 
 RUN apk add --no-cache ca-certificates git make nodejs npm
@@ -41,15 +41,15 @@ WORKDIR /app
 
 ARG TARGETARCH
 
-COPY --from=builder /src/build/arx-linux-amd64 /app/arx-amd64
-COPY --from=builder /src/build/arx-linux-arm64 /app/arx-arm64
+COPY --from=builder /src/build/arx-ca-linux-amd64 /app/arx-ca-amd64
+COPY --from=builder /src/build/arx-ca-linux-arm64 /app/arx-ca-arm64
 COPY --from=builder /src/build/webui-dist.tar.gz /tmp/webui-dist.tar.gz
 COPY deploy/docker-healthcheck.sh /app/docker-healthcheck.sh
 
 RUN ARCH=$(case "${TARGETARCH}" in arm64) echo arm64 ;; *) echo amd64 ;; esac) \
-    && cp "/app/arx-${ARCH}" /app/arx \
-    && chmod 755 /app/arx /app/docker-healthcheck.sh \
-    && rm -f /app/arx-amd64 /app/arx-arm64 \
+    && cp "/app/arx-ca-${ARCH}" /app/arx-ca \
+    && chmod 755 /app/arx-ca /app/docker-healthcheck.sh \
+    && rm -f /app/arx-ca-amd64 /app/arx-ca-arm64 \
     && mkdir -p /app/ui \
     && tar -xzf /tmp/webui-dist.tar.gz -C /app/ui \
     && rm -f /tmp/webui-dist.tar.gz \
@@ -69,4 +69,4 @@ ENV ARX_WEBUI_ENABLED=true \
 HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
     CMD ["/app/docker-healthcheck.sh"]
 
-ENTRYPOINT ["/app/arx", "server", "start", "--config", "/data/server.yaml"]
+ENTRYPOINT ["/app/arx-ca", "server", "start", "--config", "/data/server.yaml"]

@@ -243,7 +243,7 @@ func DefaultServerConfig() ServerConfig {
 		},
 		Service: ServiceConfig{
 			RunAsUser:  "arx-ca",
-			InstallDir: "/opt/arx",
+			InstallDir: "/opt/arx-ca",
 		},
 		Updater: UpdaterConfig{
 			Enabled:                  true,
@@ -254,7 +254,7 @@ func DefaultServerConfig() ServerConfig {
 		},
 		WebUI: WebUIConfig{
 			Enabled:       false,
-			UIDir:         "/opt/arx/ui",
+			UIDir:         "/opt/arx-ca/ui",
 			PathPrefix:    "/",
 			ListenAddress: ":8443",
 			MaxBodySize:   2 * 1024 * 1024,

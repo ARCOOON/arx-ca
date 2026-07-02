@@ -321,7 +321,7 @@ func (m *model) moveCursor(delta int) {
 func (m model) View() string {
 	var b strings.Builder
 
-	b.WriteString(styleTitle.Render("arx · Super Admin"))
+	b.WriteString(styleTitle.Render("arx-ca-cli · Super Admin"))
 	b.WriteString("\n")
 	b.WriteString(m.renderTabs())
 	b.WriteString("\n\n")

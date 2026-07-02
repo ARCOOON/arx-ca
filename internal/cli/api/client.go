@@ -158,7 +158,7 @@ func (c *Client) postJSON(ctx context.Context, path string, body any, out any, w
 func (c *Client) doJSON(req *http.Request, out any, withAuth bool) error {
 	if withAuth {
 		if c.BearerAuth == "" {
-			return fmt.Errorf("not logged in; run arx login first")
+			return fmt.Errorf("not logged in; run arx-ca-cli login first")
 		}
 		req.Header.Set("Authorization", c.BearerAuth)
 	}

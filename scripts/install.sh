@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — Install arx and WebUI assets from the latest GitHub release.
+# install.sh — Install arx-ca and WebUI assets from the latest GitHub release.
 # Usage: install.sh [--user|--system]   (default: --user)
 
 set -euo pipefail
@@ -14,12 +14,12 @@ usage() {
 Usage: $(basename "$0") [--user|--system]
 
   --user    Install for the current user (default)
-            Directory: \$HOME/.arx
-            Symlink:   \$HOME/.local/bin/arx
+            Directory: \$HOME/.arx-ca
+            Symlink:   \$HOME/.local/bin/arx-ca
 
   --system  Install system-wide (requires root)
-            Directory: /opt/arx
-            Symlink:   /usr/local/bin/arx
+            Directory: /opt/arx-ca
+            Symlink:   /usr/local/bin/arx-ca
 
 Existing server.yaml and .pki/ in the install directory are preserved on upgrade.
 EOF
@@ -52,11 +52,11 @@ if [[ "${SCOPE}" == "system" ]]; then
 		echo "Error: --system requires root privileges. Run with sudo." >&2
 		exit 1
 	fi
-	INSTALL_DIR="/opt/arx"
-	SYMLINK="/usr/local/bin/arx"
+	INSTALL_DIR="/opt/arx-ca"
+	SYMLINK="/usr/local/bin/arx-ca"
 else
-	INSTALL_DIR="${HOME}/.arx"
-	SYMLINK="${HOME}/.local/bin/arx"
+	INSTALL_DIR="${HOME}/.arx-ca"
+	SYMLINK="${HOME}/.local/bin/arx-ca"
 fi
 
 detect_platform() {
@@ -80,7 +80,7 @@ detect_platform() {
 		;;
 	esac
 
-	BINARY_NAME="arx-${os}-${arch}"
+	BINARY_NAME="arx-ca-${os}-${arch}"
 }
 
 fetch_latest_tag() {
@@ -141,7 +141,7 @@ main() {
 	detect_platform
 	fetch_latest_tag
 
-	echo "Installing arx ${LATEST_TAG} (${SCOPE} scope)"
+	echo "Installing arx-ca ${LATEST_TAG} (${SCOPE} scope)"
 	echo "  Install directory: ${INSTALL_DIR}"
 	echo "  Binary asset:      ${BINARY_NAME}"
 
@@ -159,8 +159,8 @@ main() {
 	mkdir -p "${INSTALL_DIR}"
 	preserve_user_data
 
-	echo "Installing binary to ${INSTALL_DIR}/arx..."
-	install -m 755 "${TMPDIR}/${BINARY_NAME}" "${INSTALL_DIR}/arx"
+	echo "Installing binary to ${INSTALL_DIR}/arx-ca..."
+	install -m 755 "${TMPDIR}/${BINARY_NAME}" "${INSTALL_DIR}/arx-ca"
 
 	echo "Extracting WebUI assets to ${INSTALL_DIR}/ui/..."
 	install_webui
@@ -169,27 +169,27 @@ main() {
 		ensure_user_path
 	fi
 
-	echo "Creating symlink ${SYMLINK} -> ${INSTALL_DIR}/arx..."
-	ln -sf "${INSTALL_DIR}/arx" "${SYMLINK}"
+	echo "Creating symlink ${SYMLINK} -> ${INSTALL_DIR}/arx-ca..."
+	ln -sf "${INSTALL_DIR}/arx-ca" "${SYMLINK}"
 
 	echo ""
 	echo "Installation complete."
 	echo "  Version:  ${LATEST_TAG}"
-	echo "  Binary:   ${INSTALL_DIR}/arx"
+	echo "  Binary:   ${INSTALL_DIR}/arx-ca"
 	echo "  WebUI:    ${INSTALL_DIR}/ui/"
-	echo "  Command:  arx (via ${SYMLINK})"
+	echo "  Command:  arx-ca (via ${SYMLINK})"
 	echo ""
 	echo "Next steps:"
 
 	if [[ "${SCOPE}" == "user" ]]; then
-		echo "  arx server config init --config ${INSTALL_DIR}/server.yaml"
-		echo "  arx server start --config ${INSTALL_DIR}/server.yaml"
+		echo "  arx-ca server config init --config ${INSTALL_DIR}/server.yaml"
+		echo "  arx-ca server start --config ${INSTALL_DIR}/server.yaml"
 		echo ""
 		echo "Note: If running on a headless server, enable linger to allow the user service to start at boot:"
 		echo "sudo loginctl enable-linger $USER"
 	else
-		echo "  arx server config init --config ${INSTALL_DIR}/server.yaml"
-		echo "  arx server start --config ${INSTALL_DIR}/server.yaml"
+		echo "  arx-ca server config init --config ${INSTALL_DIR}/server.yaml"
+		echo "  arx-ca server start --config ${INSTALL_DIR}/server.yaml"
 	fi
 
 	echo ""

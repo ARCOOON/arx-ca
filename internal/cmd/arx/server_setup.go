@@ -17,7 +17,7 @@ import (
 
 const (
 	defaultSetupRunAsUser  = "arx-ca"
-	defaultSetupInstallDir = "/opt/arx"
+	defaultSetupInstallDir = "/opt/arx-ca"
 )
 
 func newServerSetupCmd() *cobra.Command {

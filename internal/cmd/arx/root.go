@@ -6,22 +6,41 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Execute runs the arx root command.
-func Execute(version, commit string) error {
-	return NewRootCmd(version, commit).Execute()
+// ExecuteServer runs the arx-ca server root command.
+func ExecuteServer(version, commit string) error {
+	return NewServerRootCmd(version, commit).Execute()
 }
 
-// NewRootCmd builds the arx control-plane CLI (server, admin tools, and utilities).
-func NewRootCmd(version, commit string) *cobra.Command {
+// ExecuteCLI runs the arx-ca-cli administrative root command.
+func ExecuteCLI(version, commit string) error {
+	return NewCLIRootCmd(version, commit).Execute()
+}
+
+// NewServerRootCmd builds the arx-ca server binary (HTTP API, WebUI host, lifecycle).
+func NewServerRootCmd(version, commit string) *cobra.Command {
 	root := &cobra.Command{
-		Use:     "arx",
-		Short:   "Arx Certificate Authority control plane",
-		Long:    "arx is the control-plane binary for the Arx CA API server, administration CLI, and operator utilities. Use arx-agent on client nodes for renewal and local certificate operations.",
+		Use:     "arx-ca",
+		Short:   "Arx Certificate Authority server",
+		Long:    "arx-ca is the CA server binary: HTTP API, enrollment protocols, WebUI host, and local server lifecycle. Use arx-ca-cli for remote administration and arx-ca-agent on client nodes for renewal.",
+		Version: fmt.Sprintf("%s (commit: %s)", version, commit),
+	}
+
+	root.AddCommand(newServerCmd())
+
+	applyCobraErrorSilence(root)
+	return root
+}
+
+// NewCLIRootCmd builds the arx-ca-cli remote administration binary.
+func NewCLIRootCmd(version, commit string) *cobra.Command {
+	root := &cobra.Command{
+		Use:     "arx-ca-cli",
+		Short:   "Arx CA remote administration CLI",
+		Long:    "arx-ca-cli is the operator CLI for authenticating to a remote arx-ca server, managing certificates, and running admin utilities. Run arx-ca on the CA host for server lifecycle.",
 		Version: fmt.Sprintf("%s (commit: %s)", version, commit),
 	}
 
 	root.AddCommand(
-		newServerCmd(),
 		newLoginCmd(),
 		newUICmd(),
 		newCertCmd(),

@@ -4,12 +4,12 @@ package service
 
 import "fmt"
 
-// Install registers the arx-agent systemd unit (Linux only).
+// Install registers the arx-ca-agent systemd unit (Linux only).
 func Install(_ InstallOptions) error {
 	return fmt.Errorf("service install is only supported on Linux")
 }
 
-// Uninstall removes the arx-agent systemd unit (Linux only).
+// Uninstall removes the arx-ca-agent systemd unit (Linux only).
 func Uninstall(_ InstallOptions) error {
 	return fmt.Errorf("service uninstall is only supported on Linux")
 }

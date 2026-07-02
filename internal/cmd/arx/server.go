@@ -102,13 +102,13 @@ func newServerServiceCmd() *cobra.Command {
 	svc := &cobra.Command{
 		Use:   "service",
 		Short: "Install or remove the Arx CA server daemon",
-		Long: `Self-install the arx binary, bootstrap server.yaml, and register a daemon.
+		Long: `Self-install the arx-ca binary, bootstrap server.yaml, and register a daemon.
 
-Linux: --system writes /etc/systemd/system/arx.service (/opt/arx by default).
-       --user writes ~/.config/systemd/user/arx.service ($HOME/.arx by default).
+Linux: --system writes /etc/systemd/system/arx-ca.service (/opt/arx-ca by default).
+       --user writes ~/.config/systemd/user/arx-ca.service ($HOME/.arx-ca by default).
 
 Windows: --system registers a Windows Service under Program Files.
-         --user creates a logon scheduled task under %LOCALAPPDATA%\\arx.
+         --user creates a logon scheduled task under %LOCALAPPDATA%\\arx-ca.
 
 When neither --user nor --system is set, user scope is used unless the process is root
 (Linux) or Administrator (Windows), in which case system scope is selected.`,
@@ -123,7 +123,7 @@ When neither --user nor --system is set, user scope is used unless the process i
 
 	install := &cobra.Command{
 		Use:   "install",
-		Short: "Install the arx binary, configuration, and service unit",
+		Short: "Install the arx-ca binary, configuration, and service unit",
 		Run: func(cmd *cobra.Command, _ []string) {
 			scope, err := resolveInstallScope(cmd, flagUser, flagSystem)
 			if err != nil {

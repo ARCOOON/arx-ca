@@ -26,7 +26,7 @@ as v0.0.0-dev). Use --version to fetch a specific release tag instead (for examp
 downgrading or when the binary is a development build).
 
 Requires outbound HTTPS access to api.github.com and github.com. The target ui_dir
-must be writable by the current user (use sudo when installing under /opt/arx).`,
+must be writable by the current user (use sudo when installing under /opt/arx-ca).`,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			return ui.DownloadAndBootstrapWebUI(serverConfigFlag, uiDownloadVersion)
 		},

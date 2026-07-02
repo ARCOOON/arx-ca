@@ -1,15 +1,15 @@
 package service
 
-// InstallOptions configures self-install and uninstall of the arx-agent systemd unit.
+// InstallOptions configures self-install and uninstall of the arx-ca-agent systemd unit.
 type InstallOptions struct {
 	RunAsUser  string
 	InstallDir string
 }
 
 const (
-	defaultRunAsUser  = "arx-agent"
-	defaultInstallDir = "/opt/arx-agent"
-	binaryName        = "arx-agent"
+	defaultRunAsUser  = "arx-ca-agent"
+	defaultInstallDir = "/opt/arx-ca-agent"
+	binaryName        = "arx-ca-agent"
 	configFileName    = "agent.yaml"
 )
 

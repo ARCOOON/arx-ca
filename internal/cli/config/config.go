@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const configDirName = ".arx"
+const configDirName = ".arx-ca"
 const configFileName = "config.json"
 
 // Config holds persisted CLI authentication and server settings.
@@ -22,7 +22,7 @@ type Config struct {
 	Username  string    `json:"username,omitempty"` // deprecated: use Email
 }
 
-// Path returns the default config file path (~/.arx/config.json).
+// Path returns the default config file path (~/.arx-ca/config.json).
 func Path() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -56,7 +56,7 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
-// Save writes cfg to ~/.arx/config.json with restrictive permissions.
+// Save writes cfg to ~/.arx-ca/config.json with restrictive permissions.
 func Save(cfg *Config) error {
 	if cfg == nil {
 		return errors.New("config is nil")

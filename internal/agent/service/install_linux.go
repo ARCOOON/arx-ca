@@ -14,7 +14,7 @@ import (
 )
 
 // Install copies the current binary to installDir, bootstraps agent.yaml, registers
-// the arx-agent systemd unit, and starts the service. It must run as root.
+// the arx-ca-agent systemd unit, and starts the service. It must run as root.
 func Install(opts InstallOptions) error {
 	if err := requireRoot("install"); err != nil {
 		return err
@@ -72,15 +72,15 @@ func Install(opts InstallOptions) error {
 		return err
 	}
 
-	fmt.Println("arx-agent installed and started.")
+	fmt.Println("arx-ca-agent installed and started.")
 	fmt.Printf("Service:  %s\n", unitName)
 	fmt.Printf("Binary:   %s\n", destBinary)
 	fmt.Printf("Config:   %s\n", configPath)
-	fmt.Println("Edit agent.yaml (managed_certs, protocols, thresholds). Use API renewal with arx login, or ACME with acme_directory_url.")
+	fmt.Println("Edit agent.yaml (managed_certs, protocols, thresholds). Use API renewal with arx-ca-cli login, or ACME with acme_directory_url.")
 	return nil
 }
 
-// Uninstall stops the arx-agent unit, removes the unit file and install directory, and
+// Uninstall stops the arx-ca-agent unit, removes the unit file and install directory, and
 // deletes the service user. It must run as root.
 func Uninstall(opts InstallOptions) error {
 	if err := requireRoot("uninstall"); err != nil {
@@ -112,7 +112,7 @@ func Uninstall(opts InstallOptions) error {
 		return err
 	}
 
-	fmt.Println("arx-agent uninstalled.")
+	fmt.Println("arx-ca-agent uninstalled.")
 	return nil
 }
 

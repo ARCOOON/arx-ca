@@ -10,9 +10,9 @@ before:
     - go mod download
 
 builds:
-  - id: arx
-    main: ./cmd/arx
-    binary: arx
+  - id: arx-ca
+    main: ./cmd/arx-ca
+    binary: arx-ca
     env:
       - CGO_ENABLED=0
     goos:
@@ -34,9 +34,29 @@ builds:
         - npm --prefix webui install
         - npm --prefix webui run build
 
-  - id: arx-agent
-    main: ./cmd/arx-agent
-    binary: arx-agent
+  - id: arx-ca-cli
+    main: ./cmd/arx-ca-cli
+    binary: arx-ca-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.Version={{.Tag}}
+      - -X main.Commit={{.Commit}}
+
+  - id: arx-ca-agent
+    main: ./cmd/arx-ca-agent
+    binary: arx-ca-agent
     env:
       - CGO_ENABLED=0
     goos:
@@ -58,16 +78,23 @@ builds:
         - sh -c 'test -f webui/dist/index.html || (npm --prefix webui install && npm --prefix webui run build)'
 
 archives:
-  - id: arx
+  - id: arx-ca
     ids:
-      - arx
+      - arx-ca
     name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
     formats:
       - binary
 
-  - id: arx-agent
+  - id: arx-ca-cli
     ids:
-      - arx-agent
+      - arx-ca-cli
+    name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
+    formats:
+      - binary
+
+  - id: arx-ca-agent
+    ids:
+      - arx-ca-agent
     name_template: "{{ .Binary }}-{{ .Os }}-{{ .Arch }}"
     formats:
       - binary

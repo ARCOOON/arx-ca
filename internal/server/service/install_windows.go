@@ -120,7 +120,7 @@ func uninstallWindowsSystem(opts InstallOptions) error {
 		return fmt.Errorf("remove install directory %s: %w", installDir, err)
 	}
 
-	fmt.Println("arx CA server uninstalled (system scope).")
+	fmt.Println("arx-ca CA server uninstalled (system scope).")
 	return nil
 }
 
@@ -135,7 +135,7 @@ func uninstallWindowsUser(opts InstallOptions) error {
 		return fmt.Errorf("remove install directory %s: %w", installDir, err)
 	}
 
-	fmt.Println("arx CA server uninstalled (user scope).")
+	fmt.Println("arx-ca CA server uninstalled (user scope).")
 	return nil
 }
 
@@ -255,7 +255,7 @@ func removeUserLogonTask() error {
 }
 
 func printInstallSuccess(scope, serviceName, binary, config, unitPath string) {
-	fmt.Println("arx CA server installed and started.")
+	fmt.Println("arx-ca CA server installed and started.")
 	fmt.Printf("Scope:    %s\n", scope)
 	fmt.Printf("Service:  %s\n", serviceName)
 	fmt.Printf("Target:   %s\n", unitPath)

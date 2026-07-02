@@ -1,7 +1,7 @@
 package config
 
-// CLIConfig holds defaults and persisted settings for arx-ca-cli (~/.arx/cli.yaml).
-// Authentication tokens are stored in ~/.arx/config.json (see internal/cli/config.Config);
+// CLIConfig holds defaults and persisted settings for arx-ca-cli (~/.arx-ca/cli.yaml).
+// Authentication tokens are stored in ~/.arx-ca/config.json (see internal/cli/config.Config);
 // both files share server_url after a successful login.
 type CLIConfig struct {
 	ServerURL string `mapstructure:"server_url" yaml:"server_url,omitempty"`

@@ -27,7 +27,7 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/config"
 )
 
-const acmeUserAgent = "arx-agent/1.0"
+const acmeUserAgent = "arx-ca-agent/1.0"
 
 // ACMERenewer obtains and renews certificates using ACMEv2 (RFC 8555).
 type ACMERenewer struct {

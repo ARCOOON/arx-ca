@@ -8,7 +8,7 @@ import (
 	"text/template"
 )
 
-const unitName = "arx"
+const unitName = "arx-ca"
 
 type unitTarget struct {
 	filePath string
@@ -17,13 +17,13 @@ type unitTarget struct {
 
 func unitTargetForScope(scope InstallScope) (unitTarget, error) {
 	if scope.IsSystem() {
-		return unitTarget{filePath: "/etc/systemd/system/arx.service", userMode: false}, nil
+		return unitTarget{filePath: "/etc/systemd/system/arx-ca.service", userMode: false}, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return unitTarget{}, fmt.Errorf("resolve home directory: %w", err)
 	}
-	path := filepath.Join(home, ".config", "systemd", "user", "arx.service")
+	path := filepath.Join(home, ".config", "systemd", "user", "arx-ca.service")
 	return unitTarget{filePath: path, userMode: true}, nil
 }
 
@@ -107,5 +107,5 @@ func writeUnitFile(target unitTarget, params UnitParams) error {
 }
 
 func legacySystemUnitPath() string {
-	return "/etc/systemd/system/arx-server.service"
+	return "/etc/systemd/system/arx-ca-server.service"
 }

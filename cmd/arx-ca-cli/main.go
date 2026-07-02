@@ -16,7 +16,7 @@ var (
 
 func main() {
 	version.Version = Version
-	if err := arxcmd.Execute(Version, Commit); err != nil {
+	if err := arxcmd.ExecuteCLI(Version, Commit); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

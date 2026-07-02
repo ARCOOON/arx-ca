@@ -23,7 +23,7 @@ func NewAuthenticatedClient(flagURL string) (*cliapi.Client, error) {
 		return nil, err
 	}
 	if strings.TrimSpace(cfg.Token) == "" {
-		return nil, fmt.Errorf("not logged in; run arx login first")
+		return nil, fmt.Errorf("not logged in; run arx-ca-cli login first")
 	}
 
 	return cliapi.NewClient(url, cfg.BearerToken())

@@ -17,12 +17,12 @@ type ServerConfigNotFoundError struct {
 }
 
 func (e ServerConfigNotFoundError) Error() string {
-	return fmt.Sprintf("No configuration file found at %s. Run 'arx server config init' to generate one.", e.Path)
+	return fmt.Sprintf("No configuration file found at %s. Run 'arx-ca server config init' to generate one.", e.Path)
 }
 
 const (
 	serverConfigFileName = "server.yaml"
-	cliConfigDirName     = ".arx"
+	cliConfigDirName     = ".arx-ca"
 	cliConfigFileName    = "cli.yaml"
 	agentConfigDirName   = ".arx-cert-service"
 	agentConfigFileName  = "agent.yaml"
@@ -230,7 +230,7 @@ func cabootstrapConfigEmpty(b CABootstrapConfig) bool {
 		b.KeySize <= 0
 }
 
-// InitCLIConfig loads or creates ~/.arx/cli.yaml and binds it to Viper.
+// InitCLIConfig loads or creates ~/.arx-ca/cli.yaml and binds it to Viper.
 func InitCLIConfig() error {
 	configPath, err := cliConfigFilePath()
 	if err != nil {

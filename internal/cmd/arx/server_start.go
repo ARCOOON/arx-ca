@@ -289,13 +289,13 @@ func runServer() error {
 	errCh := make(chan error, 1)
 	go func() {
 		if serverCfg.Server.TLS.Enabled {
-			log.Info("arx server listening (TLS)", slog.String("address", listenAddr), slog.String("log_level", serverCfg.Server.LogLevel))
+			log.Info("arx-ca server listening (TLS)", slog.String("address", listenAddr), slog.String("log_level", serverCfg.Server.LogLevel))
 			if err := server.ListenAndServeTLS(certFile, keyFile); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errCh <- err
 			}
 			return
 		}
-		log.Info("arx server listening", slog.String("address", listenAddr), slog.String("log_level", serverCfg.Server.LogLevel))
+		log.Info("arx-ca server listening", slog.String("address", listenAddr), slog.String("log_level", serverCfg.Server.LogLevel))
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}

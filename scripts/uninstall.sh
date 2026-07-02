@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# uninstall.sh — Remove arx binary, WebUI assets, and symlink for the selected scope.
+# uninstall.sh — Remove arx-ca binary, WebUI assets, and symlink for the selected scope.
 # Usage: uninstall.sh [--user|--system]   (default: --user)
 
 set -euo pipefail
@@ -11,12 +11,12 @@ usage() {
 Usage: $(basename "$0") [--user|--system]
 
   --user    Remove user-scoped installation (default)
-            Directory: \$HOME/.arx
-            Symlink:   \$HOME/.local/bin/arx
+            Directory: \$HOME/.arx-ca
+            Symlink:   \$HOME/.local/bin/arx-ca
 
   --system  Remove system-wide installation (requires root)
-            Directory: /opt/arx
-            Symlink:   /usr/local/bin/arx
+            Directory: /opt/arx-ca
+            Symlink:   /usr/local/bin/arx-ca
 
 If server.yaml or .pki/ remain in the install directory, the directory is retained.
 EOF
@@ -49,11 +49,11 @@ if [[ "${SCOPE}" == "system" ]]; then
     echo "Error: --system requires root privileges. Run with sudo." >&2
     exit 1
   fi
-  INSTALL_DIR="/opt/arx"
-  SYMLINK="/usr/local/bin/arx"
+  INSTALL_DIR="/opt/arx-ca"
+  SYMLINK="/usr/local/bin/arx-ca"
 else
-  INSTALL_DIR="${HOME}/.arx"
-  SYMLINK="${HOME}/.local/bin/arx"
+  INSTALL_DIR="${HOME}/.arx-ca"
+  SYMLINK="${HOME}/.local/bin/arx-ca"
 fi
 
 remove_if_exists() {
@@ -65,7 +65,7 @@ remove_if_exists() {
 }
 
 main() {
-  echo "Uninstalling arx (${SCOPE} scope)"
+  echo "Uninstalling arx-ca (${SCOPE} scope)"
   echo "  Install directory: ${INSTALL_DIR}"
 
   if [[ -L "${SYMLINK}" ]] || [[ -e "${SYMLINK}" ]]; then
@@ -75,7 +75,7 @@ main() {
     echo "Symlink not found: ${SYMLINK} (skipped)"
   fi
 
-  remove_if_exists "${INSTALL_DIR}/arx"
+  remove_if_exists "${INSTALL_DIR}/arx-ca"
   remove_if_exists "${INSTALL_DIR}/ui"
 
   local preserved=false

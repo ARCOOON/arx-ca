@@ -1,4 +1,4 @@
-# uninstall.ps1 — Remove arx binary, WebUI assets, and PATH entry for the selected scope.
+# uninstall.ps1 — Remove arx-ca binary, WebUI assets, and PATH entry for the selected scope.
 # Usage: .\uninstall.ps1 [-User] [-System]   (default: -User)
 
 #Requires -Version 5.1
@@ -68,19 +68,19 @@ if ($System) {
         Write-Error 'Error: -System requires Administrator privileges. Run PowerShell as Administrator.'
         exit 1
     }
-    $InstallDir = Join-Path $env:ProgramFiles 'arx'
+    $InstallDir = Join-Path $env:ProgramFiles 'arx-ca'
     $PathTarget = [EnvironmentVariableTarget]::Machine
     $ScopeLabel = 'system'
 } else {
-    $InstallDir = Join-Path $env:LOCALAPPDATA 'arx'
+    $InstallDir = Join-Path $env:LOCALAPPDATA 'arx-ca'
     $PathTarget = [EnvironmentVariableTarget]::User
     $ScopeLabel = 'user'
 }
 
-Write-Host "Uninstalling arx ($ScopeLabel scope)"
+Write-Host "Uninstalling arx-ca ($ScopeLabel scope)"
 Write-Host "  Install directory: $InstallDir"
 
-Remove-IfExists (Join-Path $InstallDir 'arx.exe')
+Remove-IfExists (Join-Path $InstallDir 'arx-ca.exe')
 Remove-IfExists (Join-Path $InstallDir 'ui')
 
 Write-Host "Removing PATH entry ($PathTarget scope)..."

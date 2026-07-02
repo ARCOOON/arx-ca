@@ -21,8 +21,9 @@ import (
 type Component string
 
 const (
-	ComponentArx      Component = "arx"
-	ComponentArxAgent Component = "arx-agent"
+	ComponentArxCA      Component = "arx-ca"
+	ComponentArxCACli   Component = "arx-ca-cli"
+	ComponentArxCAAgent Component = "arx-ca-agent"
 )
 
 // Config drives a single self-update run.
@@ -90,7 +91,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 func validateComponent(c Component) error {
 	switch c {
-	case ComponentArx, ComponentArxAgent:
+	case ComponentArxCA, ComponentArxCACli, ComponentArxCAAgent:
 		return nil
 	default:
 		return fmt.Errorf("unsupported component %q", c)

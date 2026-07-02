@@ -10,7 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SetCLIServerURL updates server_url in ~/.arx/cli.yaml and refreshes the active Viper state.
+// SetCLIServerURL updates server_url in ~/.arx-ca/cli.yaml and refreshes the active Viper state.
 func SetCLIServerURL(url string) error {
 	url = strings.TrimRight(strings.TrimSpace(url), "/")
 	if url == "" {

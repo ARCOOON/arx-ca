@@ -4,11 +4,11 @@ Vue 3 management console for the Arx Certificate Authority API. Built with Vite,
 
 ## Development
 
-Run the Go backend once, then start Vite in a second terminal for HMR without rebuilding `arx`:
+Run the Go backend once, then start Vite in a second terminal for HMR without rebuilding `arx-ca`:
 
 ```bash
 # Terminal A (repository root)
-./bin/arx server start
+./bin/arx-ca server start
 
 # Terminal B
 npm ci

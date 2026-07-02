@@ -62,7 +62,7 @@ func downloadAndBootstrap(ctx context.Context, client *http.Client, out io.Write
 		return err
 	}
 	if !found {
-		return fmt.Errorf("server configuration not found at %s: run 'arx server config init' first", path)
+		return fmt.Errorf("server configuration not found at %s: run 'arx-ca server config init' first", path)
 	}
 
 	uiDir := strings.TrimSpace(cfg.WebUI.UIDir)

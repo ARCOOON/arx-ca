@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	unitFilePath = "/etc/systemd/system/arx-agent.service"
-	unitName     = "arx-agent"
+	unitFilePath = "/etc/systemd/system/arx-ca-agent.service"
+	unitName     = "arx-ca-agent"
 )
 
 var unitTemplate = template.Must(template.New("unit").Parse(`[Unit]

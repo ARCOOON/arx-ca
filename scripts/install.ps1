@@ -1,4 +1,4 @@
-# install.ps1 — Install arx and WebUI assets from the latest GitHub release.
+# install.ps1 — Install arx-ca and WebUI assets from the latest GitHub release.
 # Usage: .\install.ps1 [-User] [-System]   (default: -User)
 
 #Requires -Version 5.1
@@ -74,16 +74,16 @@ if ($System) {
         Write-Error 'Error: -System requires Administrator privileges. Run PowerShell as Administrator.'
         exit 1
     }
-    $InstallDir = Join-Path $env:ProgramFiles 'arx'
+    $InstallDir = Join-Path $env:ProgramFiles 'arx-ca'
     $PathTarget = [EnvironmentVariableTarget]::Machine
     $ScopeLabel = 'system'
 } else {
-    $InstallDir = Join-Path $env:LOCALAPPDATA 'arx'
+    $InstallDir = Join-Path $env:LOCALAPPDATA 'arx-ca'
     $PathTarget = [EnvironmentVariableTarget]::User
     $ScopeLabel = 'user'
 }
 
-Write-Host "Installing arx ($ScopeLabel scope)"
+Write-Host "Installing arx-ca ($ScopeLabel scope)"
 Write-Host "  Install directory: $InstallDir"
 
 try {
@@ -101,15 +101,15 @@ if ([string]::IsNullOrWhiteSpace($tag)) {
 
 Write-Host "  Release tag:       $tag"
 
-$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("arx-install-" + [guid]::NewGuid().ToString())
+$TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ("arx-ca-install-" + [guid]::NewGuid().ToString())
 New-Item -ItemType Directory -Path $TempDir -Force | Out-Null
 
 try {
     $BaseUrl = "https://github.com/$Repo/releases/download/$tag"
-    $BinaryAsset = 'arx-windows-amd64.exe'
+    $BinaryAsset = 'arx-ca-windows-amd64.exe'
     $BinaryDownload = Join-Path $TempDir $BinaryAsset
     $WebUiDownload = Join-Path $TempDir 'webui-dist.tar.gz'
-    $BinaryDest = Join-Path $InstallDir 'arx.exe'
+    $BinaryDest = Join-Path $InstallDir 'arx-ca.exe'
     $UiDir = Join-Path $InstallDir 'ui'
 
     Write-Host "Downloading $BinaryAsset..."
@@ -145,11 +145,11 @@ try {
     Write-Host "  Version:  $tag"
     Write-Host "  Binary:   $BinaryDest"
     Write-Host "  WebUI:    $UiDir\"
-    Write-Host "  Command:  arx (via PATH)"
+    Write-Host '  Command:  arx-ca (via PATH)'
     Write-Host ''
     Write-Host 'Next steps:'
-    Write-Host "  arx server config init --config $(Join-Path $InstallDir 'server.yaml')"
-    Write-Host "  arx server start --config $(Join-Path $InstallDir 'server.yaml')"
+    Write-Host "  arx-ca server config init --config $(Join-Path $InstallDir 'server.yaml')"
+    Write-Host "  arx-ca server start --config $(Join-Path $InstallDir 'server.yaml')"
 } finally {
     if (Test-Path $TempDir) {
         Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue

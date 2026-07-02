@@ -157,7 +157,7 @@ func (e *Engine) applyUpdate(ctx context.Context, log *slog.Logger, channel, cur
 	e.lastAppliedVer = remoteTag
 	e.mu.Unlock()
 
-	assetName := expectedAssetName(ComponentArx)
+	assetName := expectedAssetName(ComponentArxCA)
 	downloadURL, err := findAssetURL(release, assetName)
 	if err != nil {
 		log.Error("updater: release asset missing",
@@ -194,7 +194,7 @@ func (e *Engine) applyUpdate(ctx context.Context, log *slog.Logger, channel, cur
 	)
 
 	notifications.RecordSystemEvent(e.audit, e.notify, db.ActionSysUpdateApplied, map[string]any{
-		"message":          fmt.Sprintf("Updated arx from %s to %s on channel %q", normalizeTag(current), remoteTag, channel),
+		"message":          fmt.Sprintf("Updated arx-ca from %s to %s on channel %q", normalizeTag(current), remoteTag, channel),
 		"channel":          channel,
 		"previous_version": normalizeTag(current),
 		"new_version":      remoteTag,

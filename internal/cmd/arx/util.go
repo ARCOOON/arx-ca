@@ -16,7 +16,7 @@ func newUtilCmd() *cobra.Command {
 	}
 	utilCmd.AddCommand(
 		withCLIConfig(util.NewHashCmd()),
-		updatecli.NewCmd(updater.ComponentArx),
+		updatecli.NewCmd(updater.ComponentArxCACli),
 	)
 	return utilCmd
 }

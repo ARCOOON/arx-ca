@@ -26,16 +26,16 @@ func (s InstallScope) IsSystem() bool {
 
 func binaryFileName() string {
 	if runtime.GOOS == "windows" {
-		return "arx.exe"
+		return "arx-ca.exe"
 	}
-	return "arx"
+	return "arx-ca"
 }
 
 func defaultSystemInstallDir() string {
 	if runtime.GOOS == "windows" {
-		return filepath.Join(os.Getenv("ProgramFiles"), "arx")
+		return filepath.Join(os.Getenv("ProgramFiles"), "arx-ca")
 	}
-	return "/opt/arx"
+	return "/opt/arx-ca"
 }
 
 func defaultUserInstallDir() (string, error) {
@@ -44,11 +44,11 @@ func defaultUserInstallDir() (string, error) {
 		if localAppData == "" {
 			return "", errMissingLocalAppData
 		}
-		return filepath.Join(localAppData, "arx"), nil
+		return filepath.Join(localAppData, "arx-ca"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".arx"), nil
+	return filepath.Join(home, ".arx-ca"), nil
 }

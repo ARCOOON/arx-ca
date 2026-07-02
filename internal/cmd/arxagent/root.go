@@ -9,17 +9,17 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/updater"
 )
 
-// Execute runs the arx-agent root command.
+// Execute runs the arx-ca-agent root command.
 func Execute(version, commit string) error {
 	return NewRootCmd(version, commit).Execute()
 }
 
-// NewRootCmd builds the lightweight arx-agent CLI (renewal daemon and local data-plane tools).
+// NewRootCmd builds the arx-ca-agent renewal daemon and local data-plane tools.
 func NewRootCmd(version, commit string) *cobra.Command {
 	root := &cobra.Command{
-		Use:     "arx-agent",
+		Use:     "arx-ca-agent",
 		Short:   "Arx certificate renewal agent",
-		Long:    "arx-agent is the lightweight data-plane binary for certificate renewal, local trust stores, and public certificate access on client nodes.",
+		Long:    "arx-ca-agent is the data-plane binary for automated certificate enrollment, renewal, local trust stores, and public certificate access on client nodes.",
 		Version: fmt.Sprintf("%s (commit: %s)", version, commit),
 	}
 
@@ -32,7 +32,7 @@ func NewRootCmd(version, commit string) *cobra.Command {
 		newTrustCmd(),
 		newCertCmd(),
 		newServiceCmd(),
-		updatecli.NewCmd(updater.ComponentArxAgent),
+		updatecli.NewCmd(updater.ComponentArxCAAgent),
 	)
 
 	applyCobraErrorSilence(root)
