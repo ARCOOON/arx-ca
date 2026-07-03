@@ -1,0 +1,61 @@
+{
+  "mcpServers": {
+    "vue-docs": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@joelbarmettler/vue-mcp"
+      ]
+    },
+    "shadcn-vue": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "shadcn-vue-mcp"
+      ]
+    },
+    "vite-vue-runtime": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "vite-plugin-vue-mcp"
+      ]
+    },
+    "go-dev": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "go-dev-mcp"
+      ]
+    },
+    "firecrawl": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "firecrawl-mcp"
+      ]
+    },
+    "codebase-graph": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@optave/codegraph",
+        "mcp"
+      ]
+    },
+    "ast-structure": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "ast-grep-mcp"
+      ]
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  }
+}
