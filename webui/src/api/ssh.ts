@@ -10,132 +10,54 @@ import type {
   SshCertificateResponse,
   SshRootsResponse,
   SshStatsResponse,
-} from '../types/api'
+} from '@/types/api'
 import { apiClient } from './client'
 
-export async function generateSshUser(request: GenerateSshUserRequest): Promise<SshCertificateResponse> {
-  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/generate/user', request)
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH user certificate response did not include data')
-  }
-
-  return payload.data
-}
-
-export async function generateSshHost(request: GenerateSshHostRequest): Promise<SshCertificateResponse> {
-  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/generate/host', request)
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH host certificate response did not include data')
-  }
-
-  return payload.data
-}
-
-export async function signSshUser(request: SignSshUserRequest): Promise<SshCertificateResponse> {
-  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/sign-user', request)
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH user certificate response did not include data')
-  }
-
-  return payload.data
-}
-
-export async function signSshHost(request: SignSshHostRequest): Promise<SshCertificateResponse> {
-  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/sign-host', request)
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH host certificate response did not include data')
-  }
-
-  return payload.data
-}
-
-export async function inspectSshCertificate(
-  request: InspectSshCertificateRequest,
-): Promise<SshCertificateInspection> {
-  const response = await apiClient.post<ApiEnvelope<SshCertificateInspection>>('/ssh/inspect', request)
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH inspection response did not include data')
-  }
-
-  return payload.data
-}
-
-export async function fetchSshRoots(): Promise<SshRootsResponse> {
-  const response = await apiClient.get<ApiEnvelope<SshRootsResponse>>('/ssh/roots')
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH roots response did not include data')
-  }
-
-  return payload.data
-}
-
-export async function listSshCertificates(
-  limit = 50,
-  offset = 0,
-): Promise<ListSshCertificatesResponse> {
-  const response = await apiClient.get<ApiEnvelope<ListSshCertificatesResponse>>('/ssh/certificates', {
-    params: { limit, offset },
-  })
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH certificate list response did not include data')
-  }
-
+function unwrap<T>(payload: ApiEnvelope<T>, label: string): T {
+  if (payload.error) throw new Error(payload.error)
+  if (!payload.data) throw new Error(`${label} response did not include data`)
   return payload.data
 }
 
 export async function fetchSshStats(): Promise<SshStatsResponse> {
   const response = await apiClient.get<ApiEnvelope<SshStatsResponse>>('/ssh/stats')
-  const payload = response.data
+  return unwrap(response.data, 'SSH stats')
+}
 
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
+export async function fetchSshCertificates(params?: {
+  limit?: number
+  offset?: number
+}): Promise<ListSshCertificatesResponse> {
+  const response = await apiClient.get<ApiEnvelope<ListSshCertificatesResponse>>('/ssh/certificates', { params })
+  return unwrap(response.data, 'SSH certificates')
+}
 
-  if (!payload.data) {
-    throw new Error('SSH stats response did not include data')
-  }
+export async function fetchSshRoots(): Promise<SshRootsResponse> {
+  const response = await apiClient.get<ApiEnvelope<SshRootsResponse>>('/ssh/roots')
+  return unwrap(response.data, 'SSH roots')
+}
 
-  return payload.data
+export async function generateSshUser(req: GenerateSshUserRequest): Promise<SshCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/generate/user', req)
+  return unwrap(response.data, 'Generate SSH user certificate')
+}
+
+export async function generateSshHost(req: GenerateSshHostRequest): Promise<SshCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/generate/host', req)
+  return unwrap(response.data, 'Generate SSH host certificate')
+}
+
+export async function signSshUser(req: SignSshUserRequest): Promise<SshCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/sign-user', req)
+  return unwrap(response.data, 'Sign SSH user certificate')
+}
+
+export async function signSshHost(req: SignSshHostRequest): Promise<SshCertificateResponse> {
+  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/sign-host', req)
+  return unwrap(response.data, 'Sign SSH host certificate')
+}
+
+export async function inspectSshCertificate(req: InspectSshCertificateRequest): Promise<SshCertificateInspection> {
+  const response = await apiClient.post<ApiEnvelope<SshCertificateInspection>>('/ssh/inspect', req)
+  return unwrap(response.data, 'Inspect SSH certificate')
 }

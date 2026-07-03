@@ -1,39 +1,23 @@
 import type {
   ApiEnvelope,
-  CreateCertificateTemplateRequest,
   CertificateTemplate,
+  CreateCertificateTemplateRequest,
   ListCertificateTemplatesResponse,
-} from '../types/api'
+} from '@/types/api'
 import { apiClient } from './client'
 
-export async function listTemplates(): Promise<ListCertificateTemplatesResponse> {
-  const response = await apiClient.get<ApiEnvelope<ListCertificateTemplatesResponse>>('/templates')
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('Template list response did not include data')
-  }
-
+function unwrap<T>(payload: ApiEnvelope<T>, label: string): T {
+  if (payload.error) throw new Error(payload.error)
+  if (!payload.data) throw new Error(`${label} response did not include data`)
   return payload.data
 }
 
-export async function createTemplate(
-  request: CreateCertificateTemplateRequest,
-): Promise<CertificateTemplate> {
-  const response = await apiClient.post<ApiEnvelope<CertificateTemplate>>('/templates', request)
-  const payload = response.data
+export async function fetchTemplates(): Promise<ListCertificateTemplatesResponse> {
+  const response = await apiClient.get<ApiEnvelope<ListCertificateTemplatesResponse>>('/templates')
+  return unwrap(response.data, 'Templates')
+}
 
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('Template creation response did not include data')
-  }
-
-  return payload.data
+export async function createTemplate(req: CreateCertificateTemplateRequest): Promise<CertificateTemplate> {
+  const response = await apiClient.post<ApiEnvelope<CertificateTemplate>>('/templates', req)
+  return unwrap(response.data, 'Create template')
 }
