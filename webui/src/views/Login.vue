@@ -1,108 +1,110 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import ShieldCheck from 'lucide-vue-next/dist/esm/icons/shield-check.js'
-import axios from 'axios'
-import { login } from '../api/auth'
-import { useAuthStore } from '../store/auth'
+import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
+import { login } from '@/api/auth'
+import { useToast } from '@/composables/useToast'
+import { initTheme } from '@/composables/useTheme'
+import Button from '@/components/ui/Button.vue'
+import Input from '@/components/ui/Input.vue'
+import Label from '@/components/ui/Label.vue'
+import ToastHost from '@/components/ui/ToastHost.vue'
+import { extractErrorMessage } from '@/utils/errors'
+
+initTheme()
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const toast = useToast()
 
 const email = ref('')
 const password = ref('')
-const errorMessage = ref('')
-const isSubmitting = ref(false)
+const loading = ref(false)
 
-async function handleSubmit(): Promise<void> {
-  errorMessage.value = ''
-  isSubmitting.value = true
+async function handleLogin(): Promise<void> {
+  if (!email.value || !password.value) {
+    toast.error('Email and password are required')
+    return
+  }
 
+  loading.value = true
   try {
-    const session = await login({
-      email: email.value.trim(),
-      password: password.value,
-    })
-
-    authStore.setSession(session.token, session.roles ?? [])
-
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
+    const res = await login({ email: email.value, password: password.value })
+    authStore.setSession(res.token, res.roles ?? [])
+    const redirect = (route.query.redirect as string | undefined) ?? '/dashboard'
     await router.push(redirect)
-  } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const apiError = error.response?.data as { error?: string } | undefined
-      if (error.response?.status === 401) {
-        errorMessage.value = apiError?.error ?? 'Invalid email or password'
-      } else {
-        errorMessage.value = apiError?.error ?? 'Unable to sign in. Please try again.'
-      }
-    } else if (error instanceof Error) {
-      errorMessage.value = error.message
-    } else {
-      errorMessage.value = 'Unable to sign in. Please try again.'
-    }
+  } catch (err) {
+    toast.error(extractErrorMessage(err, 'Invalid credentials'))
   } finally {
-    isSubmitting.value = false
+    loading.value = false
   }
 }
 </script>
 
 <template>
-  <div class="ui-shell flex min-h-screen items-center justify-center px-4 py-12">
-    <div class="w-full max-w-md">
-      <div class="mb-8 text-center">
-        <div class="ui-brand-icon mx-auto mb-4 flex h-14 w-14 items-center justify-center bg-[var(--bg-elevated)]">
-          <ShieldCheck class="h-7 w-7" style="color: var(--accent-color)" aria-hidden="true" />
+  <div class="flex min-h-screen items-center justify-center bg-background p-4">
+    <div class="w-full max-w-sm">
+      <!-- Logo mark -->
+      <div class="mb-8 flex flex-col items-center gap-3">
+        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/20">
+          <svg class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
         </div>
-        <h1 class="text-2xl font-semibold tracking-tight ui-text-primary">Arx Certificate Authority</h1>
-        <p class="mt-2 text-sm ui-text-muted">Sign in with your administrator credentials</p>
+        <div class="text-center">
+          <h1 class="text-xl font-bold text-foreground tracking-tight">ARX CA</h1>
+          <p class="mt-1 text-sm text-foreground-muted">Certificate Authority Operator Console</p>
+        </div>
       </div>
 
-      <form class="ui-elevated ui-dialog p-6" @submit.prevent="handleSubmit">
-        <div v-if="errorMessage" class="mb-4 ui-alert-error text-sm" role="alert">
-          {{ errorMessage }}
-        </div>
-
-        <div class="space-y-4">
-          <div>
-            <label for="email" class="mb-1.5 block text-sm font-medium ui-text-secondary">Email</label>
-            <input
+      <!-- Login card -->
+      <div class="rounded-xl border border-border bg-card shadow-sm px-6 py-6">
+        <form class="space-y-4" @submit.prevent="handleLogin">
+          <div class="space-y-1.5">
+            <Label for="email">Email</Label>
+            <Input
               id="email"
               v-model="email"
               type="email"
-              name="email"
+              placeholder="operator@example.com"
               autocomplete="username"
-              required
-              class="ui-input py-2.5 text-sm"
-              placeholder="admin@example.com"
+              :disabled="loading"
+              class="w-full"
             />
           </div>
 
-          <div>
-            <label for="password" class="mb-1.5 block text-sm font-medium ui-text-secondary">Password</label>
-            <input
+          <div class="space-y-1.5">
+            <Label for="password">Password</Label>
+            <Input
               id="password"
               v-model="password"
               type="password"
-              name="password"
+              placeholder="••••••••"
               autocomplete="current-password"
-              required
-              class="ui-input py-2.5 text-sm"
-              placeholder="Enter your password"
+              :disabled="loading"
+              class="w-full"
             />
           </div>
-        </div>
 
-        <button
-          type="submit"
-          :disabled="isSubmitting"
-          class="ui-btn-primary mt-6 w-full py-2.5"
-          style="background-color: var(--accent-color); color: var(--text-inverse); border-color: var(--accent-muted)"
-        >
-          {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
-        </button>
-      </form>
+          <Button type="submit" class="w-full" :disabled="loading">
+            <span v-if="loading" class="flex items-center gap-2">
+              <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+              Authenticating…
+            </span>
+            <span v-else>Sign in</span>
+          </Button>
+        </form>
+      </div>
+
+      <p class="mt-6 text-center text-xs text-foreground-subtle">
+        ARX CA — Enterprise Certificate Authority
+      </p>
     </div>
+
+    <ToastHost />
   </div>
 </template>

@@ -1,109 +1,68 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { fetchNdesStatus } from '../api/ndes'
-import type { NdesStatus } from '../types/api'
-import { usePreferences } from '../composables/usePreferences'
-import FlatToggle from '../components/ui/FlatToggle.vue'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import { extractApiError } from '../utils/errors'
+import { ref, onMounted } from 'vue'
+import Card from '@/components/ui/Card.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Spinner from '@/components/ui/Spinner.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import { fetchNdesStatus } from '@/api/ndes'
+import type { NdesStatus } from '@/types/api'
+import { extractErrorMessage } from '@/utils/errors'
+import { useToast } from '@/composables/useToast'
 
-const { showApiHints } = usePreferences()
-
+const toast = useToast()
+const loading = ref(true)
 const status = ref<NdesStatus | null>(null)
-const isLoading = ref(true)
-const errorMessage = ref('')
-
-const scepEndpoint = computed(() => {
-  if (status.value?.scep_endpoint) {
-    return status.value.scep_endpoint
-  }
-  if (typeof window !== 'undefined') {
-    return `${window.location.origin}/certsrv/mscep/mscep.dll`
-  }
-  return 'https://<host>:8443/certsrv/mscep/mscep.dll'
-})
-
-const adminEndpoint = computed(() => {
-  if (status.value?.admin_endpoint) {
-    return status.value.admin_endpoint
-  }
-  if (typeof window !== 'undefined') {
-    return `${window.location.origin}/certsrv/mscep_admin/mscep_admin.dll`
-  }
-  return 'https://<host>:8443/certsrv/mscep_admin/mscep_admin.dll'
-})
 
 onMounted(async () => {
-  isLoading.value = true
-  errorMessage.value = ''
-
   try {
     status.value = await fetchNdesStatus()
-  } catch (error) {
-    errorMessage.value = extractApiError(error, 'Failed to load NDES status')
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 })
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
-      {{ errorMessage }}
+  <div class="space-y-6 max-w-2xl">
+    <div v-if="loading" class="flex justify-center py-16"><Spinner size="lg" /></div>
+
+    <Card v-else-if="status" class="px-6 py-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-foreground">NDES / AD CS</h2>
+        <StatusBadge :status="status.enabled ? 'enabled' : 'disabled'" />
+      </div>
+
+      <div v-if="status.enabled" class="space-y-2 text-sm">
+        <div class="flex gap-2">
+          <span class="w-36 text-xs text-foreground-muted">SCEP Endpoint</span>
+          <span class="font-mono text-xs text-foreground">{{ status.scep_endpoint ?? '—' }}</span>
+        </div>
+        <div class="flex gap-2">
+          <span class="w-36 text-xs text-foreground-muted">Admin Endpoint</span>
+          <span class="font-mono text-xs text-foreground">{{ status.admin_endpoint ?? '—' }}</span>
+        </div>
+        <div class="flex gap-2">
+          <span class="w-36 text-xs text-foreground-muted">AD CS Compatible</span>
+          <Badge :variant="status.adcs_compatible ? 'success' : 'secondary'">
+            {{ status.adcs_compatible ? 'Yes' : 'No' }}
+          </Badge>
+        </div>
+        <div v-if="status.connectors?.length" class="space-y-1">
+          <p class="text-xs text-foreground-muted">Connectors</p>
+          <div class="flex flex-wrap gap-1">
+            <Badge v-for="c in status.connectors" :key="c" variant="outline" class="text-[10px]">{{ c }}</Badge>
+          </div>
+        </div>
+      </div>
+      <div v-else class="text-sm text-foreground-muted">
+        NDES enrollment is not enabled in the current server configuration.
+      </div>
+    </Card>
+
+    <div v-else class="rounded-lg border border-border bg-muted px-4 py-8 text-center text-sm text-foreground-muted">
+      NDES status unavailable
     </div>
-
-    <div v-if="isLoading" class="text-sm ui-text-muted">Loading NDES configuration…</div>
-
-    <template v-else-if="status">
-      <section class="flex flex-wrap items-center gap-3">
-        <StatusBadge
-          :label="status.enabled ? 'Enabled' : 'Disabled'"
-          :tone="status.enabled ? 'enabled' : 'disabled'"
-        />
-        <StatusBadge
-          v-if="status.adcs_compatible"
-          label="AD CS compatible"
-          tone="valid"
-        />
-        <span v-if="showApiHints" class="text-xs ui-text-muted">
-          Discovery:
-          <code class="ui-code">GET /api/v1/ndes/status</code>
-        </span>
-      </section>
-
-      <FlatToggle label="NDES enrollment" :enabled="status.enabled" readonly />
-
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Endpoints</h2>
-        </header>
-        <dl class="ui-divide text-xs">
-          <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">SCEP endpoint</dt>
-            <dd class="break-all font-mono ui-text-secondary">{{ scepEndpoint }}</dd>
-          </div>
-          <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Admin endpoint</dt>
-            <dd class="break-all font-mono ui-text-secondary">{{ adminEndpoint }}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section v-if="status.connectors?.length" class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Connectors</h2>
-        </header>
-        <ul class="ui-divide px-4 py-3 text-xs">
-          <li
-            v-for="connector in status.connectors"
-            :key="connector"
-            class="py-1.5 font-mono ui-text-secondary"
-          >
-            {{ connector }}
-          </li>
-        </ul>
-      </section>
-    </template>
   </div>
 </template>

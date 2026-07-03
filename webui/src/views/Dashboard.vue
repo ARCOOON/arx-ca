@@ -1,367 +1,207 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { downloadCRL, fetchCRLStatus, type CRLStatus } from '../api/crl'
-import { downloadCABundle, fetchCAInfo, fetchCAProvisioners } from '../api/ca'
-import { fetchHealth } from '../api/health'
-import { listCertificates } from '../api/certificates'
-import type { CAInfoResponse, CAProvisionerDetail, HealthReport } from '../types/api'
-import { extractApiError } from '../utils/errors'
-import { formatBytes } from '../utils/format'
-import {
-  downloadCertificate,
-  formatCertDate,
-  formatUsageList,
-  parseBackendDetails,
-  shortenFingerprint,
-} from '../utils/ca'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import { usePreferences } from '../composables/usePreferences'
+import { ref, onMounted, computed } from 'vue'
+import Card from '@/components/ui/Card.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Spinner from '@/components/ui/Spinner.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import { fetchHealth } from '@/api/health'
+import { fetchCAInfo } from '@/api/ca'
+import { fetchCertificateStats } from '@/api/certificates'
+import { fetchSshStats } from '@/api/ssh'
+import type { HealthReport, CAInfoResponse, CertificateStatsResponse, SshStatsResponse } from '@/types/api'
+import { formatBytes, formatDate } from '@/utils/format'
+import { extractErrorMessage } from '@/utils/errors'
 
-const { showApiHints } = usePreferences()
+const loading = ref(true)
+const error = ref<string | null>(null)
 
 const health = ref<HealthReport | null>(null)
 const caInfo = ref<CAInfoResponse | null>(null)
-const caProvisioners = ref<CAProvisionerDetail[]>([])
-const certificateTotal = ref<number | null>(null)
-const isLoading = ref(true)
-const errorMessage = ref('')
-const chainDownloading = ref(false)
-const chainError = ref('')
-const crlStatus = ref<CRLStatus | null>(null)
-const crlDownloading = ref(false)
-const crlError = ref('')
-
-const backendDetails = computed(() => parseBackendDetails(health.value?.ca_backend.message))
-
-const crlStatusLabel = computed(() => {
-  if (!crlStatus.value) {
-    return 'Unknown'
-  }
-  if (!crlStatus.value.available) {
-    return 'Unavailable'
-  }
-  if (crlStatus.value.expiresAt) {
-    return `Available · next update ${crlStatus.value.expiresAt}`
-  }
-  return 'Available'
-})
-
-const crlStatusTone = computed((): 'valid' | 'revoked' | 'neutral' => {
-  return crlStatus.value?.available ? 'valid' : 'revoked'
-})
+const certStats = ref<CertificateStatsResponse | null>(null)
+const sshStats = ref<SshStatsResponse | null>(null)
 
 onMounted(async () => {
-  isLoading.value = true
-  errorMessage.value = ''
-
   try {
-    const [healthReport, certificateList, caInfoReport, provisionersReport, crlReport] = await Promise.all([
+    const [h, ca, cs, ss] = await Promise.all([
       fetchHealth(),
-      listCertificates(),
-      fetchCAInfo(),
-      fetchCAProvisioners(),
-      fetchCRLStatus(),
+      fetchCAInfo().catch(() => null),
+      fetchCertificateStats().catch(() => null),
+      fetchSshStats().catch(() => null),
     ])
-    health.value = healthReport
-    certificateTotal.value = certificateList.total
-    caInfo.value = caInfoReport
-    caProvisioners.value = provisionersReport.provisioners
-    crlStatus.value = crlReport
-  } catch (error) {
-    errorMessage.value = extractApiError(error, 'Failed to load dashboard metrics')
+    health.value = h
+    caInfo.value = ca
+    certStats.value = cs
+    sshStats.value = ss
+  } catch (err) {
+    error.value = extractErrorMessage(err)
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 })
 
-async function handleDownloadCAChain(): Promise<void> {
-  chainDownloading.value = true
-  chainError.value = ''
-
-  try {
-    await downloadCABundle()
-  } catch (error) {
-    chainError.value = extractApiError(error, 'Failed to download CA bundle')
-  } finally {
-    chainDownloading.value = false
-  }
-}
-
-async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
-  crlDownloading.value = true
-  crlError.value = ''
-
-  try {
-    await downloadCRL(format)
-  } catch (error) {
-    crlError.value = extractApiError(error, 'Failed to download CRL')
-  } finally {
-    crlDownloading.value = false
-  }
-}
-
-function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
-  if (status === 'healthy') {
-    return 'valid'
-  }
-  if (status === 'unhealthy' || status === 'degraded') {
-    return 'revoked'
-  }
-  return 'neutral'
-}
+const caStatus = computed(() => {
+  if (!health.value) return 'unknown'
+  return health.value.ca_backend.initialized ? 'online' : 'offline'
+})
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div
-      v-if="errorMessage"
-      class="ui-alert-error"
-      role="alert"
-    >
-      {{ errorMessage }}
+  <div class="space-y-6">
+    <!-- Loading -->
+    <div v-if="loading" class="flex items-center justify-center py-24">
+      <Spinner size="lg" />
     </div>
 
-    <div v-if="isLoading" class="text-sm ui-text-muted">Loading server status…</div>
+    <!-- Error -->
+    <div
+      v-else-if="error"
+      class="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+    >
+      {{ error }}
+    </div>
 
     <template v-else-if="health">
-      <section class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <article class="ui-surface-muted px-4 py-3">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">Uptime</p>
-          <p class="mt-1 text-lg font-semibold ui-text-primary">{{ health.uptime.human }}</p>
-          <p class="text-xs ui-text-muted">{{ health.uptime.seconds }} seconds</p>
-        </article>
-
-        <article class="ui-surface-muted px-4 py-3">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">API</p>
-          <div class="mt-2 flex items-center gap-2">
-            <StatusBadge :label="health.api.status" :tone="backendTone(health.api.status)" />
-            <span class="text-xs ui-text-muted">v{{ health.api.version }}</span>
-          </div>
-        </article>
-
-        <article class="ui-surface-muted px-4 py-3">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">CA Backend</p>
-          <div class="mt-2 flex flex-wrap items-center gap-2">
-            <StatusBadge :label="health.ca_backend.status" :tone="backendTone(health.ca_backend.status)" />
-            <span class="text-xs ui-text-muted">{{ health.ca_backend.engine }}</span>
-          </div>
-          <dl
-            v-if="backendDetails.length > 0"
-            class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs"
-          >
-            <template v-for="detail in backendDetails" :key="detail.label">
-              <dt class="ui-text-muted">{{ detail.label }}</dt>
-              <dd class="truncate font-mono ui-text-secondary" :title="detail.value">
-                {{ detail.value }}
-              </dd>
-            </template>
-          </dl>
-        </article>
-
-        <article class="ui-surface-muted px-4 py-3">
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">Certificates</p>
-          <p class="mt-1 text-lg font-semibold ui-text-primary">
-            {{ certificateTotal ?? '—' }}
+      <!-- Status row -->
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Card class="px-4 py-4">
+          <p class="text-xs text-foreground-muted mb-1">API Status</p>
+          <StatusBadge :status="health.api.status" class="text-sm" />
+        </Card>
+        <Card class="px-4 py-4">
+          <p class="text-xs text-foreground-muted mb-1">CA Backend</p>
+          <StatusBadge :status="caStatus" class="text-sm" />
+        </Card>
+        <Card class="px-4 py-4">
+          <p class="text-xs text-foreground-muted mb-1">Uptime</p>
+          <p class="text-sm font-semibold text-foreground">{{ health.uptime.human }}</p>
+        </Card>
+        <Card class="px-4 py-4">
+          <p class="text-xs text-foreground-muted mb-1">Version</p>
+          <p class="text-sm font-semibold text-foreground font-mono">
+            {{ health.api.binary_version || health.api.version }}
           </p>
-          <p class="text-xs ui-text-muted">Issued in database</p>
-        </article>
-      </section>
+        </Card>
+      </div>
 
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Runtime</h2>
-        </header>
-        <div class="grid grid-cols-1 gap-px md:grid-cols-2 lg:grid-cols-4" style="background-color: var(--border-subtle)">
-          <div class="px-4 py-3" style="background-color: var(--bg-inset)">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">Heap in use</p>
-            <p class="mt-1 text-sm ui-text-secondary">{{ formatBytes(health.memory.heap_inuse_bytes) }}</p>
-          </div>
-          <div class="px-4 py-3" style="background-color: var(--bg-inset)">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">Goroutines</p>
-            <p class="mt-1 text-sm ui-text-secondary">{{ health.memory.goroutines }}</p>
-          </div>
-          <div class="px-4 py-3" style="background-color: var(--bg-inset)">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">GC cycles</p>
-            <p class="mt-1 text-sm ui-text-secondary">{{ health.memory.num_gc }}</p>
-          </div>
-          <div class="px-4 py-3" style="background-color: var(--bg-inset)">
-            <p class="text-[10px] uppercase tracking-wide ui-text-muted">Engine initialized</p>
-            <p class="mt-1 text-sm ui-text-secondary">{{ health.ca_backend.initialized ? 'Yes' : 'No' }}</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="ui-surface-muted">
-        <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-          <div>
-            <h2 class="text-sm font-semibold ui-text-primary">Certificate Revocation List</h2>
-            <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
-              Public endpoint
-              <code class="ui-code">GET /api/v1/crl</code>
-            </p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="ui-btn-secondary"
-              :disabled="crlDownloading"
-              @click="handleDownloadCRL('pem')"
-            >
-              {{ crlDownloading ? 'Downloading…' : 'Download CRL (PEM)' }}
-            </button>
-            <button
-              type="button"
-              class="ui-btn-secondary"
-              :disabled="crlDownloading"
-              @click="handleDownloadCRL('der')"
-            >
-              Download CRL (DER)
-            </button>
-          </div>
-        </header>
-        <div class="flex flex-wrap items-center gap-2 px-4 py-3">
-          <StatusBadge :label="crlStatusLabel" :tone="crlStatusTone" />
-        </div>
-        <p v-if="crlError" class="px-4 pb-3 text-xs" style="color: var(--danger-text)" role="alert">
-          {{ crlError }}
-        </p>
-      </section>
-
-      <section v-if="caInfo" class="ui-surface-muted">
-        <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Certificate Authorities</h2>
-          <button
-            type="button"
-            class="ui-btn-secondary"
-            :disabled="chainDownloading"
-            @click="handleDownloadCAChain"
-          >
-            {{ chainDownloading ? 'Downloading…' : 'Download CA Bundle (.zip)' }}
-          </button>
-        </header>
-        <p v-if="chainError" class="px-4 pt-2 text-xs" style="color: var(--danger-text)" role="alert">
-          {{ chainError }}
-        </p>
-        <div class="grid grid-cols-1 gap-px lg:grid-cols-2" style="background-color: var(--border-subtle)">
-          <article
-            v-for="entry in [
-              { label: 'Root CA', cert: caInfo.root, filename: 'root_ca.crt' },
-              { label: 'Intermediate CA', cert: caInfo.intermediate, filename: 'intermediate_ca.crt' },
-            ]"
-            :key="entry.label"
-            class="px-4 py-3"
-            style="background-color: var(--bg-inset)"
-          >
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="min-w-0">
-                <p class="text-[10px] uppercase tracking-wide ui-text-muted">{{ entry.label }}</p>
-                <p class="mt-1 truncate text-sm font-medium ui-text-primary" :title="entry.cert.subject.common_name">
-                  {{ entry.cert.subject.common_name }}
-                </p>
-              </div>
-              <button
-                type="button"
-                class="ui-btn-secondary shrink-0"
-                @click="downloadCertificate(entry.filename, entry.cert.pem)"
-              >
-                Download .crt
-              </button>
-            </div>
-            <dl class="mt-3 space-y-1.5 text-xs">
-              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Expires</dt>
-                <dd class="ui-text-secondary">{{ formatCertDate(entry.cert.not_after) }}</dd>
-              </div>
-              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Serial</dt>
-                <dd
-                  class="truncate font-mono ui-text-secondary"
-                  :title="entry.cert.serial_number"
-                >
-                  {{ entry.cert.serial_number || '—' }}
-                </dd>
-              </div>
-              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Signature</dt>
-                <dd class="ui-text-secondary">{{ entry.cert.signature_algorithm || '—' }}</dd>
-              </div>
-              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Key usage</dt>
-                <dd class="ui-text-secondary">{{ formatUsageList(entry.cert.key_usages) }}</dd>
-              </div>
-              <div
-                v-if="entry.cert.ext_key_usages && entry.cert.ext_key_usages.length > 0"
-                class="grid grid-cols-[5.5rem_1fr] gap-2"
-              >
-                <dt class="ui-text-muted">Ext key usage</dt>
-                <dd class="ui-text-secondary">{{ formatUsageList(entry.cert.ext_key_usages) }}</dd>
-              </div>
-              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Fingerprint</dt>
-                <dd
-                  class="truncate font-mono ui-text-secondary"
-                  :title="entry.cert.fingerprint"
-                >
-                  {{ shortenFingerprint(entry.cert.fingerprint) }}
-                </dd>
-              </div>
-            </dl>
-          </article>
-        </div>
-      </section>
-
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Active Provisioners</h2>
-        </header>
-        <div
-          v-if="caProvisioners.length === 0"
-          class="px-4 py-3 text-xs ui-text-muted"
-        >
-          No provisioners configured in ca.json.
-        </div>
-        <div
-          v-else
-          class="grid grid-cols-1 gap-px md:grid-cols-2 xl:grid-cols-3"
-          style="background-color: var(--border-subtle)"
-        >
-          <article
-            v-for="prov in caProvisioners"
-            :key="`${prov.type}-${prov.name}`"
-            class="px-4 py-3"
-            style="background-color: var(--bg-inset)"
-          >
-            <div class="flex items-center gap-2">
-              <StatusBadge :label="prov.type" tone="neutral" />
-              <p class="truncate text-sm font-medium ui-text-primary" :title="prov.name">
-                {{ prov.name }}
+      <!-- Certificate & SSH stats -->
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card class="px-5 py-5">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs text-foreground-muted mb-2">Total Issued</p>
+              <p class="text-2xl font-bold text-foreground tabular-nums">
+                {{ certStats?.total_issued ?? '—' }}
               </p>
             </div>
-            <dl
-              v-if="prov.type === 'ACME'"
-              class="mt-3 space-y-1.5 text-xs"
-            >
-              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">EAB required</dt>
-                <dd class="ui-text-secondary">{{ prov.require_eab ? 'Yes' : 'No' }}</dd>
-              </div>
-              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Challenges</dt>
-                <dd class="ui-text-secondary">{{ formatUsageList(prov.challenges) }}</dd>
-              </div>
-            </dl>
-            <dl
-              v-else-if="prov.type === 'SCEP'"
-              class="mt-3 space-y-1.5 text-xs"
-            >
-              <div class="grid grid-cols-[5.5rem_1fr] gap-2">
-                <dt class="ui-text-muted">Challenge</dt>
-                <dd class="ui-text-secondary">{{ prov.challenge || 'not configured' }}</dd>
-              </div>
-            </dl>
-          </article>
+            <Badge variant="default">X.509</Badge>
+          </div>
+        </Card>
+        <Card class="px-5 py-5">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs text-foreground-muted mb-2">Expiring in 30d</p>
+              <p class="text-2xl font-bold tabular-nums"
+                :class="(certStats?.expiring_30d ?? 0) > 0 ? 'text-warning' : 'text-foreground'"
+              >
+                {{ certStats?.expiring_30d ?? '—' }}
+              </p>
+            </div>
+            <Badge :variant="(certStats?.expiring_30d ?? 0) > 0 ? 'warning' : 'secondary'">Expiring</Badge>
+          </div>
+        </Card>
+        <Card class="px-5 py-5">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-xs text-foreground-muted mb-2">Revoked</p>
+              <p class="text-2xl font-bold text-foreground tabular-nums">
+                {{ certStats?.total_revoked ?? '—' }}
+              </p>
+            </div>
+            <Badge variant="outline">CRL</Badge>
+          </div>
+        </Card>
+      </div>
+
+      <!-- SSH stats -->
+      <div v-if="sshStats" class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card class="px-5 py-5">
+          <p class="text-xs text-foreground-muted mb-2">SSH User Certs</p>
+          <p class="text-2xl font-bold text-foreground tabular-nums">{{ sshStats.total_user_certs }}</p>
+        </Card>
+        <Card class="px-5 py-5">
+          <p class="text-xs text-foreground-muted mb-2">SSH Host Certs</p>
+          <p class="text-2xl font-bold text-foreground tabular-nums">{{ sshStats.total_host_certs }}</p>
+        </Card>
+        <Card class="px-5 py-5">
+          <p class="text-xs text-foreground-muted mb-2">SSH Active Now</p>
+          <p class="text-2xl font-bold text-foreground tabular-nums">{{ sshStats.active_now }}</p>
+        </Card>
+      </div>
+
+      <!-- CA Info -->
+      <div v-if="caInfo" class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Card class="px-5 py-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="text-sm font-semibold text-foreground">Root CA</p>
+            <Badge variant="secondary">Root</Badge>
+          </div>
+          <div class="space-y-1.5 text-xs">
+            <Row label="CN" :value="caInfo.root.subject.common_name" />
+            <Row label="Algorithm" :value="caInfo.root.signature_algorithm" />
+            <Row label="Not After" :value="formatDate(caInfo.root.not_after)" />
+            <Row label="Fingerprint" :value="caInfo.root.fingerprint" mono />
+          </div>
+        </Card>
+        <Card class="px-5 py-5 space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="text-sm font-semibold text-foreground">Intermediate CA</p>
+            <Badge variant="info">Intermediate</Badge>
+          </div>
+          <div class="space-y-1.5 text-xs">
+            <Row label="CN" :value="caInfo.intermediate.subject.common_name" />
+            <Row label="Algorithm" :value="caInfo.intermediate.signature_algorithm" />
+            <Row label="Not After" :value="formatDate(caInfo.intermediate.not_after)" />
+            <Row label="Fingerprint" :value="caInfo.intermediate.fingerprint" mono />
+          </div>
+        </Card>
+      </div>
+
+      <!-- Memory metrics -->
+      <Card class="px-5 py-5 space-y-3">
+        <p class="text-sm font-semibold text-foreground">Runtime Memory</p>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 text-xs">
+          <div>
+            <p class="text-foreground-muted mb-0.5">Heap Alloc</p>
+            <p class="font-semibold text-foreground">{{ formatBytes(health.memory.heap_alloc_bytes) }}</p>
+          </div>
+          <div>
+            <p class="text-foreground-muted mb-0.5">Heap In-use</p>
+            <p class="font-semibold text-foreground">{{ formatBytes(health.memory.heap_inuse_bytes) }}</p>
+          </div>
+          <div>
+            <p class="text-foreground-muted mb-0.5">Goroutines</p>
+            <p class="font-semibold text-foreground">{{ health.memory.goroutines }}</p>
+          </div>
+          <div>
+            <p class="text-foreground-muted mb-0.5">GC Cycles</p>
+            <p class="font-semibold text-foreground">{{ health.memory.num_gc }}</p>
+          </div>
         </div>
-      </section>
+      </Card>
     </template>
   </div>
 </template>
+
+<script lang="ts">
+const Row = {
+  props: { label: String, value: String, mono: Boolean },
+  template: `
+    <div class="flex items-start gap-2">
+      <span class="w-20 shrink-0 text-foreground-muted">{{ label }}</span>
+      <span :class="['text-foreground truncate', mono ? 'font-mono text-[10px]' : '']">{{ value }}</span>
+    </div>
+  `,
+}
+
+export default { components: { Row } }
+</script>

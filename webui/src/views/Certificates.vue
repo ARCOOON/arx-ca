@@ -1,1446 +1,477 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import type { CertificateLifecycleStatus } from '../utils/certificate'
-import { downloadCRL, fetchCRLStatus, type CRLStatus } from '../api/crl'
+import { ref, onMounted, computed } from 'vue'
+import Card from '@/components/ui/Card.vue'
+import Button from '@/components/ui/Button.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Input from '@/components/ui/Input.vue'
+import Label from '@/components/ui/Label.vue'
+import Textarea from '@/components/ui/Textarea.vue'
+import Spinner from '@/components/ui/Spinner.vue'
+import Dialog from '@/components/ui/Dialog.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import Select from '@/components/ui/Select.vue'
+import Switch from '@/components/ui/Switch.vue'
 import {
-  autoCertificate,
-  downloadCertificateBundleFile,
-  fetchCertificateBySerial,
-  fetchCertificatePrivateKey,
-  fetchCertificateStats,
-  generateCertificateBundleFile,
+  fetchCertificates,
+  fetchCertificate,
   issueCertificate,
-  issueCertificateWithToken,
-  lintCertificate,
-  listCertificates,
-  rekeyCertificate,
-  renewCertificate,
+  generateCertificate,
   revokeCertificate,
-} from '../api/certificates'
+  lintCertificate,
+} from '@/api/certificates'
+import { fetchTemplates } from '@/api/templates'
 import type {
-  CertificateRecordDetail,
-  CertificateStatsResponse,
   CertificateSummary,
-  KeyAlgorithm,
+  CertificateRecordDetail,
+  CertificateTemplate,
   LintCertificateResponse,
-} from '../types/api'
-import DataTable from '../components/ui/DataTable.vue'
-import FlatToggle from '../components/ui/FlatToggle.vue'
-import Modal from '../components/ui/Modal.vue'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import TagInput from '../components/ui/TagInput.vue'
-import { extractCommonName, resolveCertificateStatus } from '../utils/certificate'
-import { downloadCertificateBundleZip, downloadTextFile } from '../utils/download'
-import { extractApiError } from '../utils/errors'
-import { formatDateTime } from '../utils/format'
-import { useAuthStore } from '../store/auth'
-import { usePreferences } from '../composables/usePreferences'
-import Filter from 'lucide-vue-next/dist/esm/icons/list-filter.js'
-import ChevronDown from 'lucide-vue-next/dist/esm/icons/chevron-down.js'
+  KeyAlgorithm,
+} from '@/types/api'
+import { formatDate, daysUntil } from '@/utils/format'
+import { extractErrorMessage } from '@/utils/errors'
+import { useToast } from '@/composables/useToast'
 
-type IssueMode = 'csr' | 'native' | 'token' | 'auto'
-
-const REVOKE_REASONS: Array<{ label: string; code: number }> = [
-  { label: 'Unspecified', code: 0 },
-  { label: 'Key compromise', code: 1 },
-  { label: 'CA compromise', code: 2 },
-  { label: 'Affiliation changed', code: 3 },
-  { label: 'Superseded', code: 4 },
-  { label: 'Cessation of operation', code: 5 },
-  { label: 'Certificate hold', code: 6 },
-]
-
-const authStore = useAuthStore()
-const { showApiHints } = usePreferences()
-
-const isSuperAdmin = computed(() => authStore.roles.includes('SuperAdmin'))
-
+const toast = useToast()
+const loading = ref(true)
 const certificates = ref<CertificateSummary[]>([])
-const isLoading = ref(true)
-const errorMessage = ref('')
-const filtersOpen = ref(false)
+const total = ref(0)
+const page = ref(0)
+const pageSize = 25
+const search = ref('')
 
-const draftCommonName = ref('')
-const draftSerialNumber = ref('')
-const draftStatus = ref<CertificateLifecycleStatus | ''>('')
+const detailOpen = ref(false)
+const detailLoading = ref(false)
+const selectedCert = ref<CertificateRecordDetail | null>(null)
 
-const appliedCommonName = ref('')
-const appliedSerialNumber = ref('')
-const appliedStatus = ref<CertificateLifecycleStatus | ''>('')
+const issueOpen = ref(false)
+const issueMode = ref<'csr' | 'generate'>('generate')
+const issueCsr = ref('')
+const issueTtl = ref('8760h')
+const issueTemplateId = ref('')
+const generateCN = ref('')
+const generateSans = ref('')
+const generateAlgo = ref<KeyAlgorithm>('ECDSA256')
+const generateServerAuth = ref(true)
+const generateClientAuth = ref(false)
+const issueLoading = ref(false)
+const issuedCert = ref('')
+const issuedKey = ref('')
 
-const hasActiveFilters = computed(
-  () => Boolean(appliedCommonName.value || appliedSerialNumber.value || appliedStatus.value),
-)
-
-const certStats = ref<CertificateStatsResponse | null>(null)
-const statsLoading = ref(true)
-const statsError = ref('')
-
-const crlStatus = ref<CRLStatus | null>(null)
-const crlLoading = ref(true)
-const crlDownloading = ref(false)
-const crlError = ref('')
-
-const issueModalOpen = ref(false)
-const issueMode = ref<IssueMode>('csr')
-const csrInput = ref('')
-const ttlInput = ref('720h')
-const isIssuing = ref(false)
-const issueError = ref('')
-const issueSuccess = ref('')
-
-const nativeCommonName = ref('')
-const nativeSansTags = ref<string[]>([])
-const detailsModalOpen = ref(false)
-const detailsLoading = ref(false)
-const detailsError = ref('')
-const certificateDetail = ref<CertificateRecordDetail | null>(null)
-const keyRevealLoading = ref(false)
-const keyRevealError = ref('')
-const revealedPrivateKey = ref('')
-const nativeTtlInput = ref('720h')
-const nativeKeyAlgo = ref<KeyAlgorithm>('ECDSA256')
-const nativeAdvancedOpen = ref(false)
-const nativeOrganization = ref('')
-const nativeOrganizationalUnit = ref('')
-const nativeCountry = ref('')
-const nativeState = ref('')
-const nativeLocality = ref('')
-const nativeServerAuth = ref(false)
-const nativeClientAuth = ref(false)
-const nativeDigitalSignature = ref(true)
-const nativeKeyEncipherment = ref(true)
-
-const tokenInput = ref('')
-const tokenCsrInput = ref('')
-const tokenTtlInput = ref('720h')
-
-const autoCommonName = ref('')
-const autoDnsSans = ref<string[]>([])
-const autoIpSans = ref<string[]>([])
-const autoTtlInput = ref('720h')
-
-const revokeModalOpen = ref(false)
-const revokeTargetSerial = ref('')
-const revokeReasonCode = ref(0)
-const revokeReasonText = ref('')
-const revokeConfirmInput = ref('')
+const revokeOpen = ref(false)
+const revokeSerial = ref('')
+const revokeReason = ref('0')
 const revokeLoading = ref(false)
-const revokeError = ref('')
 
-const rekeyModalOpen = ref(false)
-const rekeyCsrInput = ref('')
-const rekeyLoading = ref(false)
-const rekeyError = ref('')
-const rekeySuccess = ref('')
-
-const renewLoading = ref(false)
-const renewError = ref('')
-
+const lintOpen = ref(false)
+const lintPem = ref('')
 const lintLoading = ref(false)
-const lintError = ref('')
 const lintResult = ref<LintCertificateResponse | null>(null)
 
-const tableColumns = [
-  { key: 'serial', label: 'Serial Number', cellClass: 'font-mono text-[11px]' },
-  { key: 'commonName', label: 'Common Name' },
-  { key: 'not_before', label: 'Issue Date' },
-  { key: 'not_after', label: 'Expiry Date' },
-  { key: 'status', label: 'Status' },
-  { key: 'actions', label: '', headerClass: 'w-40' },
-]
+const templates = ref<CertificateTemplate[]>([])
 
-const tableRows = computed(() =>
-  certificates.value.map((certificate) => ({
-    ...certificate,
-    commonName: extractCommonName(certificate.subject),
-    status: resolveCertificateStatus(certificate),
-  })),
-)
-
-const crlStatusLabel = computed(() => {
-  if (crlLoading.value) {
-    return 'Checking…'
-  }
-  if (!crlStatus.value?.available) {
-    return 'Unavailable'
-  }
-  if (crlStatus.value.expiresAt) {
-    return `Available · next update ${crlStatus.value.expiresAt}`
-  }
-  return 'Available'
-})
-
-const crlStatusTone = computed((): 'valid' | 'revoked' | 'neutral' => {
-  if (crlLoading.value) {
-    return 'neutral'
-  }
-  return crlStatus.value?.available ? 'valid' : 'revoked'
-})
-
-const revokeSerialPrefix = computed(() =>
-  revokeTargetSerial.value.replace(/\s+/g, '').slice(0, 8).toUpperCase(),
-)
-
-const canConfirmRevoke = computed(() => {
-  const input = revokeConfirmInput.value.trim().toUpperCase()
-  if (input === 'REVOKE') {
-    return true
-  }
-  return input.length > 0 && input === revokeSerialPrefix.value
-})
-
-function statusTone(status: CertificateLifecycleStatus): 'valid' | 'revoked' | 'expired' {
-  if (status === 'revoked') {
-    return 'revoked'
-  }
-  if (status === 'expired') {
-    return 'expired'
-  }
-  return 'valid'
-}
-
-function statusLabel(status: CertificateLifecycleStatus): string {
-  if (status === 'revoked') {
-    return 'Revoked'
-  }
-  if (status === 'expired') {
-    return 'Expired'
-  }
-  return 'Valid'
-}
-
-async function loadCertificates(): Promise<void> {
-  isLoading.value = true
-  errorMessage.value = ''
-
+async function load(reset = false): Promise<void> {
+  if (reset) page.value = 0
+  loading.value = true
   try {
-    const response = await listCertificates({
-      common_name: appliedCommonName.value || undefined,
-      serial_number: appliedSerialNumber.value || undefined,
-      status: appliedStatus.value || undefined,
-    })
-    certificates.value = response.certificates
-  } catch (error) {
-    errorMessage.value = extractApiError(error, 'Failed to load certificates')
+    const res = await fetchCertificates({ limit: pageSize, offset: page.value * pageSize })
+    certificates.value = res.certificates
+    total.value = res.total
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 }
 
-function applyFilters(): void {
-  appliedCommonName.value = draftCommonName.value.trim()
-  appliedSerialNumber.value = draftSerialNumber.value.trim()
-  appliedStatus.value = draftStatus.value
-  void loadCertificates()
-}
-
-function clearFilters(): void {
-  draftCommonName.value = ''
-  draftSerialNumber.value = ''
-  draftStatus.value = ''
-  appliedCommonName.value = ''
-  appliedSerialNumber.value = ''
-  appliedStatus.value = ''
-  void loadCertificates()
-}
-
-async function loadStats(): Promise<void> {
-  statsLoading.value = true
-  statsError.value = ''
-
+async function loadTemplates(): Promise<void> {
   try {
-    certStats.value = await fetchCertificateStats()
-  } catch (error) {
-    statsError.value = extractApiError(error, 'Failed to load certificate statistics')
-    certStats.value = null
-  } finally {
-    statsLoading.value = false
-  }
-}
-
-async function refreshCertificateView(): Promise<void> {
-  await Promise.all([loadCertificates(), loadStats()])
-}
-
-async function loadCRLStatus(): Promise<void> {
-  crlLoading.value = true
-  crlError.value = ''
-
-  try {
-    crlStatus.value = await fetchCRLStatus()
-  } catch (error) {
-    crlError.value = extractApiError(error, 'Failed to load CRL status')
-    crlStatus.value = { available: false, expiresAt: null, format: 'pem' }
-  } finally {
-    crlLoading.value = false
+    const res = await fetchTemplates()
+    templates.value = res.templates
+  } catch {
+    // non-critical
   }
 }
 
 onMounted(() => {
-  void loadCertificates()
-  void loadStats()
-  void loadCRLStatus()
+  void load()
+  void loadTemplates()
 })
 
-function openIssueModal(): void {
-  issueError.value = ''
-  issueSuccess.value = ''
-  issueMode.value = 'csr'
-  issueModalOpen.value = true
-}
+const filtered = computed(() => {
+  if (!search.value) return certificates.value
+  const q = search.value.toLowerCase()
+  return certificates.value.filter(
+    (c) =>
+      c.serial.toLowerCase().includes(q) ||
+      c.subject.toLowerCase().includes(q) ||
+      c.dns_names?.some((d) => d.toLowerCase().includes(q)),
+  )
+})
 
-function closeIssueModal(): void {
-  if (isIssuing.value) {
-    return
-  }
-  issueModalOpen.value = false
-}
-
-function setIssueMode(mode: IssueMode): void {
-  issueMode.value = mode
-  issueError.value = ''
-  issueSuccess.value = ''
-}
-
-async function submitIssueCSR(): Promise<void> {
-  issueError.value = ''
-  issueSuccess.value = ''
-
-  const csr = csrInput.value.trim()
-  if (!csr.includes('BEGIN CERTIFICATE REQUEST')) {
-    issueError.value = 'Paste a PEM-encoded certificate signing request.'
-    return
-  }
-
-  isIssuing.value = true
-
+async function openDetail(serial: string): Promise<void> {
+  detailOpen.value = true
+  detailLoading.value = true
+  selectedCert.value = null
   try {
-    const result = await issueCertificate({
-      csr,
-      ttl: ttlInput.value.trim() || undefined,
-    })
-    issueSuccess.value = `Issued certificate serial ${result.serial}`
-    csrInput.value = ''
-    await refreshCertificateView()
-  } catch (error) {
-    issueError.value = extractApiError(error, 'Failed to issue certificate')
+    selectedCert.value = await fetchCertificate(serial)
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
+    detailOpen.value = false
   } finally {
-    isIssuing.value = false
+    detailLoading.value = false
   }
 }
 
-async function submitNativeGeneration(): Promise<void> {
-  issueError.value = ''
-  issueSuccess.value = ''
-
-  const commonName = nativeCommonName.value.trim()
-  if (!commonName) {
-    issueError.value = 'Common Name is required.'
-    return
-  }
-
-  const ttl = nativeTtlInput.value.trim()
-  if (ttl && !/^\d+[smhdwMy]$/.test(ttl)) {
-    issueError.value = 'TTL must be a duration such as 720h or 30d.'
-    return
-  }
-
-  isIssuing.value = true
-
+async function handleIssue(): Promise<void> {
+  issueLoading.value = true
+  issuedCert.value = ''
+  issuedKey.value = ''
   try {
-    const request = {
-      common_name: commonName,
-      sans: nativeSansTags.value.length > 0 ? nativeSansTags.value : undefined,
-      ttl: ttl || undefined,
-      key_algo: nativeKeyAlgo.value,
-      organization: nativeOrganization.value.trim() || undefined,
-      organizational_unit: nativeOrganizationalUnit.value.trim() || undefined,
-      country: nativeCountry.value.trim() || undefined,
-      state: nativeState.value.trim() || undefined,
-      locality: nativeLocality.value.trim() || undefined,
-      is_server_auth: nativeServerAuth.value || undefined,
-      is_client_auth: nativeClientAuth.value || undefined,
-      use_digital_signature: nativeDigitalSignature.value,
-      use_key_encipherment: nativeKeyEncipherment.value,
+    if (issueMode.value === 'csr') {
+      const res = await issueCertificate({
+        csr: issueCsr.value,
+        ttl: issueTtl.value || undefined,
+        template_id: issueTemplateId.value || undefined,
+      })
+      issuedCert.value = res.certificate_pem
+    } else {
+      const res = await generateCertificate({
+        common_name: generateCN.value,
+        sans: generateSans.value ? generateSans.value.split(',').map((s) => s.trim()) : [],
+        ttl: issueTtl.value || undefined,
+        key_algo: generateAlgo.value,
+        is_server_auth: generateServerAuth.value,
+        is_client_auth: generateClientAuth.value,
+      })
+      issuedCert.value = res.certificate_pem
+      issuedKey.value = res.private_key_pem
     }
-
-    const safeName = commonName.replace(/[^a-zA-Z0-9._-]+/g, '_')
-    await generateCertificateBundleFile(request, `${safeName}-bundle.zip`)
-
-    issueSuccess.value =
-      'Certificate bundle downloaded. The private key is also escrowed on the server (AES-256-GCM encrypted) for SuperAdmin retrieval.'
-    nativeCommonName.value = ''
-    nativeSansTags.value = []
-    nativeOrganization.value = ''
-    nativeOrganizationalUnit.value = ''
-    nativeCountry.value = ''
-    nativeState.value = ''
-    nativeLocality.value = ''
-    nativeServerAuth.value = false
-    nativeClientAuth.value = false
-    nativeDigitalSignature.value = true
-    nativeKeyEncipherment.value = true
-    nativeAdvancedOpen.value = false
-    await refreshCertificateView()
-  } catch (error) {
-    issueError.value = extractApiError(error, 'Failed to generate certificate')
+    toast.success('Certificate issued')
+    void load()
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    isIssuing.value = false
+    issueLoading.value = false
   }
 }
 
-async function submitIssue(): Promise<void> {
-  if (issueMode.value === 'native') {
-    await submitNativeGeneration()
-    return
-  }
-  if (issueMode.value === 'token') {
-    await submitIssueWithToken()
-    return
-  }
-  if (issueMode.value === 'auto') {
-    await submitAutoIssue()
-    return
-  }
-  await submitIssueCSR()
-}
-
-async function openCertificateDetails(serial: string): Promise<void> {
-  detailsModalOpen.value = true
-  detailsLoading.value = true
-  detailsError.value = ''
-  certificateDetail.value = null
-  keyRevealError.value = ''
-  revealedPrivateKey.value = ''
-  lintResult.value = null
-  lintError.value = ''
-  renewError.value = ''
-
-  try {
-    certificateDetail.value = await fetchCertificateBySerial(serial)
-  } catch (error) {
-    detailsError.value = extractApiError(error, 'Failed to load certificate details')
-  } finally {
-    detailsLoading.value = false
-  }
-}
-
-function closeDetailsModal(): void {
-  detailsModalOpen.value = false
-  certificateDetail.value = null
-  detailsError.value = ''
-  keyRevealError.value = ''
-  revealedPrivateKey.value = ''
-}
-
-async function revealPrivateKey(): Promise<void> {
-  const detail = certificateDetail.value
-  if (!detail?.serial) {
-    return
-  }
-
-  keyRevealLoading.value = true
-  keyRevealError.value = ''
-
-  try {
-    const response = await fetchCertificatePrivateKey(detail.serial)
-    revealedPrivateKey.value = response.private_key_pem
-  } catch (error) {
-    keyRevealError.value = extractApiError(error, 'Failed to retrieve private key')
-  } finally {
-    keyRevealLoading.value = false
-  }
-}
-
-async function downloadEscrowedKey(): Promise<void> {
-  const detail = certificateDetail.value
-  if (!detail?.serial) {
-    return
-  }
-
-  keyRevealLoading.value = true
-  keyRevealError.value = ''
-
-  try {
-    const response = await fetchCertificatePrivateKey(detail.serial)
-    const safeName = (detail.common_name || detail.serial).replace(/[^a-zA-Z0-9._-]+/g, '_')
-    downloadTextFile(`${safeName}.key`, response.private_key_pem)
-  } catch (error) {
-    keyRevealError.value = extractApiError(error, 'Failed to download private key')
-  } finally {
-    keyRevealLoading.value = false
-  }
-}
-
-async function downloadEscrowedBundle(): Promise<void> {
-  const detail = certificateDetail.value
-  if (!detail?.serial) {
-    return
-  }
-
-  keyRevealLoading.value = true
-  keyRevealError.value = ''
-
-  try {
-    const safeName = (detail.common_name || detail.serial).replace(/[^a-zA-Z0-9._-]+/g, '_')
-    await downloadCertificateBundleFile(detail.serial, `${safeName}-bundle.zip`)
-  } catch (error) {
-    keyRevealError.value = extractApiError(error, 'Failed to download certificate bundle')
-  } finally {
-    keyRevealLoading.value = false
-  }
-}
-
-function downloadCertificateCRT(): void {
-  const detail = certificateDetail.value
-  if (!detail?.certificate_pem) {
-    return
-  }
-  const safeName = (detail.common_name || detail.serial).replace(/[^a-zA-Z0-9._-]+/g, '_')
-  downloadTextFile(`${safeName}.crt`, detail.certificate_pem, 'application/x-x509-ca-cert')
-}
-
-async function handleDownloadCRL(format: 'der' | 'pem'): Promise<void> {
-  crlDownloading.value = true
-  crlError.value = ''
-
-  try {
-    await downloadCRL(format)
-  } catch (error) {
-    crlError.value = extractApiError(error, 'Failed to download CRL')
-  } finally {
-    crlDownloading.value = false
-  }
-}
-
-function openRevokeModal(serial: string): void {
-  revokeTargetSerial.value = serial
-  revokeReasonCode.value = 0
-  revokeReasonText.value = ''
-  revokeConfirmInput.value = ''
-  revokeError.value = ''
-  revokeModalOpen.value = true
-}
-
-function closeRevokeModal(): void {
-  if (revokeLoading.value) {
-    return
-  }
-  revokeModalOpen.value = false
-  revokeTargetSerial.value = ''
-  revokeConfirmInput.value = ''
-}
-
-async function submitRevoke(): Promise<void> {
-  if (!canConfirmRevoke.value) {
-    revokeError.value = 'Type the first 8 characters of the serial number or REVOKE to continue.'
-    return
-  }
-
-  revokeError.value = ''
+async function handleRevoke(): Promise<void> {
   revokeLoading.value = true
-
   try {
     await revokeCertificate({
-      serial_number: revokeTargetSerial.value,
-      reason: revokeReasonText.value.trim() || undefined,
-      reason_code: revokeReasonCode.value,
+      serial_number: revokeSerial.value,
+      reason_code: parseInt(revokeSerial.value, 10) || 0,
     })
-    revokeModalOpen.value = false
-    closeDetailsModal()
-    await refreshCertificateView()
-    await loadCRLStatus()
-  } catch (error) {
-    revokeError.value = extractApiError(error, 'Failed to revoke certificate')
+    toast.success(`Certificate ${revokeSerial.value} revoked`)
+    revokeOpen.value = false
+    void load()
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
     revokeLoading.value = false
   }
 }
 
-async function runLint(): Promise<void> {
-  const detail = certificateDetail.value
-  if (!detail?.certificate_pem) {
-    return
-  }
-
+async function handleLint(): Promise<void> {
   lintLoading.value = true
-  lintError.value = ''
   lintResult.value = null
-
   try {
-    lintResult.value = await lintCertificate({ certificate_pem: detail.certificate_pem })
-  } catch (error) {
-    lintError.value = extractApiError(error, 'Failed to lint certificate')
+    lintResult.value = await lintCertificate({ certificate_pem: lintPem.value })
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
     lintLoading.value = false
   }
 }
 
-async function runRenew(): Promise<void> {
-  const detail = certificateDetail.value
-  if (!detail?.certificate_pem) {
-    return
-  }
-
-  renewLoading.value = true
-  renewError.value = ''
-
-  try {
-    const result = await renewCertificate({ certificate_pem: detail.certificate_pem })
-    renewError.value = ''
-    certificateDetail.value = {
-      ...detail,
-      serial: result.serial,
-      certificate_pem: result.certificate_pem,
-      not_before: result.not_before,
-      not_after: result.not_after,
-    }
-    await refreshCertificateView()
-  } catch (error) {
-    renewError.value = extractApiError(error, 'Failed to renew certificate')
-  } finally {
-    renewLoading.value = false
-  }
+function copyToClipboard(text: string, label: string): void {
+  navigator.clipboard.writeText(text).then(() => toast.success(`${label} copied`)).catch(() => {})
 }
 
-function openRekeyModal(): void {
-  rekeyCsrInput.value = ''
-  rekeyError.value = ''
-  rekeySuccess.value = ''
-  rekeyModalOpen.value = true
-}
-
-function closeRekeyModal(): void {
-  if (rekeyLoading.value) {
-    return
-  }
-  rekeyModalOpen.value = false
-}
-
-async function submitRekey(): Promise<void> {
-  const detail = certificateDetail.value
-  if (!detail?.certificate_pem) {
-    return
-  }
-
-  const csr = rekeyCsrInput.value.trim()
-  if (!csr.includes('BEGIN CERTIFICATE REQUEST')) {
-    rekeyError.value = 'Paste a PEM-encoded certificate signing request.'
-    return
-  }
-
-  rekeyLoading.value = true
-  rekeyError.value = ''
-  rekeySuccess.value = ''
-
-  try {
-    const result = await rekeyCertificate({
-      certificate_pem: detail.certificate_pem,
-      csr,
-    })
-    rekeySuccess.value = `Rekeyed certificate serial ${result.serial}`
-    certificateDetail.value = {
-      ...detail,
-      serial: result.serial,
-      certificate_pem: result.certificate_pem,
-      not_before: result.not_before,
-      not_after: result.not_after,
-    }
-    await refreshCertificateView()
-  } catch (error) {
-    rekeyError.value = extractApiError(error, 'Failed to rekey certificate')
-  } finally {
-    rekeyLoading.value = false
-  }
-}
-
-async function submitIssueWithToken(): Promise<void> {
-  issueError.value = ''
-  issueSuccess.value = ''
-
-  const token = tokenInput.value.trim()
-  const csr = tokenCsrInput.value.trim()
-
-  if (!token) {
-    issueError.value = 'Provisioner token is required.'
-    return
-  }
-  if (!csr.includes('BEGIN CERTIFICATE REQUEST')) {
-    issueError.value = 'Paste a PEM-encoded certificate signing request.'
-    return
-  }
-
-  isIssuing.value = true
-
-  try {
-    const result = await issueCertificateWithToken({
-      token,
-      csr,
-      ttl: tokenTtlInput.value.trim() || undefined,
-    })
-    issueSuccess.value = `Issued certificate serial ${result.serial}`
-    tokenCsrInput.value = ''
-    await refreshCertificateView()
-  } catch (error) {
-    issueError.value = extractApiError(error, 'Failed to issue certificate with token')
-  } finally {
-    isIssuing.value = false
-  }
-}
-
-async function submitAutoIssue(): Promise<void> {
-  issueError.value = ''
-  issueSuccess.value = ''
-
-  const commonName = autoCommonName.value.trim()
-  if (!commonName) {
-    issueError.value = 'Common Name is required.'
-    return
-  }
-
-  isIssuing.value = true
-
-  try {
-    const result = await autoCertificate({
-      common_name: commonName,
-      dns_sans: autoDnsSans.value.length > 0 ? autoDnsSans.value : undefined,
-      ip_sans: autoIpSans.value.length > 0 ? autoIpSans.value : undefined,
-      ttl: autoTtlInput.value.trim() || undefined,
-    })
-
-    const safeName = commonName.replace(/[^a-zA-Z0-9._-]+/g, '_')
-    downloadCertificateBundleZip(`${safeName}-auto.zip`, {
-      certificatePem: result.certificate_pem,
-      privateKeyPem: result.private_key_pem,
-    })
-
-    issueSuccess.value = `Auto-issued certificate serial ${result.serial}. Bundle downloaded.`
-    autoCommonName.value = ''
-    autoDnsSans.value = []
-    autoIpSans.value = []
-    await refreshCertificateView()
-  } catch (error) {
-    issueError.value = extractApiError(error, 'Failed to auto-issue certificate')
-  } finally {
-    isIssuing.value = false
-  }
+function certExpiryVariant(notAfter: string): 'success' | 'warning' | 'destructive' {
+  const days = daysUntil(notAfter)
+  if (days <= 0) return 'destructive'
+  if (days <= 30) return 'warning'
+  return 'success'
 }
 </script>
 
 <template>
   <div class="space-y-4">
-    <section class="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Total Issued</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
-          {{ statsLoading ? '…' : (certStats?.total_issued ?? '—') }}
-        </p>
-        <p class="text-xs ui-text-muted">Certificates in the CA store</p>
-      </article>
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Expiring (&lt; 30d)</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
-          {{ statsLoading ? '…' : (certStats?.expiring_30d ?? '—') }}
-        </p>
-        <p class="text-xs ui-text-muted">Active certificates nearing expiry</p>
-      </article>
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Revoked</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
-          {{ statsLoading ? '…' : (certStats?.total_revoked ?? '—') }}
-        </p>
-        <p class="text-xs ui-text-muted">Revoked certificates in the CA store</p>
-      </article>
-    </section>
-
-    <p v-if="statsError" class="ui-alert-error rounded-[var(--radius-control)] px-3 py-2 text-xs" role="alert">
-      {{ statsError }}
-    </p>
-
-    <section class="ui-surface-muted px-4 py-3">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 class="text-sm font-semibold ui-text-primary">Certificate Revocation List</h2>
-          <p v-if="showApiHints" class="mt-1 text-xs ui-text-muted">
-            Published via
-            <code class="ui-code">GET /api/v1/crl</code>
-            (alias of
-            <code class="ui-code">/api/v1/ca/crl</code>).
-          </p>
-          <div class="mt-2 flex flex-wrap items-center gap-2">
-            <StatusBadge :label="crlStatusLabel" :tone="crlStatusTone" />
-          </div>
-          <p v-if="crlError" class="mt-2 text-xs" style="color: var(--danger-text)" role="alert">
-            {{ crlError }}
-          </p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button
-            type="button"
-            class="ui-btn-secondary"
-            :disabled="crlDownloading"
-            @click="handleDownloadCRL('pem')"
-          >
-            {{ crlDownloading ? 'Downloading…' : 'Download CRL (PEM)' }}
-          </button>
-          <button
-            type="button"
-            class="ui-btn-secondary"
-            :disabled="crlDownloading"
-            @click="handleDownloadCRL('der')"
-          >
-            Download CRL (DER)
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <p v-if="showApiHints" class="text-xs ui-text-muted">
-          Inventory from
-          <code class="ui-code">GET /api/v1/certificates</code>
-        </p>
-      </div>
-      <button type="button" class="ui-btn-primary" @click="openIssueModal">Issue Certificate</button>
+    <!-- Actions bar -->
+    <div class="flex flex-wrap items-center gap-2">
+      <Input v-model="search" placeholder="Search serial, subject, DNS…" class="w-64" />
+      <div class="flex-1" />
+      <Button variant="outline" size="sm" @click="lintOpen = true">Lint PEM</Button>
+      <Button variant="outline" size="sm" @click="() => { revokeSerial = ''; revokeOpen = true }">Revoke</Button>
+      <Button size="sm" @click="() => { issuedCert = ''; issuedKey = ''; issueOpen = true }">Issue Certificate</Button>
     </div>
 
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
-      {{ errorMessage }}
-    </div>
+    <!-- Table -->
+    <Card class="overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-border bg-muted/50">
+              <th class="px-4 py-2.5 text-left text-xs font-semibold text-foreground-muted uppercase tracking-wide">Serial</th>
+              <th class="px-4 py-2.5 text-left text-xs font-semibold text-foreground-muted uppercase tracking-wide">Subject</th>
+              <th class="px-4 py-2.5 text-left text-xs font-semibold text-foreground-muted uppercase tracking-wide hidden md:table-cell">DNS Names</th>
+              <th class="px-4 py-2.5 text-left text-xs font-semibold text-foreground-muted uppercase tracking-wide hidden lg:table-cell">Expires</th>
+              <th class="px-4 py-2.5 text-left text-xs font-semibold text-foreground-muted uppercase tracking-wide">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading">
+              <td colspan="5" class="text-center py-12">
+                <Spinner class="mx-auto" />
+              </td>
+            </tr>
+            <tr v-else-if="filtered.length === 0">
+              <td colspan="5" class="text-center py-12 text-sm text-foreground-muted">No certificates found</td>
+            </tr>
+            <tr
+              v-for="cert in filtered"
+              :key="cert.serial"
+              class="border-b border-border last:border-0 hover:bg-muted/30 cursor-pointer transition-colors"
+              @click="openDetail(cert.serial)"
+            >
+              <td class="px-4 py-2.5 font-mono text-xs text-foreground-muted">{{ cert.serial.slice(0, 16) }}…</td>
+              <td class="px-4 py-2.5 text-foreground max-w-[200px] truncate">{{ cert.subject }}</td>
+              <td class="px-4 py-2.5 text-foreground-muted hidden md:table-cell">
+                <span v-if="cert.dns_names?.length" class="text-xs">{{ cert.dns_names.slice(0, 2).join(', ') }}</span>
+                <span v-else class="text-xs">—</span>
+              </td>
+              <td class="px-4 py-2.5 hidden lg:table-cell">
+                <Badge v-if="!cert.revoked" :variant="certExpiryVariant(cert.not_after)" class="text-[10px]">
+                  {{ daysUntil(cert.not_after) }}d
+                </Badge>
+              </td>
+              <td class="px-4 py-2.5">
+                <StatusBadge :status="cert.revoked ? 'revoked' : 'active'" />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-    <section class="ui-surface-muted ui-border-b px-4 py-3">
-      <button
-        type="button"
-        class="flex w-full items-center gap-2 text-left text-xs font-medium ui-text-secondary"
-        :aria-expanded="filtersOpen"
-        @click="filtersOpen = !filtersOpen"
-      >
-        <Filter class="h-3.5 w-3.5" aria-hidden="true" />
-        <span>Search</span>
-        <span v-if="hasActiveFilters" class="ui-text-muted">(active)</span>
-        <ChevronDown
-          class="ml-auto h-4 w-4 transition-transform"
-          :class="{ 'rotate-180': filtersOpen }"
-          aria-hidden="true"
-        />
-      </button>
-
-      <div
-        v-show="filtersOpen"
-        class="mt-3 grid gap-3 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3 sm:grid-cols-3"
-      >
-        <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="cert-filter-cn">
-            Common Name
-          </label>
-          <input
-            id="cert-filter-cn"
-            v-model="draftCommonName"
-            type="text"
-            class="ui-input mt-1.5 w-full"
-            placeholder="www.example.com"
-            autocomplete="off"
-            @keydown.enter.prevent="applyFilters"
-          />
+      <!-- Pagination -->
+      <div class="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/30 text-xs text-foreground-muted">
+        <span>{{ total }} total</span>
+        <div class="flex gap-1">
+          <Button variant="ghost" size="sm" :disabled="page === 0" @click="() => { page--; load() }">Previous</Button>
+          <Button variant="ghost" size="sm" :disabled="(page + 1) * pageSize >= total" @click="() => { page++; load() }">Next</Button>
         </div>
+      </div>
+    </Card>
 
-        <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="cert-filter-serial">
-            Serial Number
-          </label>
-          <input
-            id="cert-filter-serial"
-            v-model="draftSerialNumber"
-            type="text"
-            class="ui-input mt-1.5 w-full font-mono text-[11px]"
-            placeholder="1234567890"
-            autocomplete="off"
-            @keydown.enter.prevent="applyFilters"
-          />
+    <!-- Certificate Detail Dialog -->
+    <Dialog :open="detailOpen" title="Certificate Detail" max-width="max-w-2xl" @close="detailOpen = false">
+      <div v-if="detailLoading" class="flex justify-center py-12"><Spinner /></div>
+      <div v-else-if="selectedCert" class="space-y-4">
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <InfoCell label="Serial" :value="selectedCert.serial" mono />
+          <InfoCell label="Common Name" :value="selectedCert.common_name" />
+          <InfoCell label="Not Before" :value="formatDate(selectedCert.not_before)" />
+          <InfoCell label="Not After" :value="formatDate(selectedCert.not_after)" />
+          <InfoCell label="Status" :value="selectedCert.revoked ? 'Revoked' : 'Active'" />
+          <InfoCell v-if="selectedCert.revocation_reason" label="Revocation Reason" :value="selectedCert.revocation_reason" />
         </div>
-
-        <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="cert-filter-status">
-            Status
-          </label>
-          <select id="cert-filter-status" v-model="draftStatus" class="ui-input mt-1.5 w-full">
-            <option value="">All statuses</option>
-            <option value="valid">Valid</option>
-            <option value="expired">Expired</option>
-            <option value="revoked">Revoked</option>
-          </select>
+        <div v-if="selectedCert.dns_names?.length" class="text-xs">
+          <p class="text-foreground-muted mb-1">DNS Names</p>
+          <div class="flex flex-wrap gap-1">
+            <Badge v-for="d in selectedCert.dns_names" :key="d" variant="outline">{{ d }}</Badge>
+          </div>
         </div>
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <p class="text-xs text-foreground-muted">Certificate PEM</p>
+            <Button variant="ghost" size="sm" @click="copyToClipboard(selectedCert.certificate_pem, 'Certificate PEM')">Copy</Button>
+          </div>
+          <pre class="rounded-md bg-muted p-3 text-[10px] font-mono text-foreground-muted overflow-x-auto max-h-40">{{ selectedCert.certificate_pem }}</pre>
+        </div>
+      </div>
+    </Dialog>
 
-        <div class="flex flex-wrap items-end gap-2 sm:col-span-3">
-          <button type="button" class="ui-btn-primary" :disabled="isLoading" @click="applyFilters">
-            Apply Search
-          </button>
+    <!-- Issue Certificate Dialog -->
+    <Dialog :open="issueOpen" title="Issue Certificate" max-width="max-w-xl" @close="issueOpen = false">
+      <div class="space-y-4">
+        <!-- Mode tabs -->
+        <div class="flex rounded-lg border border-border bg-muted p-0.5 gap-0.5">
           <button
+            v-for="m in [{ v: 'generate', l: 'Generate Key' }, { v: 'csr', l: 'Sign CSR' }]"
+            :key="m.v"
             type="button"
-            class="ui-btn-secondary"
-            :disabled="isLoading || !hasActiveFilters"
-            @click="clearFilters"
+            :class="[
+              'flex-1 rounded-md py-1.5 text-xs font-medium transition-all',
+              issueMode === m.v ? 'bg-card text-foreground shadow-sm' : 'text-foreground-muted hover:text-foreground',
+            ]"
+            @click="issueMode = m.v as 'csr' | 'generate'"
           >
-            Clear
+            {{ m.l }}
           </button>
         </div>
-      </div>
-    </section>
 
-    <DataTable
-      :columns="tableColumns"
-      :rows="tableRows"
-      :row-key="(row) => row.serial"
-      :loading="isLoading"
-      empty-message="No certificates match the current filters."
-    >
-      <template #cell-not_before="{ row }">
-        {{ formatDateTime(row.not_before) }}
-      </template>
-      <template #cell-not_after="{ row }">
-        {{ formatDateTime(row.not_after) }}
-      </template>
-      <template #cell-status="{ row }">
-        <StatusBadge :label="statusLabel(row.status)" :tone="statusTone(row.status)" />
-      </template>
-      <template #cell-actions="{ row }">
-        <div class="flex flex-wrap gap-1">
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openCertificateDetails(row.serial)">
-            Details
-          </button>
-          <button
-            v-if="row.status !== 'revoked'"
-            type="button"
-            class="ui-btn-danger text-[11px]"
-            @click="openRevokeModal(row.serial)"
-          >
-            Revoke
-          </button>
-        </div>
-      </template>
-    </DataTable>
-
-    <Modal :open="detailsModalOpen" title="Certificate Details" wide @close="closeDetailsModal">
-      <div v-if="detailsLoading" class="text-sm ui-text-muted">Loading certificate record…</div>
-      <div v-else-if="detailsError" class="ui-alert-error text-xs" role="alert">
-        {{ detailsError }}
-      </div>
-      <template v-else-if="certificateDetail">
-        <dl class="grid gap-3 text-xs sm:grid-cols-2">
-          <div>
-            <dt class="font-medium ui-text-muted">Serial</dt>
-            <dd class="mt-0.5 font-mono ui-text-primary">{{ certificateDetail.serial }}</dd>
+        <div v-if="issueMode === 'generate'" class="space-y-3">
+          <div class="space-y-1.5">
+            <Label>Common Name</Label>
+            <Input v-model="generateCN" placeholder="service.example.com" />
           </div>
-          <div>
-            <dt class="font-medium ui-text-muted">Requestor ID</dt>
-            <dd class="mt-0.5 font-mono ui-text-primary">{{ certificateDetail.requestor_id }}</dd>
+          <div class="space-y-1.5">
+            <Label>SANs (comma-separated)</Label>
+            <Input v-model="generateSans" placeholder="www.example.com, 10.0.0.1" />
           </div>
-          <div class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">Subject</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.subject }}</dd>
-          </div>
-          <div>
-            <dt class="font-medium ui-text-muted">Issued At</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(certificateDetail.not_before) }}</dd>
-          </div>
-          <div>
-            <dt class="font-medium ui-text-muted">Expires</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(certificateDetail.not_after) }}</dd>
-          </div>
-          <div v-if="certificateDetail.revoked">
-            <dt class="font-medium ui-text-muted">Status</dt>
-            <dd class="mt-0.5">
-              <StatusBadge label="Revoked" tone="revoked" />
-            </dd>
-          </div>
-          <div v-if="certificateDetail.revoked_at">
-            <dt class="font-medium ui-text-muted">Revoked At</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(certificateDetail.revoked_at) }}</dd>
-          </div>
-          <div v-if="certificateDetail.reason_code != null">
-            <dt class="font-medium ui-text-muted">Reason Code</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.reason_code }}</dd>
-          </div>
-          <div v-if="certificateDetail.revocation_reason" class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">Revocation Reason</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.revocation_reason }}</dd>
-          </div>
-          <div v-if="certificateDetail.dns_names?.length" class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">DNS SANs</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.dns_names.join(', ') }}</dd>
-          </div>
-          <div v-if="certificateDetail.ip_addresses?.length" class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">IP SANs</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.ip_addresses.join(', ') }}</dd>
-          </div>
-        </dl>
-        <div class="mt-4">
-          <p class="text-xs font-medium ui-text-secondary">Certificate (PEM)</p>
-          <pre class="ui-inset mt-1.5 max-h-48 overflow-auto p-3 font-mono text-[10px] ui-text-secondary">{{ certificateDetail.certificate_pem }}</pre>
-        </div>
-
-        <div v-if="renewError" class="mt-3 ui-alert-error text-xs" role="alert">{{ renewError }}</div>
-        <div v-if="lintError" class="mt-3 ui-alert-error text-xs" role="alert">{{ lintError }}</div>
-        <div v-if="lintResult" class="mt-3 ui-inset p-3 text-xs">
-          <p class="font-medium ui-text-secondary">
-            Lint summary:
-            {{ lintResult.summary.fatals }} fatal,
-            {{ lintResult.summary.errors }} error,
-            {{ lintResult.summary.warnings }} warning,
-            {{ lintResult.summary.notices }} notice
-          </p>
-          <ul v-if="lintResult.findings.length" class="mt-2 max-h-32 space-y-1 overflow-auto">
-            <li v-for="(finding, index) in lintResult.findings" :key="index" class="ui-text-muted">
-              [{{ finding.severity }}] {{ finding.lint }}: {{ finding.message }}
-            </li>
-          </ul>
-        </div>
-        <div
-          v-if="isSuperAdmin && certificateDetail.has_escrowed_key"
-          class="mt-4 rounded border border-[var(--border-subtle)] p-3"
-        >
-          <p class="text-xs font-medium ui-text-secondary">Escrowed Private Key</p>
-          <p class="mt-1 text-[11px] ui-text-muted">
-            SuperAdmin access only. Key material is decrypted server-side using the CA master password.
-          </p>
-          <div v-if="keyRevealError" class="mt-2 ui-alert-error text-xs" role="alert">
-            {{ keyRevealError }}
-          </div>
-          <div v-if="revealedPrivateKey" class="mt-3">
-            <pre class="ui-inset max-h-48 overflow-auto p-3 font-mono text-[10px] ui-text-secondary">{{ revealedPrivateKey }}</pre>
-          </div>
-        </div>
-      </template>
-
-      <template #footer>
-        <button type="button" class="ui-btn-secondary" @click="closeDetailsModal">Close</button>
-        <button
-          v-if="certificateDetail && !certificateDetail.revoked"
-          type="button"
-          class="ui-btn-danger"
-          @click="openRevokeModal(certificateDetail.serial)"
-        >
-          Revoke
-        </button>
-        <button
-          v-if="certificateDetail?.certificate_pem"
-          type="button"
-          class="ui-btn-secondary"
-          :disabled="lintLoading"
-          @click="runLint"
-        >
-          {{ lintLoading ? 'Linting…' : 'Lint Certificate' }}
-        </button>
-        <button
-          v-if="certificateDetail?.certificate_pem && !certificateDetail.revoked"
-          type="button"
-          class="ui-btn-secondary"
-          :disabled="renewLoading"
-          @click="runRenew"
-        >
-          {{ renewLoading ? 'Renewing…' : 'Renew' }}
-        </button>
-        <button
-          v-if="certificateDetail?.certificate_pem && !certificateDetail.revoked"
-          type="button"
-          class="ui-btn-secondary"
-          @click="openRekeyModal"
-        >
-          Rekey
-        </button>
-        <button
-          v-if="isSuperAdmin && certificateDetail?.has_escrowed_key"
-          type="button"
-          class="ui-btn-secondary"
-          :disabled="keyRevealLoading"
-          @click="revealPrivateKey"
-        >
-          {{ keyRevealLoading ? 'Working…' : 'Reveal Private Key' }}
-        </button>
-        <button
-          v-if="isSuperAdmin && certificateDetail?.has_escrowed_key"
-          type="button"
-          class="ui-btn-secondary"
-          :disabled="keyRevealLoading"
-          @click="downloadEscrowedKey"
-        >
-          Download Key
-        </button>
-        <button
-          v-if="isSuperAdmin && certificateDetail?.has_escrowed_key"
-          type="button"
-          class="ui-btn-primary"
-          :disabled="keyRevealLoading"
-          @click="downloadEscrowedBundle"
-        >
-          Download Bundle
-        </button>
-        <button
-          type="button"
-          class="ui-btn-primary"
-          :disabled="!certificateDetail?.certificate_pem"
-          @click="downloadCertificateCRT"
-        >
-          Download Certificate (.crt)
-        </button>
-      </template>
-    </Modal>
-
-    <Modal :open="issueModalOpen" title="Issue Certificate" wide @close="closeIssueModal">
-      <div class="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'csr' }"
-          @click="setIssueMode('csr')"
-        >
-          Paste CSR
-        </button>
-        <button
-          type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'native' }"
-          @click="setIssueMode('native')"
-        >
-          Native Generation
-        </button>
-        <button
-          type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'token' }"
-          @click="setIssueMode('token')"
-        >
-          Provisioner Token
-        </button>
-        <button
-          v-if="isSuperAdmin"
-          type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'auto' }"
-          @click="setIssueMode('auto')"
-        >
-          Auto Issue
-        </button>
-      </div>
-
-      <p v-if="issueMode === 'csr'" class="mb-3 text-xs ui-text-muted">
-        Signs a PEM CSR<template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/issue</code></template>.
-        The private key never leaves your client.
-      </p>
-      <p v-else-if="issueMode === 'token'" class="mb-3 text-xs ui-text-muted">
-        Signs a CSR using a provisioner token<template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/issue-with-token</code></template>.
-      </p>
-      <p v-else-if="issueMode === 'auto'" class="mb-3 text-xs ui-text-muted">
-        Generates key pair and certificate in one step<template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/auto</code></template>
-        (SuperAdmin).
-      </p>
-      <p v-else class="mb-3 text-xs ui-text-muted">
-        Generates a key pair and signs the certificate<template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/generate</code></template>.
-        The private key is returned immediately in a ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) and escrowed encrypted at rest for SuperAdmin retrieval. Download the CA chain separately from the Dashboard.
-      </p>
-
-      <div v-if="issueError" class="mb-3 ui-alert-error text-xs" role="alert">
-        {{ issueError }}
-      </div>
-
-      <div v-if="issueSuccess" class="mb-3 ui-alert-success" role="status">
-        {{ issueSuccess }}
-      </div>
-
-      <template v-if="issueMode === 'csr'">
-        <label class="block text-xs font-medium ui-text-secondary" for="csr-input">
-          Certificate signing request
-        </label>
-        <textarea
-          id="csr-input"
-          v-model="csrInput"
-          rows="10"
-          class="ui-textarea mt-1.5"
-          placeholder="-----BEGIN CERTIFICATE REQUEST-----&#10;...&#10;-----END CERTIFICATE REQUEST-----"
-          spellcheck="false"
-        />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="ttl-input">
-          TTL (optional)
-        </label>
-        <input id="ttl-input" v-model="ttlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
-      </template>
-
-      <template v-else-if="issueMode === 'native'">
-        <label class="block text-xs font-medium ui-text-secondary" for="cn-input">Common Name</label>
-        <input
-          id="cn-input"
-          v-model="nativeCommonName"
-          type="text"
-          class="ui-input mt-1.5"
-          placeholder="www.example.com"
-          autocomplete="off"
-        />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="sans-input">
-          Subject Alternative Names
-        </label>
-        <TagInput
-          id="sans-input"
-          v-model="nativeSansTags"
-          placeholder="api.example.com or 203.0.113.10"
-        />
-        <p class="mt-1 text-[11px] ui-text-muted">
-          Press Enter, Space, or comma to add each DNS name or IP address.
-        </p>
-
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="key-algo-select">
-              Key algorithm
-            </label>
-            <select id="key-algo-select" v-model="nativeKeyAlgo" class="ui-input mt-1.5">
-              <option value="RSA2048">RSA 2048</option>
-              <option value="ECDSA256">ECDSA P-256</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="native-ttl-input">
-              TTL / validity
-            </label>
-            <input
-              id="native-ttl-input"
-              v-model="nativeTtlInput"
-              type="text"
-              class="ui-input mt-1.5"
-              placeholder="720h"
-            />
-          </div>
-        </div>
-
-        <details class="mt-4 ui-inset" :open="nativeAdvancedOpen" @toggle="nativeAdvancedOpen = ($event.target as HTMLDetailsElement).open">
-          <summary class="cursor-pointer px-4 py-3 text-xs font-medium ui-text-secondary">
-            Advanced Subject Options
-          </summary>
-          <div class="space-y-3 border-t border-[var(--border-subtle)] px-4 py-3">
-            <div class="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label class="block text-xs font-medium ui-text-secondary" for="org-input">Organization (O)</label>
-                <input id="org-input" v-model="nativeOrganization" type="text" class="ui-input mt-1.5" autocomplete="organization" />
-              </div>
-              <div>
-                <label class="block text-xs font-medium ui-text-secondary" for="ou-input">Organizational Unit (OU)</label>
-                <input id="ou-input" v-model="nativeOrganizationalUnit" type="text" class="ui-input mt-1.5" />
-              </div>
-              <div>
-                <label class="block text-xs font-medium ui-text-secondary" for="country-input">Country (C)</label>
-                <input id="country-input" v-model="nativeCountry" type="text" class="ui-input mt-1.5" maxlength="2" placeholder="US" />
-              </div>
-              <div>
-                <label class="block text-xs font-medium ui-text-secondary" for="state-input">State / Province (ST)</label>
-                <input id="state-input" v-model="nativeState" type="text" class="ui-input mt-1.5" />
-              </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1.5">
+              <Label>Key Algorithm</Label>
+              <Select v-model="generateAlgo">
+                <option value="ECDSA256">ECDSA P-256</option>
+                <option value="RSA2048">RSA 2048</option>
+              </Select>
             </div>
-            <div>
-              <label class="block text-xs font-medium ui-text-secondary" for="locality-input">Locality (L)</label>
-              <input id="locality-input" v-model="nativeLocality" type="text" class="ui-input mt-1.5" />
+            <div class="space-y-1.5">
+              <Label>TTL</Label>
+              <Input v-model="issueTtl" placeholder="8760h" />
             </div>
           </div>
-        </details>
-
-        <div class="mt-3 space-y-3">
-          <p class="text-xs leading-relaxed ui-text-muted">
-            Recommended key-usage profiles for common issuance paths:
-            <span class="mt-1.5 block">
-              <span class="font-medium ui-text-secondary">Webserver / ACME:</span>
-              Digital Signature, Key Encipherment, Server Authentication.
-            </span>
-            <span class="mt-1 block">
-              <span class="font-medium ui-text-secondary">MDM / SCEP:</span>
-              Digital Signature, Client Authentication.
-            </span>
-          </p>
-
-          <div class="space-y-2">
-            <p class="text-xs font-medium ui-text-secondary">Standard Key Usage</p>
-            <FlatToggle
-              label="Digital Signature"
-              :enabled="nativeDigitalSignature"
-              @toggle="nativeDigitalSignature = !nativeDigitalSignature"
-            />
-            <FlatToggle
-              label="Key Encipherment"
-              :enabled="nativeKeyEncipherment"
-              @toggle="nativeKeyEncipherment = !nativeKeyEncipherment"
-            />
-          </div>
-
-          <div class="space-y-2">
-            <p class="text-xs font-medium ui-text-secondary">Extended Key Usage</p>
-            <FlatToggle
-              label="Server Authentication"
-              :enabled="nativeServerAuth"
-              @toggle="nativeServerAuth = !nativeServerAuth"
-            />
-            <FlatToggle
-              label="Client Authentication"
-              :enabled="nativeClientAuth"
-              @toggle="nativeClientAuth = !nativeClientAuth"
-            />
+          <div class="flex items-center gap-6 text-sm">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <Switch v-model="generateServerAuth" />
+              <span class="text-foreground">Server Auth</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <Switch v-model="generateClientAuth" />
+              <span class="text-foreground">Client Auth</span>
+            </label>
           </div>
         </div>
-      </template>
 
-      <template v-else-if="issueMode === 'token'">
-        <label class="block text-xs font-medium ui-text-secondary" for="token-input">Provisioner token</label>
-        <input id="token-input" v-model="tokenInput" type="text" class="ui-input mt-1.5 font-mono text-[11px]" autocomplete="off" />
+        <div v-else class="space-y-3">
+          <div class="space-y-1.5">
+            <Label>PEM-encoded CSR</Label>
+            <Textarea v-model="issueCsr" placeholder="-----BEGIN CERTIFICATE REQUEST-----" :rows="6" />
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1.5">
+              <Label>TTL</Label>
+              <Input v-model="issueTtl" placeholder="8760h" />
+            </div>
+            <div v-if="templates.length" class="space-y-1.5">
+              <Label>Template</Label>
+              <Select v-model="issueTemplateId">
+                <option value="">None</option>
+                <option v-for="t in templates" :key="t.id" :value="t.id">{{ t.name }}</option>
+              </Select>
+            </div>
+          </div>
+        </div>
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="token-csr-input">
-          Certificate signing request
-        </label>
-        <textarea
-          id="token-csr-input"
-          v-model="tokenCsrInput"
-          rows="10"
-          class="ui-textarea mt-1.5"
-          placeholder="-----BEGIN CERTIFICATE REQUEST-----"
-          spellcheck="false"
-        />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="token-ttl-input">
-          TTL (optional)
-        </label>
-        <input id="token-ttl-input" v-model="tokenTtlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
-      </template>
-
-      <template v-else-if="issueMode === 'auto'">
-        <label class="block text-xs font-medium ui-text-secondary" for="auto-cn-input">Common Name</label>
-        <input id="auto-cn-input" v-model="autoCommonName" type="text" class="ui-input mt-1.5" autocomplete="off" />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary">DNS SANs</label>
-        <TagInput v-model="autoDnsSans" placeholder="api.example.com" />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary">IP SANs</label>
-        <TagInput v-model="autoIpSans" placeholder="10.0.0.1" />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="auto-ttl-input">
-          TTL (optional)
-        </label>
-        <input id="auto-ttl-input" v-model="autoTtlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
-      </template>
-
-      <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="isIssuing" @click="closeIssueModal">
-          Cancel
-        </button>
-        <button type="button" class="ui-btn-primary" :disabled="isIssuing" @click="submitIssue">
-          {{
-            isIssuing
-              ? 'Working…'
-              : issueMode === 'csr'
-                ? 'Sign CSR'
-                : issueMode === 'token'
-                  ? 'Sign with Token'
-                  : issueMode === 'auto'
-                    ? 'Auto Issue & Download'
-                    : 'Generate & Download'
-          }}
-        </button>
-      </template>
-    </Modal>
-
-    <Modal :open="revokeModalOpen" title="Revoke Certificate" @close="closeRevokeModal">
-      <div class="mb-3 ui-alert-error text-xs" role="alert">
-        This action is irreversible. The certificate will be added to the CRL and clients must reject it.
+        <!-- Results -->
+        <div v-if="issuedCert" class="space-y-2">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <p class="text-xs text-foreground-muted">Certificate PEM</p>
+              <Button variant="ghost" size="sm" @click="copyToClipboard(issuedCert, 'Certificate')">Copy</Button>
+            </div>
+            <pre class="rounded-md bg-muted p-3 text-[10px] font-mono overflow-x-auto max-h-32">{{ issuedCert }}</pre>
+          </div>
+          <div v-if="issuedKey">
+            <div class="flex items-center justify-between mb-1">
+              <p class="text-xs text-foreground-muted">Private Key PEM</p>
+              <Button variant="ghost" size="sm" @click="copyToClipboard(issuedKey, 'Private key')">Copy</Button>
+            </div>
+            <pre class="rounded-md bg-muted p-3 text-[10px] font-mono overflow-x-auto max-h-32">{{ issuedKey }}</pre>
+          </div>
+        </div>
       </div>
 
-      <p class="mb-3 text-xs ui-text-muted">
-        Permanently revokes serial
-        <code class="ui-code">{{ revokeTargetSerial }}</code><template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/revoke</code></template>.
-      </p>
-
-      <div v-if="revokeError" class="mb-3 ui-alert-error text-xs" role="alert">{{ revokeError }}</div>
-
-      <label class="block text-xs font-medium ui-text-secondary" for="revoke-confirm-input">
-        Confirmation
-      </label>
-      <input
-        id="revoke-confirm-input"
-        v-model="revokeConfirmInput"
-        type="text"
-        class="ui-input mt-1.5 font-mono"
-        :placeholder="`Type ${revokeSerialPrefix || 'serial prefix'} or REVOKE`"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <p class="mt-1 text-[11px] ui-text-muted">
-        Enter the first 8 characters of the serial number (<code class="ui-code">{{ revokeSerialPrefix }}</code>)
-        or type <code class="ui-code">REVOKE</code> to enable confirmation.
-      </p>
-
-      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="revoke-reason-code">Reason code</label>
-      <select id="revoke-reason-code" v-model.number="revokeReasonCode" class="ui-input mt-1.5">
-        <option v-for="reason in REVOKE_REASONS" :key="reason.code" :value="reason.code">
-          {{ reason.label }} ({{ reason.code }})
-        </option>
-      </select>
-
-      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="revoke-reason-text">
-        Reason text (optional)
-      </label>
-      <input id="revoke-reason-text" v-model="revokeReasonText" type="text" class="ui-input mt-1.5" autocomplete="off" />
-
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="revokeLoading" @click="closeRevokeModal">
-          Cancel
-        </button>
-        <button
-          type="button"
-          class="ui-btn-danger"
-          :disabled="revokeLoading || !canConfirmRevoke"
-          @click="submitRevoke"
-        >
-          {{ revokeLoading ? 'Revoking…' : 'Confirm Revocation' }}
-        </button>
+        <Button variant="outline" @click="issueOpen = false">Cancel</Button>
+        <Button :disabled="issueLoading" @click="handleIssue">
+          <Spinner v-if="issueLoading" size="sm" />
+          <span>{{ issueLoading ? 'Issuing…' : 'Issue' }}</span>
+        </Button>
       </template>
-    </Modal>
+    </Dialog>
 
-    <Modal :open="rekeyModalOpen" title="Rekey Certificate" wide @close="closeRekeyModal">
-      <p v-if="showApiHints" class="mb-3 text-xs ui-text-muted">
-        Submit a new CSR via
-        <code class="ui-code">POST /api/v1/certificates/rekey</code>.
-      </p>
-
-      <div v-if="rekeyError" class="mb-3 ui-alert-error text-xs" role="alert">{{ rekeyError }}</div>
-      <div v-if="rekeySuccess" class="mb-3 ui-alert-success text-xs" role="status">{{ rekeySuccess }}</div>
-
-      <label class="block text-xs font-medium ui-text-secondary" for="rekey-csr-input">
-        New certificate signing request
-      </label>
-      <textarea
-        id="rekey-csr-input"
-        v-model="rekeyCsrInput"
-        rows="10"
-        class="ui-textarea mt-1.5"
-        placeholder="-----BEGIN CERTIFICATE REQUEST-----"
-        spellcheck="false"
-      />
-
+    <!-- Revoke Dialog -->
+    <Dialog :open="revokeOpen" title="Revoke Certificate" @close="revokeOpen = false">
+      <div class="space-y-3">
+        <div class="space-y-1.5">
+          <Label>Serial Number</Label>
+          <Input v-model="revokeSerial" placeholder="hex serial number" />
+        </div>
+        <div class="space-y-1.5">
+          <Label>Reason Code</Label>
+          <Select v-model="revokeReason">
+            <option value="0">0 — Unspecified</option>
+            <option value="1">1 — Key Compromise</option>
+            <option value="2">2 — CA Compromise</option>
+            <option value="3">3 — Affiliation Changed</option>
+            <option value="4">4 — Superseded</option>
+            <option value="5">5 — Cessation of Operation</option>
+          </Select>
+        </div>
+      </div>
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="rekeyLoading" @click="closeRekeyModal">
-          Cancel
-        </button>
-        <button type="button" class="ui-btn-primary" :disabled="rekeyLoading" @click="submitRekey">
-          {{ rekeyLoading ? 'Rekeying…' : 'Submit Rekey' }}
-        </button>
+        <Button variant="outline" @click="revokeOpen = false">Cancel</Button>
+        <Button variant="destructive" :disabled="revokeLoading || !revokeSerial" @click="handleRevoke">
+          <Spinner v-if="revokeLoading" size="sm" />
+          <span>{{ revokeLoading ? 'Revoking…' : 'Revoke' }}</span>
+        </Button>
       </template>
-    </Modal>
+    </Dialog>
+
+    <!-- Lint Dialog -->
+    <Dialog :open="lintOpen" title="Lint Certificate" max-width="max-w-xl" @close="lintOpen = false">
+      <div class="space-y-3">
+        <div class="space-y-1.5">
+          <Label>PEM Certificate</Label>
+          <Textarea v-model="lintPem" placeholder="-----BEGIN CERTIFICATE-----" :rows="6" />
+        </div>
+        <div v-if="lintResult">
+          <div class="flex gap-3 mb-2 text-xs">
+            <span class="text-destructive">{{ lintResult.summary.errors }} errors</span>
+            <span class="text-warning-foreground">{{ lintResult.summary.warnings }} warnings</span>
+            <span class="text-foreground-muted">{{ lintResult.summary.notices }} notices</span>
+          </div>
+          <div class="space-y-1 max-h-48 overflow-y-auto">
+            <div
+              v-for="(f, i) in lintResult.findings"
+              :key="i"
+              class="flex gap-2 text-xs rounded-md px-2 py-1.5 bg-muted"
+            >
+              <Badge
+                :variant="f.severity === 'error' ? 'destructive' : f.severity === 'warn' ? 'warning' : 'secondary'"
+                class="shrink-0"
+              >
+                {{ f.severity }}
+              </Badge>
+              <span class="text-foreground-muted">{{ f.lint }}</span>
+              <span v-if="f.message" class="text-foreground">{{ f.message }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button variant="outline" @click="lintOpen = false">Close</Button>
+        <Button :disabled="lintLoading || !lintPem" @click="handleLint">
+          <Spinner v-if="lintLoading" size="sm" />
+          <span>{{ lintLoading ? 'Linting…' : 'Lint' }}</span>
+        </Button>
+      </template>
+    </Dialog>
   </div>
 </template>
+
+<script lang="ts">
+const InfoCell = {
+  props: { label: String, value: String, mono: Boolean },
+  template: `
+    <div>
+      <p class="text-foreground-muted mb-0.5">{{ label }}</p>
+      <p :class="['text-foreground break-all', mono ? 'font-mono text-[10px]' : 'font-medium']">{{ value ?? '—' }}</p>
+    </div>
+  `,
+}
+export default { components: { InfoCell } }
+</script>

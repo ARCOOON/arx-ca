@@ -1,223 +1,176 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { createProvisionerToken, fetchK8sStatus } from '../api/provisioners'
-import type { K8sProvisionerStatus, ProvisionerTokenResponse } from '../types/api'
-import { usePreferences } from '../composables/usePreferences'
-import FlatToggle from '../components/ui/FlatToggle.vue'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import TagInput from '../components/ui/TagInput.vue'
-import { copyToClipboard } from '../utils/clipboard'
-import { extractApiError } from '../utils/errors'
+import { ref, onMounted } from 'vue'
+import Card from '@/components/ui/Card.vue'
+import Button from '@/components/ui/Button.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Input from '@/components/ui/Input.vue'
+import Label from '@/components/ui/Label.vue'
+import Spinner from '@/components/ui/Spinner.vue'
+import Dialog from '@/components/ui/Dialog.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import { fetchCAProvisioners } from '@/api/ca'
+import { fetchK8sStatus, generateProvisionerToken } from '@/api/provisioners'
+import type { CAProvisionerDetail, K8sProvisionerStatus, ProvisionerTokenResponse } from '@/types/api'
+import { extractErrorMessage } from '@/utils/errors'
+import { useToast } from '@/composables/useToast'
 
-const { showApiHints } = usePreferences()
-
+const toast = useToast()
+const loading = ref(true)
+const provisioners = ref<CAProvisionerDetail[]>([])
 const k8sStatus = ref<K8sProvisionerStatus | null>(null)
-const isLoading = ref(true)
-const errorMessage = ref('')
 
+const tokenOpen = ref(false)
+const tokenCN = ref('')
 const tokenProvisioner = ref('')
-const tokenCommonName = ref('')
-const tokenDnsSans = ref<string[]>([])
-const tokenIpSans = ref<string[]>([])
-const tokenTtl = ref('5m')
-const tokenGenerating = ref(false)
-const tokenError = ref('')
+const tokenSans = ref('')
+const tokenTtl = ref('1h')
+const tokenLoading = ref(false)
 const tokenResult = ref<ProvisionerTokenResponse | null>(null)
-const tokenCopied = ref(false)
 
 onMounted(async () => {
-  isLoading.value = true
-  errorMessage.value = ''
-
   try {
-    k8sStatus.value = await fetchK8sStatus()
-    if (k8sStatus.value.provisioner) {
-      tokenProvisioner.value = k8sStatus.value.provisioner
-    }
-  } catch (error) {
-    errorMessage.value = extractApiError(error, 'Failed to load provisioner status')
+    const [prov, k8s] = await Promise.all([
+      fetchCAProvisioners(),
+      fetchK8sStatus().catch(() => null),
+    ])
+    provisioners.value = prov.provisioners
+    k8sStatus.value = k8s
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 })
 
-async function submitTokenGeneration(): Promise<void> {
-  tokenError.value = ''
+async function handleGenerateToken(): Promise<void> {
+  tokenLoading.value = true
   tokenResult.value = null
-  tokenCopied.value = false
-
-  const commonName = tokenCommonName.value.trim()
-  if (!commonName) {
-    tokenError.value = 'Common Name is required.'
-    return
-  }
-
-  tokenGenerating.value = true
-
   try {
-    tokenResult.value = await createProvisionerToken({
-      provisioner: tokenProvisioner.value.trim() || undefined,
-      common_name: commonName,
-      dns_sans: tokenDnsSans.value.length > 0 ? tokenDnsSans.value : undefined,
-      ip_sans: tokenIpSans.value.length > 0 ? tokenIpSans.value : undefined,
-      token_ttl: tokenTtl.value.trim() || undefined,
+    tokenResult.value = await generateProvisionerToken({
+      common_name: tokenCN.value,
+      provisioner: tokenProvisioner.value || undefined,
+      dns_sans: tokenSans.value ? tokenSans.value.split(',').map((s) => s.trim()) : undefined,
+      token_ttl: tokenTtl.value || undefined,
     })
-  } catch (error) {
-    tokenError.value = extractApiError(error, 'Failed to mint provisioner token')
+    toast.success('Token generated')
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    tokenGenerating.value = false
+    tokenLoading.value = false
   }
 }
 
-async function copyToken(): Promise<void> {
-  if (!tokenResult.value?.token) {
-    return
-  }
-  await copyToClipboard(tokenResult.value.token)
-  tokenCopied.value = true
-}
-
-function dismissTokenResult(): void {
-  tokenResult.value = null
-  tokenCopied.value = false
+function copy(text: string): void {
+  navigator.clipboard.writeText(text).then(() => toast.success('Token copied')).catch(() => {})
 }
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
-      {{ errorMessage }}
-    </div>
-
-    <div v-if="isLoading" class="text-sm ui-text-muted">Loading provisioner configuration…</div>
+  <div class="space-y-6">
+    <div v-if="loading" class="flex justify-center py-16"><Spinner size="lg" /></div>
 
     <template v-else>
-      <section v-if="k8sStatus" class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Kubernetes Provisioner</h2>
-          <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
-            Status from
-            <code class="ui-code">GET /api/v1/k8s/status</code>
-          </p>
-        </header>
-        <div class="flex flex-wrap items-center gap-3 px-4 py-3">
-          <StatusBadge
-            :label="k8sStatus.enabled ? 'Enabled' : 'Disabled'"
-            :tone="k8sStatus.enabled ? 'enabled' : 'disabled'"
-          />
+      <!-- Provisioners list -->
+      <Card class="px-5 py-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-foreground">CA Provisioners</h2>
+          <Button size="sm" @click="() => { tokenResult = null; tokenOpen = true }">Generate Token</Button>
         </div>
-        <dl class="ui-divide text-xs">
-          <div v-if="k8sStatus.provisioner" class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Provisioner</dt>
-            <dd class="font-mono ui-text-secondary">{{ k8sStatus.provisioner }}</dd>
-          </div>
-          <div v-if="k8sStatus.review_mode" class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Review mode</dt>
-            <dd class="ui-text-secondary">{{ k8sStatus.review_mode }}</dd>
-          </div>
-          <div class="px-4 py-3 space-y-2">
-            <FlatToggle label="Public keys configured" :enabled="k8sStatus.has_public_keys" readonly />
-            <FlatToggle label="Uses TokenReview API" :enabled="k8sStatus.uses_token_review_api" readonly />
-          </div>
-        </dl>
-      </section>
 
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Mint Provisioner Token</h2>
-          <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
-            Single-use JWK signing token via
-            <code class="ui-code">POST /api/v1/provisioners/token</code>
-          </p>
-        </header>
-        <div class="space-y-3 px-4 py-3">
-          <div v-if="tokenError" class="ui-alert-error text-xs" role="alert">
-            {{ tokenError }}
-          </div>
-
-          <div v-if="tokenResult" class="ui-alert-warning space-y-3" role="alert">
-            <p class="font-semibold">Save the token now — it will not be shown again.</p>
-            <dl class="space-y-2 text-xs">
-              <div>
-                <dt class="font-medium ui-text-muted">Provisioner</dt>
-                <dd class="mt-0.5 font-mono ui-text-primary">
-                  {{ tokenResult.provisioner }} ({{ tokenResult.provisioner_type }})
-                </dd>
-              </div>
-              <div>
-                <dt class="font-medium ui-text-muted">Expires in</dt>
-                <dd class="mt-0.5 ui-text-primary">{{ tokenResult.expires_in }} seconds</dd>
-              </div>
-              <div>
-                <dt class="font-medium ui-text-muted">Audience</dt>
-                <dd class="mt-0.5 break-all font-mono ui-text-primary">{{ tokenResult.audience }}</dd>
-              </div>
-              <div>
-                <dt class="font-medium ui-text-muted">Token</dt>
-                <dd class="mt-0.5 break-all font-mono text-[10px] ui-text-primary">{{ tokenResult.token }}</dd>
-              </div>
-            </dl>
-            <div class="flex flex-wrap gap-2">
-              <button type="button" class="ui-btn-primary" @click="copyToken">
-                {{ tokenCopied ? 'Copied' : 'Copy Token' }}
-              </button>
-              <button type="button" class="ui-btn-secondary" @click="dismissTokenResult">Dismiss</button>
-            </div>
-          </div>
-
-          <div class="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label class="block text-xs font-medium ui-text-secondary" for="token-provisioner">
-                Provisioner (optional)
-              </label>
-              <input
-                id="token-provisioner"
-                v-model="tokenProvisioner"
-                type="text"
-                class="ui-input mt-1.5"
-                autocomplete="off"
-              />
-            </div>
-            <div>
-              <label class="block text-xs font-medium ui-text-secondary" for="token-ttl">
-                Token TTL
-              </label>
-              <input id="token-ttl" v-model="tokenTtl" type="text" class="ui-input mt-1.5" placeholder="5m" />
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary" for="token-cn">Common Name</label>
-            <input
-              id="token-cn"
-              v-model="tokenCommonName"
-              type="text"
-              class="ui-input mt-1.5"
-              placeholder="pod.example.svc"
-              autocomplete="off"
-            />
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary">DNS SANs</label>
-            <TagInput v-model="tokenDnsSans" placeholder="api.example.com" />
-          </div>
-
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary">IP SANs</label>
-            <TagInput v-model="tokenIpSans" placeholder="10.0.0.1" />
-          </div>
-
-          <button
-            type="button"
-            class="ui-btn-primary"
-            :disabled="tokenGenerating"
-            @click="submitTokenGeneration"
+        <div class="divide-y divide-border">
+          <div
+            v-for="p in provisioners"
+            :key="p.name"
+            class="flex items-center justify-between py-3"
           >
-            {{ tokenGenerating ? 'Minting…' : 'Mint Token' }}
-          </button>
+            <div>
+              <p class="text-sm font-medium text-foreground">{{ p.name }}</p>
+              <div class="flex gap-1.5 mt-1">
+                <Badge variant="secondary" class="text-[10px]">{{ p.type }}</Badge>
+                <Badge v-if="p.require_eab" variant="warning" class="text-[10px]">EAB Required</Badge>
+              </div>
+            </div>
+            <div v-if="p.challenges?.length" class="flex gap-1">
+              <Badge v-for="c in p.challenges" :key="c" variant="outline" class="text-[10px]">{{ c }}</Badge>
+            </div>
+          </div>
+
+          <div v-if="provisioners.length === 0" class="py-8 text-center text-sm text-foreground-muted">
+            No provisioners found
+          </div>
         </div>
-      </section>
+      </Card>
+
+      <!-- Kubernetes status -->
+      <Card v-if="k8sStatus" class="px-5 py-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-foreground">Kubernetes Enrollment</h2>
+          <StatusBadge :status="k8sStatus.enabled ? 'enabled' : 'disabled'" />
+        </div>
+        <div v-if="k8sStatus.enabled" class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <p class="text-foreground-muted mb-0.5">Provisioner</p>
+            <p class="text-foreground font-medium">{{ k8sStatus.provisioner ?? '—' }}</p>
+          </div>
+          <div>
+            <p class="text-foreground-muted mb-0.5">Review Mode</p>
+            <p class="text-foreground font-medium">{{ k8sStatus.review_mode ?? '—' }}</p>
+          </div>
+          <div>
+            <p class="text-foreground-muted mb-0.5">Token Review API</p>
+            <Badge :variant="k8sStatus.uses_token_review_api ? 'success' : 'secondary'">
+              {{ k8sStatus.uses_token_review_api ? 'Yes' : 'No' }}
+            </Badge>
+          </div>
+          <div>
+            <p class="text-foreground-muted mb-0.5">Public Keys</p>
+            <Badge :variant="k8sStatus.has_public_keys ? 'success' : 'secondary'">
+              {{ k8sStatus.has_public_keys ? 'Configured' : 'Missing' }}
+            </Badge>
+          </div>
+        </div>
+      </Card>
     </template>
+
+    <!-- Token dialog -->
+    <Dialog :open="tokenOpen" title="Generate Provisioner Token" @close="tokenOpen = false">
+      <div class="space-y-3">
+        <div class="space-y-1.5">
+          <Label>Common Name</Label>
+          <Input v-model="tokenCN" placeholder="service.example.com" />
+        </div>
+        <div class="space-y-1.5">
+          <Label>Provisioner (optional)</Label>
+          <Input v-model="tokenProvisioner" placeholder="default provisioner" />
+        </div>
+        <div class="space-y-1.5">
+          <Label>DNS SANs (comma-separated, optional)</Label>
+          <Input v-model="tokenSans" placeholder="api.example.com, www.example.com" />
+        </div>
+        <div class="space-y-1.5">
+          <Label>TTL</Label>
+          <Input v-model="tokenTtl" placeholder="1h" />
+        </div>
+
+        <div v-if="tokenResult" class="pt-2 space-y-2 rounded-md bg-muted p-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-foreground-muted">JWT Token</span>
+            <button class="text-primary text-xs hover:underline" @click="copy(tokenResult.token)">Copy</button>
+          </div>
+          <p class="font-mono text-[10px] text-foreground break-all">{{ tokenResult.token }}</p>
+          <div class="grid grid-cols-2 gap-2 text-xs mt-2">
+            <div><p class="text-foreground-muted">Provisioner</p><p class="font-medium">{{ tokenResult.provisioner }}</p></div>
+            <div><p class="text-foreground-muted">Expires In</p><p class="font-medium">{{ tokenResult.expires_in }}s</p></div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button variant="outline" @click="tokenOpen = false">Close</Button>
+        <Button :disabled="tokenLoading || !tokenCN" @click="handleGenerateToken">
+          <Spinner v-if="tokenLoading" size="sm" />
+          <span>{{ tokenLoading ? 'Generating…' : 'Generate' }}</span>
+        </Button>
+      </template>
+    </Dialog>
   </div>
 </template>

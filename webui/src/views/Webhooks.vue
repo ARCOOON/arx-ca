@@ -1,418 +1,243 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import Card from '@/components/ui/Card.vue'
+import Button from '@/components/ui/Button.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Input from '@/components/ui/Input.vue'
+import Label from '@/components/ui/Label.vue'
+import Switch from '@/components/ui/Switch.vue'
+import Spinner from '@/components/ui/Spinner.vue'
+import Dialog from '@/components/ui/Dialog.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
 import {
+  fetchWebhooks,
+  fetchWebhookEvents,
   createWebhook,
-  deleteWebhook,
-  listWebhookEvents,
-  listWebhooks,
-  testWebhook,
   updateWebhook,
-} from '../api/webhooks'
-import type { WebhookEventOption, WebhookResponse } from '../types/api'
-import DataTable from '../components/ui/DataTable.vue'
-import Modal from '../components/ui/Modal.vue'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import { usePreferences } from '../composables/usePreferences'
-import { useToast } from '../composables/useToast'
-import { extractApiError } from '../utils/errors'
-import { formatDateTime } from '../utils/format'
+  deleteWebhook,
+  testWebhook,
+} from '@/api/webhooks'
+import type { WebhookResponse, WebhookEventOption } from '@/types/api'
+import { formatDate } from '@/utils/format'
+import { extractErrorMessage } from '@/utils/errors'
+import { useToast } from '@/composables/useToast'
 
-const { showToast } = useToast()
-const { showApiHints } = usePreferences()
-
+const toast = useToast()
+const loading = ref(true)
 const webhooks = ref<WebhookResponse[]>([])
-const eventOptions = ref<WebhookEventOption[]>([])
-const isLoading = ref(true)
-const errorMessage = ref('')
+const events = ref<WebhookEventOption[]>([])
 
-const editorOpen = ref(false)
-const editorMode = ref<'create' | 'edit'>('create')
-const editingId = ref<string | null>(null)
-const editorName = ref('')
-const editorURL = ref('')
-const editorSecret = ref('')
-const editorActive = ref(true)
-const editorEvents = ref<string[]>([])
-const editorError = ref('')
-const editorSaving = ref(false)
-const editorTesting = ref(false)
+const formOpen = ref(false)
+const formMode = ref<'create' | 'edit'>('create')
+const editingId = ref('')
+const saving = ref(false)
+const testing = ref(false)
 
-const deleteConfirmOpen = ref(false)
-const deletingWebhook = ref<WebhookResponse | null>(null)
-const deleteInProgress = ref(false)
+const formUrl = ref('')
+const formName = ref('')
+const formSecret = ref('')
+const formActive = ref(true)
+const formEvents = ref<string[]>([])
 
-const tableColumns = [
-  { key: 'name', label: 'Name' },
-  { key: 'url', label: 'Endpoint', cellClass: 'font-mono text-[11px] break-all' },
-  { key: 'active', label: 'Status', headerClass: 'w-24' },
-  { key: 'events', label: 'Subscriptions' },
-  { key: 'updated_at', label: 'Updated' },
-  { key: 'actions', label: '', headerClass: 'w-40' },
-]
-
-const editorTitle = computed(() => (editorMode.value === 'create' ? 'Add Webhook' : 'Edit Webhook'))
-const selectedEventSet = computed(() => new Set(editorEvents.value))
-
-onMounted(() => {
-  void loadAll()
-})
-
-async function loadAll(): Promise<void> {
-  isLoading.value = true
-  errorMessage.value = ''
-
+async function load(): Promise<void> {
+  loading.value = true
   try {
-    const [hooksResponse, eventsResponse] = await Promise.all([listWebhooks(), listWebhookEvents()])
-    webhooks.value = hooksResponse.webhooks
-    eventOptions.value = eventsResponse.events
-  } catch (error) {
-    errorMessage.value = extractApiError(error, 'Failed to load webhooks')
+    const [wh, ev] = await Promise.all([fetchWebhooks(), fetchWebhookEvents().catch(() => ({ events: [] }))])
+    webhooks.value = wh.webhooks
+    events.value = ev.events
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 }
 
-function openCreateModal(): void {
-  editorMode.value = 'create'
-  editingId.value = null
-  editorName.value = ''
-  editorURL.value = ''
-  editorSecret.value = ''
-  editorActive.value = true
-  editorEvents.value = []
-  editorError.value = ''
-  editorOpen.value = true
+onMounted(() => void load())
+
+function openCreate(): void {
+  formMode.value = 'create'
+  editingId.value = ''
+  formUrl.value = ''
+  formName.value = ''
+  formSecret.value = ''
+  formActive.value = true
+  formEvents.value = []
+  formOpen.value = true
 }
 
-function openEditModal(webhook: WebhookResponse): void {
-  editorMode.value = 'edit'
-  editingId.value = webhook.id
-  editorName.value = webhook.name
-  editorURL.value = webhook.url
-  editorSecret.value = ''
-  editorActive.value = webhook.active
-  editorEvents.value = [...webhook.subscribed_events]
-  editorError.value = ''
-  editorOpen.value = true
-}
-
-function closeEditor(): void {
-  if (editorSaving.value || editorTesting.value) {
-    return
-  }
-  editorOpen.value = false
+function openEdit(wh: WebhookResponse): void {
+  formMode.value = 'edit'
+  editingId.value = wh.id
+  formUrl.value = wh.url
+  formName.value = wh.name
+  formSecret.value = ''
+  formActive.value = wh.active
+  formEvents.value = [...wh.subscribed_events]
+  formOpen.value = true
 }
 
 function toggleEvent(action: string): void {
-  const next = new Set(editorEvents.value)
-  if (next.has(action)) {
-    next.delete(action)
-  } else {
-    next.add(action)
-  }
-  editorEvents.value = Array.from(next)
+  const idx = formEvents.value.indexOf(action)
+  if (idx === -1) formEvents.value.push(action)
+  else formEvents.value.splice(idx, 1)
 }
 
-function openDeleteConfirm(webhook: WebhookResponse): void {
-  deletingWebhook.value = webhook
-  deleteConfirmOpen.value = true
-}
-
-function closeDeleteConfirm(): void {
-  if (deleteInProgress.value) {
-    return
-  }
-  deleteConfirmOpen.value = false
-  deletingWebhook.value = null
-}
-
-async function submitEditor(): Promise<void> {
-  editorError.value = ''
-
-  const name = editorName.value.trim()
-  const url = editorURL.value.trim()
-  if (!name) {
-    editorError.value = 'Name is required.'
-    return
-  }
-  if (!url) {
-    editorError.value = 'Webhook URL is required.'
-    return
-  }
-  if (editorEvents.value.length === 0) {
-    editorError.value = 'Select at least one event subscription.'
-    return
-  }
-
-  editorSaving.value = true
-
+async function handleSave(): Promise<void> {
+  saving.value = true
   try {
-    if (editorMode.value === 'create') {
-      await createWebhook({
-        name,
-        url,
-        secret_token: editorSecret.value.trim() || undefined,
-        active: editorActive.value,
-        subscribed_events: editorEvents.value,
-      })
-      showToast('Webhook created.', 'success')
-    } else if (editingId.value) {
-      await updateWebhook(editingId.value, {
-        name,
-        url,
-        secret_token: editorSecret.value.trim() || undefined,
-        active: editorActive.value,
-        subscribed_events: editorEvents.value,
-      })
-      showToast('Webhook updated.', 'success')
+    const payload = {
+      url: formUrl.value,
+      name: formName.value,
+      secret_token: formSecret.value || undefined,
+      active: formActive.value,
+      subscribed_events: formEvents.value,
     }
-    editorOpen.value = false
-    await loadAll()
-  } catch (error) {
-    editorError.value = extractApiError(error, 'Failed to save webhook')
-  } finally {
-    editorSaving.value = false
-  }
-}
-
-async function runTestFromEditor(): Promise<void> {
-  if (editorMode.value !== 'edit' || !editingId.value) {
-    editorError.value = 'Save the webhook before testing connectivity.'
-    return
-  }
-
-  editorTesting.value = true
-  editorError.value = ''
-
-  try {
-    const result = await testWebhook(editingId.value)
-    if (result.success) {
-      showToast(`Test delivered (${result.status_code}, ${result.latency_ms} ms).`, 'success')
-      return
+    if (formMode.value === 'create') {
+      await createWebhook(payload)
+      toast.success('Webhook created')
+    } else {
+      await updateWebhook(editingId.value, payload)
+      toast.success('Webhook updated')
     }
-    const detail = result.error || `HTTP ${result.status_code}`
-    showToast(`Test failed: ${detail}`, 'error')
-  } catch (error) {
-    showToast(extractApiError(error, 'Webhook test failed'), 'error')
+    formOpen.value = false
+    void load()
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    editorTesting.value = false
+    saving.value = false
   }
 }
 
-async function runTestFromRow(webhook: WebhookResponse): Promise<void> {
+async function handleDelete(id: string): Promise<void> {
+  if (!confirm('Delete this webhook?')) return
   try {
-    const result = await testWebhook(webhook.id)
-    if (result.success) {
-      showToast(`"${webhook.name}" responded ${result.status_code} in ${result.latency_ms} ms.`, 'success')
-      return
+    await deleteWebhook(id)
+    toast.success('Webhook deleted')
+    void load()
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
+  }
+}
+
+async function handleTest(id: string): Promise<void> {
+  testing.value = true
+  try {
+    const res = await testWebhook(id)
+    if (res.success) {
+      toast.success(`Test succeeded (${res.status_code}) in ${res.latency_ms}ms`)
+    } else {
+      toast.warning(`Test failed (${res.status_code}): ${res.error ?? ''}`)
     }
-    const detail = result.error || `HTTP ${result.status_code}`
-    showToast(`"${webhook.name}" test failed: ${detail}`, 'error')
-  } catch (error) {
-    showToast(extractApiError(error, 'Webhook test failed'), 'error')
-  }
-}
-
-async function confirmDelete(): Promise<void> {
-  if (!deletingWebhook.value) {
-    return
-  }
-
-  deleteInProgress.value = true
-
-  try {
-    await deleteWebhook(deletingWebhook.value.id)
-    showToast('Webhook deleted.', 'success')
-    deleteConfirmOpen.value = false
-    deletingWebhook.value = null
-    await loadAll()
-  } catch (error) {
-    showToast(extractApiError(error, 'Failed to delete webhook'), 'error')
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    deleteInProgress.value = false
+    testing.value = false
   }
-}
-
-function eventSummary(events: string[]): string {
-  if (events.length === 0) {
-    return '—'
-  }
-  if (events.length <= 2) {
-    return events.join(', ')
-  }
-  return `${events.slice(0, 2).join(', ')} +${events.length - 2}`
 }
 </script>
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-xs ui-text-muted">
-        Outbound alerts<template v-if="showApiHints">
-          via
-          <code class="ui-code">GET /api/v1/webhooks</code></template>
-        — Discord, Slack, Gotify, and custom HTTP receivers.
-      </p>
-      <button type="button" class="ui-btn-primary" @click="openCreateModal">Add Webhook</button>
+    <div class="flex items-center justify-between">
+      <p class="text-sm text-foreground-muted">{{ webhooks.length }} webhook(s) configured</p>
+      <Button size="sm" @click="openCreate">Add Webhook</Button>
     </div>
 
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
-      {{ errorMessage }}
+    <div v-if="loading" class="flex justify-center py-16"><Spinner size="lg" /></div>
+
+    <div v-else-if="webhooks.length === 0" class="flex flex-col items-center justify-center py-16 text-foreground-muted text-sm gap-2">
+      <p>No webhooks configured.</p>
+      <Button variant="outline" size="sm" @click="openCreate">Create first webhook</Button>
     </div>
 
-    <DataTable
-      :columns="tableColumns"
-      :rows="webhooks"
-      :row-key="(row) => row.id"
-      :loading="isLoading"
-      empty-message="No webhooks configured. Add an endpoint to receive audit alerts."
-    >
-      <template #cell-active="{ row }">
-        <StatusBadge :label="row.active ? 'Active' : 'Paused'" :tone="row.active ? 'enabled' : 'disabled'" />
-      </template>
-      <template #cell-events="{ row }">
-        <span class="ui-text-secondary">{{ eventSummary(row.subscribed_events) }}</span>
-      </template>
-      <template #cell-updated_at="{ row }">
-        {{ formatDateTime(row.updated_at) }}
-      </template>
-      <template #cell-actions="{ row }">
-        <div class="flex flex-wrap gap-1.5">
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openEditModal(row)">Edit</button>
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="runTestFromRow(row)">Test</button>
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openDeleteConfirm(row)">Delete</button>
-        </div>
-      </template>
-    </DataTable>
-
-    <Modal :open="editorOpen" :title="editorTitle" wide @close="closeEditor">
-      <p class="mb-3 text-xs ui-text-muted">
-        Deliver JSON audit payloads when subscribed events occur.<template v-if="showApiHints">
-          Optional HMAC signatures use
-          <code class="ui-code">X-Webhook-Signature: sha256=&lt;hex&gt;</code>.</template>
-      </p>
-
-      <div v-if="editorError" class="mb-3 ui-alert-error text-xs" role="alert">
-        {{ editorError }}
-      </div>
-
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="webhook-name">Name</label>
-          <input id="webhook-name" v-model="editorName" type="text" class="ui-input mt-1.5" autocomplete="off" />
-        </div>
-        <div>
-          <label class="block text-xs font-medium ui-text-secondary" for="webhook-url">URL endpoint</label>
-          <input
-            id="webhook-url"
-            v-model="editorURL"
-            type="url"
-            class="ui-input mt-1.5 font-mono text-[11px]"
-            placeholder="https://discord.com/api/webhooks/..."
-            autocomplete="off"
-          />
-        </div>
-      </div>
-
-      <div class="mt-3">
-        <label class="block text-xs font-medium ui-text-secondary" for="webhook-secret">
-          Secret token (optional)
-        </label>
-        <input
-          id="webhook-secret"
-          v-model="editorSecret"
-          type="password"
-          class="ui-input mt-1.5 font-mono text-[11px]"
-          :placeholder="editorMode === 'edit' ? 'Leave blank to keep existing secret' : 'HMAC signing key'"
-          autocomplete="new-password"
-        />
-      </div>
-
-      <div class="mt-3 flex items-center justify-between gap-3 rounded-[var(--radius-control)] border border-[var(--border-color)] px-3 py-2.5">
-        <div>
-          <p class="text-xs font-medium ui-text-secondary">Active</p>
-          <p class="mt-0.5 text-[11px] ui-text-muted">Paused webhooks are not dispatched.</p>
-        </div>
-        <button
-          type="button"
-          class="ui-theme-toggle shrink-0"
-          :data-active="editorActive"
-          :aria-pressed="editorActive"
-          aria-label="Webhook active"
-          @click="editorActive = !editorActive"
-        >
-          <span class="ui-theme-toggle-thumb" />
-        </button>
-      </div>
-
-      <div class="mt-4">
-        <p class="text-xs font-medium ui-text-secondary">Subscribed events</p>
-        <p class="mt-0.5 text-[11px] ui-text-muted">Select audit actions that should trigger this webhook.</p>
-        <div class="mt-2 grid gap-2 sm:grid-cols-2">
-          <label
-            v-for="option in eventOptions"
-            :key="option.action"
-            class="flex cursor-pointer items-start gap-2 rounded-[var(--radius-control)] border border-[var(--border-color)] px-3 py-2.5"
-          >
-            <input
-              type="checkbox"
-              class="mt-0.5"
-              :checked="selectedEventSet.has(option.action)"
-              @change="toggleEvent(option.action)"
-            />
-            <span class="min-w-0">
-              <span class="block text-xs font-medium ui-text-primary">{{ option.label }}</span>
-              <span class="mt-0.5 block text-[11px] ui-text-muted">{{ option.description }}</span>
-              <span class="mt-1 block font-mono text-[10px] ui-text-muted">{{ option.action }}</span>
-            </span>
-          </label>
-        </div>
-      </div>
-
-      <template #footer>
-        <div class="flex flex-wrap items-center justify-between gap-2">
-          <button
-            v-if="editorMode === 'edit'"
-            type="button"
-            class="ui-btn-secondary"
-            :disabled="editorSaving || editorTesting"
-            @click="runTestFromEditor"
-          >
-            {{ editorTesting ? 'Testing…' : 'Test Connection' }}
-          </button>
-          <div v-else />
-          <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-secondary" :disabled="editorSaving" @click="closeEditor">
-              Cancel
-            </button>
-            <button type="button" class="ui-btn-primary" :disabled="editorSaving" @click="submitEditor">
-              {{ editorSaving ? 'Saving…' : editorMode === 'create' ? 'Create Webhook' : 'Save Changes' }}
-            </button>
+    <div v-else class="space-y-3">
+      <Card
+        v-for="wh in webhooks"
+        :key="wh.id"
+        class="px-5 py-4"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <p class="text-sm font-semibold text-foreground">{{ wh.name }}</p>
+              <StatusBadge :status="wh.active ? 'enabled' : 'disabled'" />
+            </div>
+            <p class="text-xs font-mono text-foreground-muted truncate">{{ wh.url }}</p>
+            <div class="flex flex-wrap gap-1 mt-2">
+              <Badge
+                v-for="ev in wh.subscribed_events.slice(0, 4)"
+                :key="ev"
+                variant="outline"
+                class="text-[10px]"
+              >
+                {{ ev }}
+              </Badge>
+              <Badge v-if="wh.subscribed_events.length > 4" variant="secondary" class="text-[10px]">
+                +{{ wh.subscribed_events.length - 4 }} more
+              </Badge>
+            </div>
+            <p class="mt-1.5 text-[10px] text-foreground-subtle">Updated {{ formatDate(wh.updated_at) }}</p>
+          </div>
+          <div class="flex shrink-0 gap-1">
+            <Button variant="ghost" size="sm" :disabled="testing" @click="handleTest(wh.id)">Test</Button>
+            <Button variant="ghost" size="sm" @click="openEdit(wh)">Edit</Button>
+            <Button variant="ghost" size="sm" class="text-destructive hover:text-destructive" @click="handleDelete(wh.id)">Delete</Button>
           </div>
         </div>
-      </template>
-    </Modal>
+      </Card>
+    </div>
 
-    <Modal
-      :open="deleteConfirmOpen"
-      title="Delete Webhook"
-      @close="closeDeleteConfirm"
+    <!-- Webhook form dialog -->
+    <Dialog
+      :open="formOpen"
+      :title="formMode === 'create' ? 'Add Webhook' : 'Edit Webhook'"
+      max-width="max-w-lg"
+      @close="formOpen = false"
     >
-      <p class="text-sm ui-text-secondary">
-        Delete webhook
-        <strong class="ui-text-primary">{{ deletingWebhook?.name }}</strong>?
-        This cannot be undone.
-      </p>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <button type="button" class="ui-btn-secondary" :disabled="deleteInProgress" @click="closeDeleteConfirm">
-            Cancel
-          </button>
-          <button type="button" class="ui-btn-primary" :disabled="deleteInProgress" @click="confirmDelete">
-            {{ deleteInProgress ? 'Deleting…' : 'Delete' }}
-          </button>
+      <div class="space-y-4">
+        <div class="space-y-1.5">
+          <Label>Name</Label>
+          <Input v-model="formName" placeholder="My Webhook" />
         </div>
+        <div class="space-y-1.5">
+          <Label>Endpoint URL</Label>
+          <Input v-model="formUrl" placeholder="https://hooks.example.com/receiver" type="url" />
+        </div>
+        <div class="space-y-1.5">
+          <Label>Secret Token (optional)</Label>
+          <Input v-model="formSecret" placeholder="Leave blank to keep existing" type="password" />
+        </div>
+        <div class="flex items-center gap-3">
+          <Switch v-model="formActive" />
+          <Label>Active</Label>
+        </div>
+        <div v-if="events.length" class="space-y-2">
+          <Label>Subscribed Events</Label>
+          <div class="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto rounded-md border border-border p-3">
+            <label
+              v-for="ev in events"
+              :key="ev.action"
+              class="flex items-center gap-2 text-xs cursor-pointer hover:text-foreground transition-colors"
+              :class="formEvents.includes(ev.action) ? 'text-foreground' : 'text-foreground-muted'"
+            >
+              <input
+                type="checkbox"
+                :checked="formEvents.includes(ev.action)"
+                class="h-3 w-3 accent-primary"
+                @change="toggleEvent(ev.action)"
+              />
+              {{ ev.label }}
+            </label>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <Button variant="outline" @click="formOpen = false">Cancel</Button>
+        <Button :disabled="saving || !formUrl || !formName" @click="handleSave">
+          <Spinner v-if="saving" size="sm" />
+          <span>{{ saving ? 'Saving…' : formMode === 'create' ? 'Create' : 'Save' }}</span>
+        </Button>
       </template>
-    </Modal>
+    </Dialog>
   </div>
 </template>

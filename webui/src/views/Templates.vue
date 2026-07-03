@@ -1,231 +1,112 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { createTemplate, listTemplates } from '../api/templates'
-import type { CertificateTemplate } from '../types/api'
-import { usePreferences } from '../composables/usePreferences'
-import DataTable from '../components/ui/DataTable.vue'
-import Modal from '../components/ui/Modal.vue'
-import { extractApiError } from '../utils/errors'
-import { formatDateTime } from '../utils/format'
+import { ref, onMounted } from 'vue'
+import Card from '@/components/ui/Card.vue'
+import Button from '@/components/ui/Button.vue'
+import Badge from '@/components/ui/Badge.vue'
+import Input from '@/components/ui/Input.vue'
+import Label from '@/components/ui/Label.vue'
+import Textarea from '@/components/ui/Textarea.vue'
+import Spinner from '@/components/ui/Spinner.vue'
+import Dialog from '@/components/ui/Dialog.vue'
+import { fetchTemplates, createTemplate } from '@/api/templates'
+import type { CertificateTemplate } from '@/types/api'
+import { formatDate } from '@/utils/format'
+import { extractErrorMessage } from '@/utils/errors'
+import { useToast } from '@/composables/useToast'
 
-const { showApiHints } = usePreferences()
-
+const toast = useToast()
+const loading = ref(true)
 const templates = ref<CertificateTemplate[]>([])
-const isLoading = ref(true)
-const errorMessage = ref('')
 
-const createModalOpen = ref(false)
-const createName = ref('')
-const createDescription = ref('')
-const createBody = ref('')
-const createError = ref('')
-const createSuccess = ref('')
-const isCreating = ref(false)
+const createOpen = ref(false)
+const creating = ref(false)
+const formName = ref('')
+const formDesc = ref('')
+const formBody = ref('')
 
-const tableColumns = [
-  { key: 'name', label: 'Name' },
-  { key: 'description', label: 'Description' },
-  { key: 'created_at', label: 'Created' },
-  { key: 'actions', label: '', headerClass: 'w-24' },
-]
-
-const detailModalOpen = ref(false)
-const selectedTemplate = ref<CertificateTemplate | null>(null)
-
-async function loadTemplates(): Promise<void> {
-  isLoading.value = true
-  errorMessage.value = ''
-
+onMounted(async () => {
   try {
-    const response = await listTemplates()
-    templates.value = response.templates
-  } catch (error) {
-    errorMessage.value = extractApiError(error, 'Failed to load templates')
+    const res = await fetchTemplates()
+    templates.value = res.templates
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
-}
-
-onMounted(() => {
-  void loadTemplates()
 })
 
-function openCreateModal(): void {
-  createError.value = ''
-  createSuccess.value = ''
-  createName.value = ''
-  createDescription.value = ''
-  createBody.value = ''
-  createModalOpen.value = true
-}
-
-function closeCreateModal(): void {
-  if (isCreating.value) {
-    return
-  }
-  createModalOpen.value = false
-}
-
-function openTemplateDetail(template: CertificateTemplate): void {
-  selectedTemplate.value = template
-  detailModalOpen.value = true
-}
-
-function closeTemplateDetail(): void {
-  detailModalOpen.value = false
-  selectedTemplate.value = null
-}
-
-async function submitCreate(): Promise<void> {
-  createError.value = ''
-  createSuccess.value = ''
-
-  const name = createName.value.trim()
-  const body = createBody.value.trim()
-
-  if (!name) {
-    createError.value = 'Template name is required.'
-    return
-  }
-  if (!body) {
-    createError.value = 'Template body is required.'
-    return
-  }
-
-  isCreating.value = true
-
+async function handleCreate(): Promise<void> {
+  creating.value = true
   try {
-    const created = await createTemplate({
-      name,
-      description: createDescription.value.trim() || undefined,
-      body,
-    })
-    createSuccess.value = `Template "${created.name}" created.`
-    await loadTemplates()
-    createName.value = ''
-    createDescription.value = ''
-    createBody.value = ''
-  } catch (error) {
-    createError.value = extractApiError(error, 'Failed to create template')
+    const t = await createTemplate({ name: formName.value, description: formDesc.value || undefined, body: formBody.value })
+    templates.value.unshift(t)
+    createOpen.value = false
+    toast.success('Template created')
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    isCreating.value = false
+    creating.value = false
   }
+}
+
+function openCreate(): void {
+  formName.value = ''
+  formDesc.value = ''
+  formBody.value = ''
+  createOpen.value = true
 }
 </script>
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <p v-if="showApiHints" class="text-xs ui-text-muted">
-        Issuance templates from
-        <code class="ui-code">GET /api/v1/templates</code>
-      </p>
-      <button type="button" class="ui-btn-primary" @click="openCreateModal">Create Template</button>
+    <div class="flex items-center justify-between">
+      <p class="text-sm text-foreground-muted">{{ templates.length }} template(s)</p>
+      <Button size="sm" @click="openCreate">New Template</Button>
     </div>
 
-    <div v-if="errorMessage" class="ui-alert-error" role="alert">
-      {{ errorMessage }}
+    <div v-if="loading" class="flex justify-center py-16"><Spinner size="lg" /></div>
+
+    <div v-else-if="templates.length === 0" class="flex flex-col items-center py-16 text-foreground-muted text-sm gap-2">
+      <p>No certificate templates defined.</p>
+      <Button variant="outline" size="sm" @click="openCreate">Create first template</Button>
     </div>
 
-    <DataTable
-      :columns="tableColumns"
-      :rows="templates"
-      :row-key="(row) => row.id"
-      :loading="isLoading"
-      empty-message="No certificate templates registered."
-    >
-      <template #cell-created_at="{ row }">
-        {{ formatDateTime(row.created_at) }}
-      </template>
-      <template #cell-actions="{ row }">
-        <button type="button" class="ui-btn-secondary text-[11px]" @click="openTemplateDetail(row)">
-          View
-        </button>
-      </template>
-    </DataTable>
-
-    <Modal :open="createModalOpen" title="Create Template" wide @close="closeCreateModal">
-      <p v-if="showApiHints" class="mb-3 text-xs ui-text-muted">
-        Registers a Go text/template body via
-        <code class="ui-code">POST /api/v1/templates</code>.
-      </p>
-
-      <div v-if="createError" class="mb-3 ui-alert-error text-xs" role="alert">
-        {{ createError }}
-      </div>
-      <div v-if="createSuccess" class="mb-3 ui-alert-success" role="status">
-        {{ createSuccess }}
-      </div>
-
-      <label class="block text-xs font-medium ui-text-secondary" for="template-name">Name</label>
-      <input id="template-name" v-model="createName" type="text" class="ui-input mt-1.5" autocomplete="off" />
-
-      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="template-desc">
-        Description (optional)
-      </label>
-      <input
-        id="template-desc"
-        v-model="createDescription"
-        type="text"
-        class="ui-input mt-1.5"
-        autocomplete="off"
-      />
-
-      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="template-body">
-        Template body
-      </label>
-      <textarea
-        id="template-body"
-        v-model="createBody"
-        rows="12"
-        class="ui-textarea mt-1.5 font-mono text-[11px]"
-        placeholder='{"subject": {"commonName": "{{ .CommonName }}"}}'
-        spellcheck="false"
-      />
-
-      <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="isCreating" @click="closeCreateModal">
-          Cancel
-        </button>
-        <button type="button" class="ui-btn-primary" :disabled="isCreating" @click="submitCreate">
-          {{ isCreating ? 'Creating…' : 'Create Template' }}
-        </button>
-      </template>
-    </Modal>
-
-    <Modal :open="detailModalOpen" title="Template Details" wide @close="closeTemplateDetail">
-      <template v-if="selectedTemplate">
-        <dl class="grid gap-3 text-xs sm:grid-cols-2">
+    <div v-else class="space-y-3">
+      <Card v-for="t in templates" :key="t.id" class="px-5 py-4 space-y-2">
+        <div class="flex items-start justify-between gap-2">
           <div>
-            <dt class="font-medium ui-text-muted">ID</dt>
-            <dd class="mt-0.5 font-mono ui-text-primary">{{ selectedTemplate.id }}</dd>
+            <p class="text-sm font-semibold text-foreground">{{ t.name }}</p>
+            <p v-if="t.description" class="text-xs text-foreground-muted mt-0.5">{{ t.description }}</p>
           </div>
-          <div>
-            <dt class="font-medium ui-text-muted">Name</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ selectedTemplate.name }}</dd>
-          </div>
-          <div v-if="selectedTemplate.description" class="sm:col-span-2">
-            <dt class="font-medium ui-text-muted">Description</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ selectedTemplate.description }}</dd>
-          </div>
-          <div>
-            <dt class="font-medium ui-text-muted">Created</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(selectedTemplate.created_at) }}</dd>
-          </div>
-          <div>
-            <dt class="font-medium ui-text-muted">Updated</dt>
-            <dd class="mt-0.5 ui-text-primary">{{ formatDateTime(selectedTemplate.updated_at) }}</dd>
-          </div>
-        </dl>
-        <div class="mt-4">
-          <p class="text-xs font-medium ui-text-secondary">Body</p>
-          <pre class="ui-inset mt-1.5 max-h-64 overflow-auto p-3 font-mono text-[10px] ui-text-secondary">{{ selectedTemplate.body }}</pre>
+          <Badge variant="secondary" class="shrink-0 text-[10px]">{{ t.id.slice(0, 8) }}</Badge>
         </div>
-      </template>
+        <pre class="rounded-md bg-muted p-3 text-[10px] font-mono text-foreground-muted overflow-x-auto max-h-24">{{ t.body }}</pre>
+        <p class="text-[10px] text-foreground-subtle">Updated {{ formatDate(t.updated_at) }}</p>
+      </Card>
+    </div>
 
+    <Dialog :open="createOpen" title="New Certificate Template" max-width="max-w-xl" @close="createOpen = false">
+      <div class="space-y-3">
+        <div class="space-y-1.5">
+          <Label>Name</Label>
+          <Input v-model="formName" placeholder="webserver-2year" />
+        </div>
+        <div class="space-y-1.5">
+          <Label>Description (optional)</Label>
+          <Input v-model="formDesc" placeholder="Standard web server certificate" />
+        </div>
+        <div class="space-y-1.5">
+          <Label>Template Body (JSON/Go template)</Label>
+          <Textarea v-model="formBody" placeholder='{"subject": {"commonName": "{{.Subject.CommonName}}"}}' :rows="8" />
+        </div>
+      </div>
       <template #footer>
-        <button type="button" class="ui-btn-secondary" @click="closeTemplateDetail">Close</button>
+        <Button variant="outline" @click="createOpen = false">Cancel</Button>
+        <Button :disabled="creating || !formName || !formBody" @click="handleCreate">
+          <Spinner v-if="creating" size="sm" />
+          <span>{{ creating ? 'Creating…' : 'Create' }}</span>
+        </Button>
       </template>
-    </Modal>
+    </Dialog>
   </div>
 </template>

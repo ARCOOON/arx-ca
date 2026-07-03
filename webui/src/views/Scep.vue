@@ -1,87 +1,59 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { fetchScepStatus } from '../api/scep'
-import type { ScepStatus } from '../types/api'
-import { usePreferences } from '../composables/usePreferences'
-import FlatToggle from '../components/ui/FlatToggle.vue'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import { extractApiError } from '../utils/errors'
+import { ref, onMounted } from 'vue'
+import Card from '@/components/ui/Card.vue'
+import Spinner from '@/components/ui/Spinner.vue'
+import StatusBadge from '@/components/ui/StatusBadge.vue'
+import { fetchScepStatus } from '@/api/scep'
+import type { ScepStatus } from '@/types/api'
+import { extractErrorMessage } from '@/utils/errors'
+import { useToast } from '@/composables/useToast'
 
-const { showApiHints } = usePreferences()
-
+const toast = useToast()
+const loading = ref(true)
 const status = ref<ScepStatus | null>(null)
-const isLoading = ref(true)
-const errorMessage = ref('')
-
-const baseUrl = computed(() => {
-  if (status.value?.base_url) {
-    return status.value.base_url
-  }
-  if (typeof window !== 'undefined') {
-    return `${window.location.origin}/scep/scep`
-  }
-  return 'https://<host>:8443/scep/scep'
-})
 
 onMounted(async () => {
-  isLoading.value = true
-  errorMessage.value = ''
-
   try {
     status.value = await fetchScepStatus()
-  } catch (error) {
-    errorMessage.value = extractApiError(error, 'Failed to load SCEP status')
+  } catch (err) {
+    toast.error(extractErrorMessage(err))
   } finally {
-    isLoading.value = false
+    loading.value = false
   }
 })
 </script>
 
 <template>
-  <div class="space-y-4">
-    <div
-      v-if="errorMessage"
-      class="ui-alert-error"
-      role="alert"
-    >
-      {{ errorMessage }}
+  <div class="space-y-6 max-w-2xl">
+    <div v-if="loading" class="flex justify-center py-16"><Spinner size="lg" /></div>
+
+    <Card v-else-if="status" class="px-6 py-5 space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-foreground">SCEP Protocol</h2>
+        <StatusBadge :status="status.enabled ? 'enabled' : 'disabled'" />
+      </div>
+
+      <div v-if="status.enabled" class="space-y-2 text-sm">
+        <div class="flex gap-2">
+          <span class="w-32 text-xs text-foreground-muted">Base URL</span>
+          <span class="font-mono text-xs text-foreground">{{ status.base_url ?? '—' }}</span>
+        </div>
+        <div class="flex gap-2">
+          <span class="w-32 text-xs text-foreground-muted">Provisioner</span>
+          <span class="text-foreground">{{ status.provisioner ?? '—' }}</span>
+        </div>
+        <div v-if="status.challenge_hint" class="flex gap-2">
+          <span class="w-32 text-xs text-foreground-muted">Challenge</span>
+          <span class="font-mono text-xs text-foreground">{{ status.challenge_hint }}</span>
+        </div>
+      </div>
+      <div v-else class="text-sm text-foreground-muted">
+        SCEP enrollment is not enabled in the current server configuration.
+      </div>
+    </Card>
+
+    <div v-else class="rounded-lg border border-border bg-muted px-4 py-8 text-center text-sm text-foreground-muted">
+      SCEP status unavailable
     </div>
-
-    <div v-if="isLoading" class="text-sm ui-text-muted">Loading SCEP configuration…</div>
-
-    <template v-else-if="status">
-      <section class="flex flex-wrap items-center gap-3">
-        <StatusBadge
-          :label="status.enabled ? 'Enabled' : 'Disabled'"
-          :tone="status.enabled ? 'enabled' : 'disabled'"
-        />
-        <span v-if="showApiHints" class="text-xs ui-text-muted">
-          Discovery:
-          <code class="ui-code">GET /api/v1/scep/status</code>
-        </span>
-      </section>
-
-      <FlatToggle label="SCEP enrollment" :enabled="status.enabled" readonly />
-
-      <section class="ui-surface-muted">
-        <header class="ui-border-b px-4 py-2.5">
-          <h2 class="text-sm font-semibold ui-text-primary">Endpoints</h2>
-        </header>
-        <dl class="ui-divide text-xs">
-          <div class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Base URL</dt>
-            <dd class="break-all font-mono ui-text-secondary">{{ baseUrl }}</dd>
-          </div>
-          <div v-if="status.provisioner" class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Provisioner</dt>
-            <dd class="font-mono ui-text-secondary">{{ status.provisioner }}</dd>
-          </div>
-          <div v-if="status.challenge_hint" class="grid gap-2 px-4 py-3 sm:grid-cols-[10rem_1fr]">
-            <dt class="ui-text-muted">Challenge</dt>
-            <dd class="ui-text-secondary">{{ status.challenge_hint }}</dd>
-          </div>
-        </dl>
-      </section>
-    </template>
   </div>
 </template>
