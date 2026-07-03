@@ -61,8 +61,8 @@ function Sync-SessionPath {
 function Preserve-UserData {
     param([string]$InstallDir)
 
-    if (Test-Path (Join-Path $InstallDir 'server.yaml')) {
-        Write-Host 'Preserving existing server.yaml'
+    if (Test-Path (Join-Path $InstallDir 'server.toml')) {
+        Write-Host 'Preserving existing server.toml'
     }
     if (Test-Path (Join-Path $InstallDir '.pki')) {
         Write-Host 'Preserving existing .pki/ directory'
@@ -148,8 +148,8 @@ try {
     Write-Host '  Command:  arx-ca (via PATH)'
     Write-Host ''
     Write-Host 'Next steps:'
-    Write-Host "  arx-ca server config init --config $(Join-Path $InstallDir 'server.yaml')"
-    Write-Host "  arx-ca server start --config $(Join-Path $InstallDir 'server.yaml')"
+    Write-Host "  arx-ca server config init --config $(Join-Path $InstallDir 'server.toml')"
+    Write-Host "  arx-ca server start --config $(Join-Path $InstallDir 'server.toml')"
 } finally {
     if (Test-Path $TempDir) {
         Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue

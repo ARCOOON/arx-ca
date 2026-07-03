@@ -21,7 +21,7 @@ Usage: $(basename "$0") [--user|--system]
             Directory: /opt/arx-ca
             Symlink:   /usr/local/bin/arx-ca
 
-Existing server.yaml and .pki/ in the install directory are preserved on upgrade.
+Existing server.toml and .pki/ in the install directory are preserved on upgrade.
 EOF
 }
 
@@ -102,8 +102,8 @@ fetch_latest_tag() {
 }
 
 preserve_user_data() {
-	if [[ -f "${INSTALL_DIR}/server.yaml" ]]; then
-		echo "Preserving existing server.yaml"
+	if [[ -f "${INSTALL_DIR}/server.toml" ]]; then
+		echo "Preserving existing server.toml"
 	fi
 	if [[ -d "${INSTALL_DIR}/.pki" ]]; then
 		echo "Preserving existing .pki/ directory"
@@ -182,14 +182,14 @@ main() {
 	echo "Next steps:"
 
 	if [[ "${SCOPE}" == "user" ]]; then
-		echo "  arx-ca server config init --config ${INSTALL_DIR}/server.yaml"
-		echo "  arx-ca server start --config ${INSTALL_DIR}/server.yaml"
+		echo "  arx-ca server config init --config ${INSTALL_DIR}/server.toml"
+		echo "  arx-ca server start --config ${INSTALL_DIR}/server.toml"
 		echo ""
 		echo "Note: If running on a headless server, enable linger to allow the user service to start at boot:"
 		echo "sudo loginctl enable-linger $USER"
 	else
-		echo "  arx-ca server config init --config ${INSTALL_DIR}/server.yaml"
-		echo "  arx-ca server start --config ${INSTALL_DIR}/server.yaml"
+		echo "  arx-ca server config init --config ${INSTALL_DIR}/server.toml"
+		echo "  arx-ca server start --config ${INSTALL_DIR}/server.toml"
 	fi
 
 	echo ""
