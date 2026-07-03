@@ -1,25 +1,23 @@
 {
   "mcpServers": {
-    "go-gopls": {
-      "command": "${userHome}/go/bin/mcp-gopls",
-      "args": []
+    "mcp-gopls": {
+      "command": "mcp-gopls",
+      "args": [
+        "--workspace",
+        "${workspaceFolder}"
+      ],
+      "env": {
+        "MCP_GOPLS_LOG_LEVEL": "info",
+        "PATH": "/go/bin:${userHome}/go/bin:${env:PATH}"
+      }
     },
     "sqlite": {
       "command": "npx",
       "args": [
         "-y",
         "mcp-server-sqlite",
-        "--db-path",
+        "--db",
         "${workspaceFolder}/data/arx.db"
-      ]
-    },
-    "git": {
-      "command": "python3",
-      "args": [
-        "-m",
-        "mcp_server_git",
-        "--repository",
-        "${workspaceFolder}"
       ]
     },
     "memory": {
@@ -32,25 +30,11 @@
         "MEMORY_FILE_PATH": "${workspaceFolder}/.cursor/arx-ca-memory.jsonl"
       }
     },
-    "fetch": {
-      "command": "python3",
-      "args": [
-        "-m",
-        "mcp_server_fetch"
-      ]
-    },
     "ast-grep": {
       "command": "npx",
       "args": [
         "-y",
         "ast-grep-mcp"
-      ]
-    },
-    "vite-vue": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "vite-plugin-vue-mcp"
       ]
     },
     "github": {
