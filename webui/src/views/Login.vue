@@ -1,10 +1,21 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ShieldCheck from 'lucide-vue-next/dist/esm/icons/shield-check.js'
-import axios from 'axios'
-import { login } from '../api/auth'
-import { useAuthStore } from '../store/auth'
+import { ShieldCheck, Loader2 } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
+import { login } from '@/api/auth'
+import { useAuthStore } from '@/stores/auth'
+import { extractApiError } from '@/lib/errors'
 
 const router = useRouter()
 const route = useRoute()
@@ -12,36 +23,24 @@ const authStore = useAuthStore()
 
 const email = ref('')
 const password = ref('')
-const errorMessage = ref('')
 const isSubmitting = ref(false)
+const errorMessage = ref('')
 
-async function handleSubmit(): Promise<void> {
+async function onSubmit(): Promise<void> {
   errorMessage.value = ''
+  if (!email.value.trim() || !password.value) {
+    errorMessage.value = 'Email and password are required.'
+    return
+  }
+
   isSubmitting.value = true
-
   try {
-    const session = await login({
-      email: email.value.trim(),
-      password: password.value,
-    })
-
-    authStore.setSession(session.token, session.roles ?? [])
-
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
-    await router.push(redirect)
+    const response = await login({ email: email.value.trim(), password: password.value })
+    authStore.setSession(response.token, response.roles ?? [])
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
+    await router.push(redirect ?? { name: 'dashboard' })
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const apiError = error.response?.data as { error?: string } | undefined
-      if (error.response?.status === 401) {
-        errorMessage.value = apiError?.error ?? 'Invalid email or password'
-      } else {
-        errorMessage.value = apiError?.error ?? 'Unable to sign in. Please try again.'
-      }
-    } else if (error instanceof Error) {
-      errorMessage.value = error.message
-    } else {
-      errorMessage.value = 'Unable to sign in. Please try again.'
-    }
+    errorMessage.value = extractApiError(error, 'Invalid email or password')
   } finally {
     isSubmitting.value = false
   }
@@ -49,60 +48,60 @@ async function handleSubmit(): Promise<void> {
 </script>
 
 <template>
-  <div class="ui-shell flex min-h-screen items-center justify-center px-4 py-12">
-    <div class="w-full max-w-md">
-      <div class="mb-8 text-center">
-        <div class="ui-brand-icon mx-auto mb-4 flex h-14 w-14 items-center justify-center bg-[var(--bg-elevated)]">
-          <ShieldCheck class="h-7 w-7" style="color: var(--accent-color)" aria-hidden="true" />
-        </div>
-        <h1 class="text-2xl font-semibold tracking-tight ui-text-primary">Arx Certificate Authority</h1>
-        <p class="mt-2 text-sm ui-text-muted">Sign in with your administrator credentials</p>
-      </div>
+  <div class="relative flex min-h-screen items-center justify-center bg-background px-4">
+    <div class="absolute right-4 top-4">
+      <ThemeSwitcher />
+    </div>
 
-      <form class="ui-elevated ui-dialog p-6" @submit.prevent="handleSubmit">
-        <div v-if="errorMessage" class="mb-4 ui-alert-error text-sm" role="alert">
-          {{ errorMessage }}
+    <Card class="w-full max-w-sm">
+      <CardHeader class="items-center text-center">
+        <div
+          class="mb-2 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground"
+        >
+          <ShieldCheck class="size-6" />
         </div>
-
-        <div class="space-y-4">
-          <div>
-            <label for="email" class="mb-1.5 block text-sm font-medium ui-text-secondary">Email</label>
-            <input
+        <CardTitle class="text-xl">Arx CA Console</CardTitle>
+        <CardDescription>Sign in to manage your certificate authority.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form class="space-y-4" @submit.prevent="onSubmit">
+          <div class="space-y-2">
+            <Label for="email">Email</Label>
+            <Input
               id="email"
               v-model="email"
               type="email"
-              name="email"
               autocomplete="username"
-              required
-              class="ui-input py-2.5 text-sm"
               placeholder="admin@example.com"
+              :disabled="isSubmitting"
             />
           </div>
-
-          <div>
-            <label for="password" class="mb-1.5 block text-sm font-medium ui-text-secondary">Password</label>
-            <input
+          <div class="space-y-2">
+            <Label for="password">Password</Label>
+            <Input
               id="password"
               v-model="password"
               type="password"
-              name="password"
               autocomplete="current-password"
-              required
-              class="ui-input py-2.5 text-sm"
-              placeholder="Enter your password"
+              placeholder="••••••••"
+              :disabled="isSubmitting"
             />
           </div>
-        </div>
 
-        <button
-          type="submit"
-          :disabled="isSubmitting"
-          class="ui-btn-primary mt-6 w-full py-2.5"
-          style="background-color: var(--accent-color); color: var(--text-inverse); border-color: var(--accent-muted)"
-        >
-          {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
-        </button>
-      </form>
-    </div>
+          <p
+            v-if="errorMessage"
+            class="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            role="alert"
+          >
+            {{ errorMessage }}
+          </p>
+
+          <Button type="submit" class="w-full" :disabled="isSubmitting">
+            <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
+            {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   </div>
 </template>
