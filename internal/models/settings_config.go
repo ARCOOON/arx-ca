@@ -6,7 +6,7 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/config"
 )
 
-// SettingsConfigResponse is the masked server.yaml view returned to the WebUI.
+// SettingsConfigResponse is the masked server.toml view returned to the WebUI.
 type SettingsConfigResponse struct {
 	Server      ServerSettingsView    `json:"server"`
 	Database    DatabaseConfigView    `json:"database"`
@@ -20,7 +20,7 @@ type SettingsConfigResponse struct {
 	Updater     UpdaterConfigView     `json:"updater"`
 }
 
-// ServerSettingsView mirrors server.yaml server settings for JSON APIs.
+// ServerSettingsView mirrors server.toml server settings for JSON APIs.
 type ServerSettingsView struct {
 	Host         string        `json:"host"`
 	Port         int           `json:"port"`
