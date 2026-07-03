@@ -1,10 +1,9 @@
+import { request, type QueryParams } from './client'
 import type {
-  ApiEnvelope,
   ArchiveAllNotificationsResponse,
   ListNotificationsResponse,
   MarkAllNotificationsReadResponse,
-} from '../types/api'
-import { apiClient } from './client'
+} from '@/types/api'
 
 export interface ListNotificationsParams {
   limit?: number
@@ -12,77 +11,33 @@ export interface ListNotificationsParams {
   unread?: boolean
 }
 
-export async function listNotifications(
+export function listNotifications(
   params: ListNotificationsParams = {},
 ): Promise<ListNotificationsResponse> {
-  const response = await apiClient.get<ApiEnvelope<ListNotificationsResponse>>('/notifications', {
-    params: {
-      limit: params.limit ?? 50,
-      offset: params.offset ?? 0,
-      ...(params.unread ? { unread: 'true' } : {}),
-    },
-  })
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('Notification response did not include data')
-  }
-
-  return payload.data
+  return request<ListNotificationsResponse>('/notifications', { query: params as QueryParams })
 }
 
-export async function markNotificationRead(id: string): Promise<void> {
-  const response = await apiClient.post<ApiEnvelope<{ id: string; status: string }>>(
+export function markNotificationRead(id: string): Promise<{ id: string; status: string }> {
+  return request<{ id: string; status: string }>(
     `/notifications/${encodeURIComponent(id)}/read`,
+    { method: 'POST' },
   )
-  if (response.data.error) {
-    throw new Error(response.data.error)
-  }
 }
 
-export async function markAllNotificationsRead(): Promise<MarkAllNotificationsReadResponse> {
-  const response = await apiClient.post<ApiEnvelope<MarkAllNotificationsReadResponse>>(
-    '/notifications/read-all',
-  )
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('Mark all read response did not include data')
-  }
-
-  return payload.data
+export function markAllNotificationsRead(): Promise<MarkAllNotificationsReadResponse> {
+  return request<MarkAllNotificationsReadResponse>('/notifications/read-all', {
+    method: 'POST',
+  })
 }
 
-export async function deleteNotification(id: string): Promise<void> {
-  const response = await apiClient.delete<ApiEnvelope<{ id: string; status: string }>>(
-    `/notifications/${encodeURIComponent(id)}`,
-  )
-  if (response.data.error) {
-    throw new Error(response.data.error)
-  }
+export function deleteNotification(id: string): Promise<{ id: string; status: string }> {
+  return request<{ id: string; status: string }>(`/notifications/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
 }
 
-export async function archiveAllNotifications(): Promise<ArchiveAllNotificationsResponse> {
-  const response = await apiClient.post<ApiEnvelope<ArchiveAllNotificationsResponse>>(
-    '/notifications/archive-all',
-  )
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('Archive all notifications response did not include data')
-  }
-
-  return payload.data
+export function archiveAllNotifications(): Promise<ArchiveAllNotificationsResponse> {
+  return request<ArchiveAllNotificationsResponse>('/notifications/archive-all', {
+    method: 'POST',
+  })
 }
