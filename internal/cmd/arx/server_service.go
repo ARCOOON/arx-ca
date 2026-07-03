@@ -45,7 +45,7 @@ func runServerServiceUninstall(scope service.InstallScope, opts service.InstallO
 	}
 }
 
-// resolveServiceInstallOptions applies flag > server.yaml service block > hardcoded defaults.
+// resolveServiceInstallOptions applies flag > server.toml service block > hardcoded defaults.
 func resolveServiceInstallOptions(cmd *cobra.Command, flagRunAsUser, flagInstallDir string) (service.InstallOptions, error) {
 	opts := service.InstallOptions{}
 
