@@ -1,152 +1,76 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
-import Bell from 'lucide-vue-next/dist/esm/icons/bell.js'
-import LogOut from 'lucide-vue-next/dist/esm/icons/log-out.js'
-import Menu from 'lucide-vue-next/dist/esm/icons/menu.js'
-import Moon from 'lucide-vue-next/dist/esm/icons/moon.js'
-import Sun from 'lucide-vue-next/dist/esm/icons/sun.js'
-import UserRound from 'lucide-vue-next/dist/esm/icons/user-round.js'
-import NotificationDrawer from '../NotificationDrawer.vue'
-import { useNotifications } from '../../composables/useNotifications'
-import { useAuthStore } from '../../store/auth'
-import { applyTheme, resolveInitialTheme, type ThemeMode, toggleTheme } from '../../composables/useTheme'
+import { Menu, ChevronRight, LogOut, UserRound } from '@lucide/vue'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
+import { useAuthStore } from '@/stores/auth'
 
-const emit = defineEmits<{
-  logout: []
+defineEmits<{
   'toggle-mobile-nav': []
 }>()
 
 const route = useRoute()
 const authStore = useAuthStore()
-const { unreadCount } = useNotifications()
-const theme = ref<ThemeMode>(resolveInitialTheme())
-const drawerOpen = ref(false)
 
-const pageTitle = computed(() => {
-  const title = route.meta.title
-  return typeof title === 'string' ? title : 'Console'
-})
-
-const pageSubtitle = computed(() => {
-  const subtitle = route.meta.subtitle
-  return typeof subtitle === 'string' ? subtitle : ''
-})
-
-const roleLabel = computed(() => {
-  if (authStore.roles.length > 0) {
-    return authStore.roles.join(', ')
-  }
-  return 'Administrator'
-})
-
-const isDark = computed(() => theme.value === 'dark')
-
-const badgeLabel = computed(() => {
-  const count = unreadCount.value
-  if (count <= 0) {
-    return ''
-  }
-  return count > 99 ? '99+' : String(count)
-})
-
-function onThemeToggle(): void {
-  theme.value = toggleTheme(theme.value)
-}
-
-function setLightTheme(): void {
-  theme.value = 'light'
-  applyTheme('light')
-}
-
-function setDarkTheme(): void {
-  theme.value = 'dark'
-  applyTheme('dark')
-}
-
-function toggleDrawer(): void {
-  drawerOpen.value = !drawerOpen.value
-}
-
-function closeDrawer(): void {
-  drawerOpen.value = false
-}
+const breadcrumb = computed(() => (route.meta.breadcrumb as string) ?? (route.meta.title as string) ?? '')
+const roleLabel = computed(() => (authStore.roles.length ? authStore.roles.join(', ') : 'Operator'))
 </script>
 
 <template>
-  <header class="ui-border-b ui-chrome-bar flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-5">
-    <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-      <button
-        type="button"
-        class="ui-btn-secondary inline-flex h-8 w-8 shrink-0 items-center justify-center p-0 md:hidden"
-        aria-label="Open navigation menu"
-        @click="emit('toggle-mobile-nav')"
-      >
-        <Menu class="h-4 w-4" aria-hidden="true" />
-      </button>
+  <header
+    class="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-3 sm:px-4"
+  >
+    <Button
+      variant="ghost"
+      size="icon"
+      class="md:hidden"
+      aria-label="Open navigation"
+      @click="$emit('toggle-mobile-nav')"
+    >
+      <Menu class="size-5" />
+    </Button>
 
-      <div class="min-w-0">
-        <h1 class="truncate text-base font-semibold ui-text-primary">{{ pageTitle }}</h1>
-        <p v-if="pageSubtitle" class="truncate text-xs ui-text-muted">{{ pageSubtitle }}</p>
-      </div>
-    </div>
+    <!-- Breadcrumbs -->
+    <nav class="flex min-w-0 items-center gap-1.5 text-sm" aria-label="Breadcrumb">
+      <span class="text-muted-foreground">Console</span>
+      <ChevronRight class="size-4 shrink-0 text-muted-foreground/60" />
+      <span class="truncate font-medium text-foreground">{{ breadcrumb }}</span>
+    </nav>
 
-    <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-      <div class="hidden items-center gap-2 sm:flex">
-        <span class="sr-only">Color theme</span>
-        <Sun v-if="isDark" class="h-3.5 w-3.5 ui-text-muted" aria-hidden="true" />
-        <Moon v-else class="h-3.5 w-3.5 ui-text-muted" aria-hidden="true" />
-        <button
-          type="button"
-          class="ui-theme-toggle"
-          :data-active="isDark"
-          :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
-          @click="onThemeToggle"
-          @keydown.home.prevent="setLightTheme"
-          @keydown.end.prevent="setDarkTheme"
-        >
-          <span class="ui-theme-toggle-thumb" />
-        </button>
-      </div>
+    <div class="ml-auto flex items-center gap-1">
+      <NotificationBell />
+      <ThemeSwitcher />
+      <Separator orientation="vertical" class="mx-1 h-6" />
 
-      <button
-        type="button"
-        class="ui-topbar-control ui-btn-secondary relative inline-flex h-8 w-8 shrink-0 items-center justify-center p-0"
-        :aria-label="unreadCount > 0 ? `${unreadCount} unread notifications` : 'Open notifications'"
-        @click="toggleDrawer"
-      >
-        <Bell class="h-4 w-4" aria-hidden="true" />
-        <span
-          v-if="unreadCount > 0"
-          class="absolute -top-1 -right-1 inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-[var(--radius-pill)] bg-red-500 px-1 text-[10px] font-bold leading-none text-white"
-          aria-hidden="true"
-        >
-          {{ badgeLabel }}
-        </span>
-      </button>
-
-      <div class="ui-topbar-user-badge hidden sm:flex" aria-label="Signed in user">
-        <UserRound class="h-3.5 w-3.5 shrink-0 ui-text-muted" aria-hidden="true" />
-        <div class="flex min-w-0 flex-col items-end justify-center text-right">
-          <span class="whitespace-nowrap text-[10px] font-medium uppercase leading-tight tracking-wide ui-text-muted">
-            Signed in
-          </span>
-          <span class="mt-0.5 max-w-[12rem] truncate whitespace-nowrap text-xs leading-tight ui-text-secondary">
-            {{ roleLabel }}
-          </span>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        class="ui-topbar-control ui-btn-secondary inline-flex shrink-0 items-center gap-1.5"
-        @click="emit('logout')"
-      >
-        <LogOut class="h-3.5 w-3.5" aria-hidden="true" />
-        Logout
-      </button>
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="ghost" size="icon" aria-label="Account menu">
+            <UserRound class="size-[1.15rem]" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-52">
+          <DropdownMenuLabel>
+            <p class="text-sm font-medium">Signed in</p>
+            <p class="truncate text-xs font-normal text-muted-foreground">{{ roleLabel }}</p>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem class="text-destructive focus:text-destructive" @select="authStore.logout()">
+            <LogOut class="size-4" />
+            Sign out
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   </header>
-
-  <NotificationDrawer :open="drawerOpen" @close="closeDrawer" />
 </template>
