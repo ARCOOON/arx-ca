@@ -1,7 +1,7 @@
 ---
 description: Enforces mandatory documentation updates immediately following any codebase modification.
-globs: "**/*.go, **/*.yaml, **/*.ts, **/*.vue, **/*.json"
-alwaysApply: true
+globs: **/*.go, **/*.yaml, **/*.ts, **/*.vue, **/*.json, **/*.md, **/*.mdc
+alwaysApply: false
 ---
 
 # Mandatory Continuous Documentation Synchronization Rule

@@ -1,6 +1,5 @@
 ---
-description: "Core architectural philosophy for the entire project. Enforces KISS principles, direct communication, strict production-readiness, and methodical test tracking."
-globs: ["*.*"]
+description: Core architectural philosophy for the entire project. Enforces KISS principles, direct communication, strict production-readiness, and methodical test tracking.
 alwaysApply: true
 ---
 # Skill: KISS Architecture & Pragmatic Execution
