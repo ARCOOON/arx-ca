@@ -3,34 +3,21 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
-const srcDir = fileURLToPath(new URL('./src', import.meta.url))
-
+// https://vite.dev/config/
 export default defineConfig({
-  plugins: [
-    vue({
-      features: {
-        optionsAPI: false,
-        prodDevtools: false,
-        prodHydrationMismatchDetails: false,
-        componentIdGenerator: 'filepath',
-      },
-    }),
-    tailwindcss(),
-  ],
+  plugins: [vue(), tailwindcss()],
   resolve: {
-    extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.vue'],
     alias: {
-      '@': srcDir,
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   server: {
     host: '0.0.0.0',
     port: 5173,
+    // Proxy API calls to the Go backend during development so the SPA can use
+    // same-origin /api/v1 requests just like the packaged production build.
     proxy: {
-      '/api': {
-        target: 'http://127.0.0.1:8080',
-        changeOrigin: true,
-      },
+      '/api': { target: 'http://127.0.0.1:8080', changeOrigin: true },
     },
   },
 })
