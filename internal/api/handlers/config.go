@@ -16,7 +16,7 @@ import (
 
 const maxSettingsConfigBody = 256 * 1024
 
-// ConfigHandler serves server.yaml settings management endpoints.
+// ConfigHandler serves server.toml settings management endpoints.
 type ConfigHandler struct {
 	manager *config.Manager
 	audit   *db.AuditStore
