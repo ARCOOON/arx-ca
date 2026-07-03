@@ -18,7 +18,7 @@
 
 | Topic | Wiki page |
 | ----- | --------- |
-| Architecture & `server.yaml` | [Architecture](https://github.com/ARCOOON/arx-ca/wiki/Architecture) |
+| Architecture & `server.toml` | [Architecture](https://github.com/ARCOOON/arx-ca/wiki/Architecture) |
 | SSH CA trust & principals | [SSH CA Setup](https://github.com/ARCOOON/arx-ca/wiki/SSH-CA-Setup) |
 | CLI commands | [CLI Reference](https://github.com/ARCOOON/arx-ca/wiki/CLI-Reference) |
 | REST API schemas | [API Reference](https://github.com/ARCOOON/arx-ca/wiki/API-Reference) |
@@ -85,7 +85,7 @@ make test
 
 Tagged releases are built and published automatically via [GoReleaser](https://goreleaser.com/) when a semantic version tag (`v*`) is pushed. The workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)) compiles the Vue WebUI, cross-compiles `arx-ca`, `arx-ca-cli`, and `arx-ca-agent` binaries, groups the changelog (**Features**, **Fixes**, **Dependency updates**), and uploads assets to GitHub Releases. Configuration lives in [`.goreleaser.yaml`](.goreleaser.yaml).
 
-The `arx-ca` server includes a background updater (`updater` block in `server.yaml`) that polls GitHub releases by channel and can notify administrators or auto-apply updates — see the [Architecture wiki](https://github.com/ARCOOON/arx-ca/wiki/Architecture#updater-block). Operators can manage updater settings from **Settings → Auto-Updater** in the WebUI or via `GET`/`PUT /api/v1/settings/config` (see [API Reference](https://github.com/ARCOOON/arx-ca/wiki/API-Reference#system-settings-serveryaml)). After an update, administrators can be prompted once with release notes fetched from GitHub (`view_changelog_after_update`, `GET /api/v1/updater/current-changelog`).
+The `arx-ca` server includes a background updater (`updater` block in `server.toml`) that polls GitHub releases by channel and can notify administrators or auto-apply updates — see the [Architecture wiki](https://github.com/ARCOOON/arx-ca/wiki/Architecture#updater-block). Operators can manage updater settings from **Settings → Auto-Updater** in the WebUI or via `GET`/`PUT /api/v1/settings/config` (see [API Reference](https://github.com/ARCOOON/arx-ca/wiki/API-Reference#system-settings-servertoml)). After an update, administrators can be prompted once with release notes fetched from GitHub (`view_changelog_after_update`, `GET /api/v1/updater/current-changelog`).
 
 ---
 
