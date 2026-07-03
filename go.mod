@@ -13,6 +13,7 @@ require (
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/minio/selfupdate v0.6.0
 	github.com/mitchellh/mapstructure v1.5.0
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pkg/errors v0.9.1
 	github.com/smallstep/certificates v0.30.2
 	github.com/smallstep/cli-utils v0.12.2
@@ -111,7 +112,6 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/newrelic/go-agent/v3 v3.43.3 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.68.0 // indirect
