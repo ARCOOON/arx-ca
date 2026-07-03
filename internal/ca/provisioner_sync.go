@@ -14,7 +14,7 @@ import (
 	"github.com/ARCOOON/arx-ca/internal/config"
 )
 
-// syncCAProvisioners updates ca.json provisioners to match server.yaml enrollment settings.
+// syncCAProvisioners updates ca.json provisioners to match server.toml enrollment settings.
 func syncCAProvisioners(configPath, basePath string, password []byte, prov config.CAProvisionersConfig) error {
 	cfg, err := authconfig.LoadConfiguration(configPath)
 	if err != nil {
@@ -191,7 +191,7 @@ func buildSCEPProvisioner(basePath string, password []byte, scepCfg config.SCEPP
 			return nil, fmt.Errorf("generate SCEP challenge password: %w", err)
 		}
 		challenge = string(pass)
-		log.Printf("SCEP: generated challenge password; set ca.provisioners.scep.challenge_password in server.yaml to pin it across restarts")
+		log.Printf("SCEP: generated challenge password; set ca.provisioners.scep.challenge_password in server.toml to pin it across restarts")
 	}
 
 	decrypterCert, decrypterKey, err := loadOrCreateSCEPDecrypter(basePath, password)

@@ -20,7 +20,7 @@ import (
 
 // InitCA initializes or loads a local Root CA and Intermediate CA using the step-ca SDK.
 // configPath must point to ca.json or to the PKI base directory containing config/ca.json.
-// When the .pki tree is absent, new certificates are generated using cabootstrap from server.yaml.
+// When the .pki tree is absent, new certificates are generated using cabootstrap from server.toml.
 func InitCA(configPath string, caCfg config.CAConfig, caBootstrap config.CABootstrapConfig) (*PKIEngine, error) {
 	caBootstrap = caBootstrap.WithDefaults()
 
