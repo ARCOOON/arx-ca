@@ -12,47 +12,47 @@ import (
 
 // ServerTLSConfig holds TLS settings for the main API HTTP server.
 type ServerTLSConfig struct {
-	Enabled  bool   `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
-	CertFile string `json:"cert_file" mapstructure:"cert_file" yaml:"cert_file"`
-	KeyFile  string `json:"key_file" mapstructure:"key_file" yaml:"key_file"`
+	Enabled  bool   `json:"enabled" mapstructure:"enabled" toml:"enabled"`
+	CertFile string `json:"cert_file" mapstructure:"cert_file" toml:"cert_file"`
+	KeyFile  string `json:"key_file" mapstructure:"key_file" toml:"key_file"`
 }
 
 // ServerSettings holds HTTP server bind and timeout options.
 type ServerSettings struct {
-	Host         string          `json:"host" mapstructure:"host" yaml:"host"`
-	Port         int             `json:"port" mapstructure:"port" yaml:"port"`
-	LogLevel     string          `json:"log_level" mapstructure:"log_level" yaml:"log_level"`
-	ReadTimeout  time.Duration   `json:"read_timeout" mapstructure:"read_timeout" yaml:"read_timeout"`
-	WriteTimeout time.Duration   `json:"write_timeout" mapstructure:"write_timeout" yaml:"write_timeout"`
-	TLS          ServerTLSConfig `json:"tls" mapstructure:"tls" yaml:"tls"`
+	Host         string          `json:"host" mapstructure:"host" toml:"host"`
+	Port         int             `json:"port" mapstructure:"port" toml:"port"`
+	LogLevel     string          `json:"log_level" mapstructure:"log_level" toml:"log_level"`
+	ReadTimeout  time.Duration   `json:"read_timeout" mapstructure:"read_timeout" toml:"read_timeout"`
+	WriteTimeout time.Duration   `json:"write_timeout" mapstructure:"write_timeout" toml:"write_timeout"`
+	TLS          ServerTLSConfig `json:"tls" mapstructure:"tls" toml:"tls"`
 }
 
 // DatabaseConfig holds application user-store database connection settings.
 type DatabaseConfig struct {
-	Driver       string `json:"driver" mapstructure:"driver" yaml:"driver"`
-	Path         string `json:"path" mapstructure:"path" yaml:"path"`
-	Host         string `json:"host" mapstructure:"host" yaml:"host"`
-	Port         int    `json:"port" mapstructure:"port" yaml:"port"`
-	User         string `json:"user" mapstructure:"user" yaml:"user"`
-	Password     string `json:"password" mapstructure:"password" yaml:"password"`
-	PasswordFile string `json:"password_file" mapstructure:"password_file" yaml:"password_file"`
-	DBName       string `json:"dbname" mapstructure:"dbname" yaml:"dbname"`
-	SSLMode      string `json:"sslmode" mapstructure:"sslmode" yaml:"sslmode"`
-	MaxOpenConns int    `json:"max_open_conns" mapstructure:"max_open_conns" yaml:"max_open_conns"`
-	MaxIdleConns int    `json:"max_idle_conns" mapstructure:"max_idle_conns" yaml:"max_idle_conns"`
+	Driver       string `json:"driver" mapstructure:"driver" toml:"driver"`
+	Path         string `json:"path" mapstructure:"path" toml:"path"`
+	Host         string `json:"host" mapstructure:"host" toml:"host"`
+	Port         int    `json:"port" mapstructure:"port" toml:"port"`
+	User         string `json:"user" mapstructure:"user" toml:"user"`
+	Password     string `json:"password" mapstructure:"password" toml:"password"`
+	PasswordFile string `json:"password_file" mapstructure:"password_file" toml:"password_file"`
+	DBName       string `json:"dbname" mapstructure:"dbname" toml:"dbname"`
+	SSLMode      string `json:"sslmode" mapstructure:"sslmode" toml:"sslmode"`
+	MaxOpenConns int    `json:"max_open_conns" mapstructure:"max_open_conns" toml:"max_open_conns"`
+	MaxIdleConns int    `json:"max_idle_conns" mapstructure:"max_idle_conns" toml:"max_idle_conns"`
 }
 
 // CAConfig holds step-ca integration paths and provisioner settings.
 type CAConfig struct {
-	StepCAURL               string               `json:"stepca_url" mapstructure:"stepca_url" yaml:"stepca_url"`
-	RootPath                string               `json:"root_path" mapstructure:"root_path" yaml:"root_path"`
-	IntermediatePath        string               `json:"intermediate_path" mapstructure:"intermediate_path" yaml:"intermediate_path"`
-	ProvisionerName         string               `json:"provisioner_name" mapstructure:"provisioner_name" yaml:"provisioner_name"`
-	MaxTTL                  string               `json:"max_ttl" mapstructure:"max_ttl" yaml:"max_ttl"`
-	Password                string               `json:"password" mapstructure:"password" yaml:"password"`
-	PasswordFile            string               `json:"password_file" mapstructure:"password_file" yaml:"password_file"`
-	ProvisionerPasswordFile string               `json:"provisioner_password_file" mapstructure:"provisioner_password_file" yaml:"provisioner_password_file"`
-	Provisioners            CAProvisionersConfig `json:"provisioners" mapstructure:"provisioners" yaml:"provisioners"`
+	StepCAURL               string               `json:"stepca_url" mapstructure:"stepca_url" toml:"stepca_url"`
+	RootPath                string               `json:"root_path" mapstructure:"root_path" toml:"root_path"`
+	IntermediatePath        string               `json:"intermediate_path" mapstructure:"intermediate_path" toml:"intermediate_path"`
+	ProvisionerName         string               `json:"provisioner_name" mapstructure:"provisioner_name" toml:"provisioner_name"`
+	MaxTTL                  string               `json:"max_ttl" mapstructure:"max_ttl" toml:"max_ttl"`
+	Password                string               `json:"password" mapstructure:"password" toml:"password"`
+	PasswordFile            string               `json:"password_file" mapstructure:"password_file" toml:"password_file"`
+	ProvisionerPasswordFile string               `json:"provisioner_password_file" mapstructure:"provisioner_password_file" toml:"provisioner_password_file"`
+	Provisioners            CAProvisionersConfig `json:"provisioners" mapstructure:"provisioners" toml:"provisioners"`
 }
 
 // MaxTTLDuration parses the configured maximum X.509 certificate lifetime.
@@ -73,54 +73,54 @@ func (c CAConfig) MaxTTLDuration() (time.Duration, error) {
 
 // SecurityConfig holds authentication and token policy for the API.
 type SecurityConfig struct {
-	JWTSecret            string `json:"jwt_secret" mapstructure:"jwt_secret" yaml:"jwt_secret"`
-	TokenExpirationHours int    `json:"token_expiration_hours" mapstructure:"token_expiration_hours" yaml:"token_expiration_hours"`
-	CookieSameSite       string `json:"cookie_same_site" mapstructure:"cookie_same_site" yaml:"cookie_same_site"`
-	CookieSecure         *bool  `json:"cookie_secure" mapstructure:"cookie_secure" yaml:"cookie_secure"`
+	JWTSecret            string `json:"jwt_secret" mapstructure:"jwt_secret" toml:"jwt_secret"`
+	TokenExpirationHours int    `json:"token_expiration_hours" mapstructure:"token_expiration_hours" toml:"token_expiration_hours"`
+	CookieSameSite       string `json:"cookie_same_site" mapstructure:"cookie_same_site" toml:"cookie_same_site"`
+	CookieSecure         *bool  `json:"cookie_secure" mapstructure:"cookie_secure" toml:"cookie_secure"`
 }
 
 // Bootstrap holds first-run admin credentials seeded when the users table is empty.
 type Bootstrap struct {
-	AdminEmail    string `json:"admin_email" mapstructure:"admin_email" yaml:"admin_email"`
-	AdminPassword string `json:"admin_password" mapstructure:"admin_password" yaml:"admin_password"`
+	AdminEmail    string `json:"admin_email" mapstructure:"admin_email" toml:"admin_email"`
+	AdminPassword string `json:"admin_password" mapstructure:"admin_password" toml:"admin_password"`
 }
 
 // ServiceConfig holds systemd self-install parameters for Infrastructure as Code.
 type ServiceConfig struct {
-	RunAsUser  string `json:"run_as_user" mapstructure:"run_as_user" yaml:"run_as_user"`
-	InstallDir string `json:"install_dir" mapstructure:"install_dir" yaml:"install_dir"`
+	RunAsUser  string `json:"run_as_user" mapstructure:"run_as_user" toml:"run_as_user"`
+	InstallDir string `json:"install_dir" mapstructure:"install_dir" toml:"install_dir"`
 }
 
 // TelemetryConfig holds OpenTelemetry exporter settings.
 type TelemetryConfig struct {
-	ServiceName      string `json:"service_name" mapstructure:"service_name" yaml:"service_name"`
-	ExporterEndpoint string `json:"exporter_endpoint" mapstructure:"exporter_endpoint" yaml:"exporter_endpoint"`
-	ExporterInsecure bool   `json:"exporter_insecure" mapstructure:"exporter_insecure" yaml:"exporter_insecure"`
-	SDKDisabled      bool   `json:"sdk_disabled" mapstructure:"sdk_disabled" yaml:"sdk_disabled"`
+	ServiceName      string `json:"service_name" mapstructure:"service_name" toml:"service_name"`
+	ExporterEndpoint string `json:"exporter_endpoint" mapstructure:"exporter_endpoint" toml:"exporter_endpoint"`
+	ExporterInsecure bool   `json:"exporter_insecure" mapstructure:"exporter_insecure" toml:"exporter_insecure"`
+	SDKDisabled      bool   `json:"sdk_disabled" mapstructure:"sdk_disabled" toml:"sdk_disabled"`
 }
 
 // WebUITLSConfig holds TLS settings for the dedicated WebUI HTTP server.
 type WebUITLSConfig struct {
-	Enabled  bool   `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
-	CertFile string `json:"cert_file" mapstructure:"cert_file" yaml:"cert_file"`
-	KeyFile  string `json:"key_file" mapstructure:"key_file" yaml:"key_file"`
+	Enabled  bool   `json:"enabled" mapstructure:"enabled" toml:"enabled"`
+	CertFile string `json:"cert_file" mapstructure:"cert_file" toml:"cert_file"`
+	KeyFile  string `json:"key_file" mapstructure:"key_file" toml:"key_file"`
 }
 
 // WebUICORSConfig holds CORS policy for the WebUI listener and API cross-origin access.
 type WebUICORSConfig struct {
-	AllowedOrigins   []string `json:"allowed_origins" mapstructure:"allowed_origins" yaml:"allowed_origins"`
-	AllowedMethods   []string `json:"allowed_methods" mapstructure:"allowed_methods" yaml:"allowed_methods"`
-	AllowedHeaders   []string `json:"allowed_headers" mapstructure:"allowed_headers" yaml:"allowed_headers"`
-	AllowCredentials bool     `json:"allow_credentials" mapstructure:"allow_credentials" yaml:"allow_credentials"`
+	AllowedOrigins   []string `json:"allowed_origins" mapstructure:"allowed_origins" toml:"allowed_origins"`
+	AllowedMethods   []string `json:"allowed_methods" mapstructure:"allowed_methods" toml:"allowed_methods"`
+	AllowedHeaders   []string `json:"allowed_headers" mapstructure:"allowed_headers" toml:"allowed_headers"`
+	AllowCredentials bool     `json:"allow_credentials" mapstructure:"allow_credentials" toml:"allow_credentials"`
 }
 
 // UpdaterConfig controls the background release checker and optional auto-apply engine.
 type UpdaterConfig struct {
-	Enabled                  bool   `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
-	Channel                  string `json:"channel" mapstructure:"channel" yaml:"channel"`
-	NotifyOnly               bool   `json:"notify_only" mapstructure:"notify_only" yaml:"notify_only"`
-	CheckInterval            string `json:"check_interval" mapstructure:"check_interval" yaml:"check_interval"`
-	ViewChangelogAfterUpdate bool   `json:"view_changelog_after_update" mapstructure:"view_changelog_after_update" yaml:"view_changelog_after_update"`
+	Enabled                  bool   `json:"enabled" mapstructure:"enabled" toml:"enabled"`
+	Channel                  string `json:"channel" mapstructure:"channel" toml:"channel"`
+	NotifyOnly               bool   `json:"notify_only" mapstructure:"notify_only" toml:"notify_only"`
+	CheckInterval            string `json:"check_interval" mapstructure:"check_interval" toml:"check_interval"`
+	ViewChangelogAfterUpdate bool   `json:"view_changelog_after_update" mapstructure:"view_changelog_after_update" toml:"view_changelog_after_update"`
 }
 
 // CheckIntervalDuration parses the configured background poll interval.
@@ -150,30 +150,30 @@ func (u UpdaterConfig) NormalizedChannel() string {
 
 // WebUIConfig holds the isolated WebUI static file server settings.
 type WebUIConfig struct {
-	Enabled       bool            `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
-	UIDir         string          `json:"ui_dir" mapstructure:"ui_dir" yaml:"ui_dir"`
-	PathPrefix    string          `json:"path_prefix" mapstructure:"path_prefix" yaml:"path_prefix"`
-	ListenAddress string          `json:"listen_address" mapstructure:"listen_address" yaml:"listen_address"`
-	ProxyAPI      *bool           `json:"proxy_api" mapstructure:"proxy_api" yaml:"proxy_api"`
-	MaxBodySize   int64           `json:"max_body_size" mapstructure:"max_body_size" yaml:"max_body_size"`
-	ReadTimeout   string          `json:"read_timeout" mapstructure:"read_timeout" yaml:"read_timeout"`
-	WriteTimeout  string          `json:"write_timeout" mapstructure:"write_timeout" yaml:"write_timeout"`
-	TLS           WebUITLSConfig  `json:"tls" mapstructure:"tls" yaml:"tls"`
-	CORS          WebUICORSConfig `json:"cors" mapstructure:"cors" yaml:"cors"`
+	Enabled       bool            `json:"enabled" mapstructure:"enabled" toml:"enabled"`
+	UIDir         string          `json:"ui_dir" mapstructure:"ui_dir" toml:"ui_dir"`
+	PathPrefix    string          `json:"path_prefix" mapstructure:"path_prefix" toml:"path_prefix"`
+	ListenAddress string          `json:"listen_address" mapstructure:"listen_address" toml:"listen_address"`
+	ProxyAPI      *bool           `json:"proxy_api" mapstructure:"proxy_api" toml:"proxy_api"`
+	MaxBodySize   int64           `json:"max_body_size" mapstructure:"max_body_size" toml:"max_body_size"`
+	ReadTimeout   string          `json:"read_timeout" mapstructure:"read_timeout" toml:"read_timeout"`
+	WriteTimeout  string          `json:"write_timeout" mapstructure:"write_timeout" toml:"write_timeout"`
+	TLS           WebUITLSConfig  `json:"tls" mapstructure:"tls" toml:"tls"`
+	CORS          WebUICORSConfig `json:"cors" mapstructure:"cors" toml:"cors"`
 }
 
-// ServerConfig is the root configuration loaded from server.yaml.
+// ServerConfig is the root configuration loaded from server.toml.
 type ServerConfig struct {
-	Server      ServerSettings    `mapstructure:"server" yaml:"server"`
-	Database    DatabaseConfig    `mapstructure:"database" yaml:"database"`
-	CA          CAConfig          `mapstructure:"ca" yaml:"ca"`
-	CABootstrap CABootstrapConfig `mapstructure:"ca_bootstrap" yaml:"ca_bootstrap"`
-	Security    SecurityConfig    `mapstructure:"security" yaml:"security"`
-	Bootstrap   Bootstrap         `mapstructure:"bootstrap" yaml:"bootstrap"`
-	Telemetry   TelemetryConfig   `mapstructure:"telemetry" yaml:"telemetry"`
-	Service     ServiceConfig     `mapstructure:"service" yaml:"service"`
-	WebUI       WebUIConfig       `mapstructure:"webui" yaml:"webui"`
-	Updater     UpdaterConfig     `mapstructure:"updater" yaml:"updater"`
+	Server      ServerSettings    `mapstructure:"server" toml:"server"`
+	Database    DatabaseConfig    `mapstructure:"database" toml:"database"`
+	CA          CAConfig          `mapstructure:"ca" toml:"ca"`
+	CABootstrap CABootstrapConfig `mapstructure:"ca_bootstrap" toml:"ca_bootstrap"`
+	Security    SecurityConfig    `mapstructure:"security" toml:"security"`
+	Bootstrap   Bootstrap         `mapstructure:"bootstrap" toml:"bootstrap"`
+	Telemetry   TelemetryConfig   `mapstructure:"telemetry" toml:"telemetry"`
+	Service     ServiceConfig     `mapstructure:"service" toml:"service"`
+	WebUI       WebUIConfig       `mapstructure:"webui" toml:"webui"`
+	Updater     UpdaterConfig     `mapstructure:"updater" toml:"updater"`
 }
 
 // DefaultServerConfigForExecutable returns defaults with paths beside the current binary.
@@ -198,7 +198,7 @@ func webUIDirBesideExecutable() (string, error) {
 	return filepath.Join(filepath.Dir(exe), "ui"), nil
 }
 
-// DefaultServerConfig returns the built-in defaults used when server.yaml is created.
+// DefaultServerConfig returns the built-in defaults used when server.toml is created.
 func DefaultServerConfig() ServerConfig {
 	return ServerConfig{
 		Server: ServerSettings{

@@ -15,31 +15,31 @@ const (
 
 // ManagedCert describes a certificate file pair monitored and renewed by the agent daemon.
 type ManagedCert struct {
-	Protocol string `mapstructure:"protocol" yaml:"protocol,omitempty"`
+	Protocol string `mapstructure:"protocol" toml:"protocol,omitempty"`
 
-	CertPath   string `mapstructure:"cert_path" yaml:"cert_path"`
-	KeyPath    string `mapstructure:"key_path" yaml:"key_path"`
-	Template   string `mapstructure:"template" yaml:"template,omitempty"`
-	CommonName string `mapstructure:"common_name" yaml:"common_name"`
-	PostHook   string `mapstructure:"post_hook" yaml:"post_hook,omitempty"`
+	CertPath   string `mapstructure:"cert_path" toml:"cert_path"`
+	KeyPath    string `mapstructure:"key_path" toml:"key_path"`
+	Template   string `mapstructure:"template" toml:"template,omitempty"`
+	CommonName string `mapstructure:"common_name" toml:"common_name"`
+	PostHook   string `mapstructure:"post_hook" toml:"post_hook,omitempty"`
 
-	ACMEDirectoryURL    string `mapstructure:"acme_directory_url" yaml:"acme_directory_url,omitempty"`
-	ACMEEmail           string `mapstructure:"acme_email" yaml:"acme_email,omitempty"`
-	ChallengeType       string `mapstructure:"challenge_type" yaml:"challenge_type,omitempty"`
-	Webroot             string `mapstructure:"webroot" yaml:"webroot,omitempty"`
-	ChallengeListenPort int    `mapstructure:"challenge_listen_port" yaml:"challenge_listen_port,omitempty"`
+	ACMEDirectoryURL    string `mapstructure:"acme_directory_url" toml:"acme_directory_url,omitempty"`
+	ACMEEmail           string `mapstructure:"acme_email" toml:"acme_email,omitempty"`
+	ChallengeType       string `mapstructure:"challenge_type" toml:"challenge_type,omitempty"`
+	Webroot             string `mapstructure:"webroot" toml:"webroot,omitempty"`
+	ChallengeListenPort int    `mapstructure:"challenge_listen_port" toml:"challenge_listen_port,omitempty"`
 }
 
 // AgentDaemonConfig controls the long-running certificate renewal loop.
 type AgentDaemonConfig struct {
-	CheckInterval  string        `mapstructure:"check_interval" yaml:"check_interval"`
-	RenewThreshold string        `mapstructure:"renew_threshold" yaml:"renew_threshold"`
-	ManagedCerts   []ManagedCert `mapstructure:"managed_certs" yaml:"managed_certs"`
+	CheckInterval  string        `mapstructure:"check_interval" toml:"check_interval"`
+	RenewThreshold string        `mapstructure:"renew_threshold" toml:"renew_threshold"`
+	ManagedCerts   []ManagedCert `mapstructure:"managed_certs" toml:"managed_certs"`
 }
 
 // AgentConfig is the root configuration loaded from agent.yaml.
 type AgentConfig struct {
-	Daemon AgentDaemonConfig `mapstructure:"daemon" yaml:"daemon"`
+	Daemon AgentDaemonConfig `mapstructure:"daemon" toml:"daemon"`
 }
 
 // DefaultAgentConfig returns the built-in defaults used when agent.yaml is created.

@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ServerConfigNotFoundError is returned when server.yaml is missing at startup.
+// ServerConfigNotFoundError is returned when server.toml is missing at startup.
 type ServerConfigNotFoundError struct {
 	Path string
 }
@@ -21,7 +21,7 @@ func (e ServerConfigNotFoundError) Error() string {
 }
 
 const (
-	serverConfigFileName = "server.yaml"
+	serverConfigFileName = "server.toml"
 	cliConfigDirName     = ".arx-ca"
 	cliConfigFileName    = "cli.yaml"
 	agentConfigDirName   = ".arx-cert-service"
@@ -38,7 +38,7 @@ var (
 	agentConfigPathOverride  string
 )
 
-// SetServerConfigPath forces server.yaml to load from an absolute path on the next InitServerConfig call.
+// SetServerConfigPath forces server.toml to load from an absolute path on the next InitServerConfig call.
 func SetServerConfigPath(path string) error {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -48,7 +48,7 @@ func SetServerConfigPath(path string) error {
 	return nil
 }
 
-// ResolveServerConfigPath returns the absolute server.yaml path from an explicit flag or the executable directory.
+// ResolveServerConfigPath returns the absolute server.toml path from an explicit flag or the executable directory.
 func ResolveServerConfigPath(configFlag string) (string, error) {
 	if strings.TrimSpace(configFlag) != "" {
 		return filepath.Abs(configFlag)
@@ -73,7 +73,7 @@ func ExecutablePath() (string, error) {
 	return abs, nil
 }
 
-// WriteDefaultServerConfig marshals DefaultServerConfig to YAML at path with mode 0600.
+// WriteDefaultServerConfig marshals DefaultServerConfig to TOML at path with mode 0600.
 func WriteDefaultServerConfig(path string, force bool) error {
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -98,7 +98,7 @@ func WriteDefaultServerConfig(path string, force bool) error {
 	if err != nil {
 		return fmt.Errorf("build default config: %w", err)
 	}
-	raw, err := marshalYAMLConfig(defaults)
+	raw, err := marshalTOMLConfig(defaults)
 	if err != nil {
 		return fmt.Errorf("marshal default config: %w", err)
 	}
@@ -108,7 +108,7 @@ func WriteDefaultServerConfig(path string, force bool) error {
 	return nil
 }
 
-// InitServerConfig loads server.yaml beside the executable (or from SetServerConfigPath) and binds it to Viper.
+// InitServerConfig loads server.toml beside the executable (or from SetServerConfigPath) and binds it to Viper.
 func InitServerConfig() error {
 	configPath, err := serverConfigFilePath()
 	if err != nil {
@@ -127,7 +127,7 @@ func InitServerConfig() error {
 	viper.Reset()
 	v := viper.GetViper()
 	v.SetConfigFile(configPath)
-	v.SetConfigType("yaml")
+	v.SetConfigType("toml")
 	v.SetEnvPrefix(serverEnvPrefix)
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	v.AutomaticEnv()
@@ -160,7 +160,7 @@ func InitServerConfig() error {
 	return nil
 }
 
-// ServerConfigPath returns the absolute path to the active server.yaml file.
+// ServerConfigPath returns the absolute path to the active server.toml file.
 func ServerConfigPath() (string, error) {
 	return serverConfigFilePath()
 }
@@ -183,7 +183,7 @@ func migrateLegacyAdminPassword(v *viper.Viper, cfg *ServerConfig) {
 	}
 }
 
-// migrateLegacyCABootstrap loads CABootstrap when server.yaml uses the legacy "CABootstrap" key
+// migrateLegacyCABootstrap loads CABootstrap when server.toml uses the legacy "CABootstrap" key
 // instead of the canonical "ca_bootstrap" field expected by Viper/mapstructure.
 func migrateLegacyCABootstrap(v *viper.Viper, cfg *ServerConfig) {
 	if cfg == nil || v == nil {
@@ -257,7 +257,7 @@ func InitCLIConfig() error {
 	return nil
 }
 
-// ReloadServerConfigFromDisk re-reads server.yaml into Viper and the active in-memory snapshot.
+// ReloadServerConfigFromDisk re-reads server.toml into Viper and the active in-memory snapshot.
 func ReloadServerConfigFromDisk(configPath string) error {
 	if strings.TrimSpace(configPath) == "" {
 		var err error
@@ -288,7 +288,7 @@ func ReloadServerConfigFromDisk(configPath string) error {
 	return nil
 }
 
-// migrateLegacyProvisioners loads ca.provisioners when server.yaml uses legacy PascalCase keys.
+// migrateLegacyProvisioners loads ca.provisioners when server.toml uses legacy PascalCase keys.
 func migrateLegacyProvisioners(v *viper.Viper, cfg *ServerConfig) {
 	if cfg == nil || v == nil {
 		return
@@ -458,7 +458,7 @@ func ResolveAgentConfigPath(configFlag string) (string, error) {
 	return agentConfigFilePath()
 }
 
-// InitAgentConfig loads or creates agent.yaml (never server.yaml) and binds it to Viper.
+// InitAgentConfig loads or creates agent.yaml (never server.toml) and binds it to Viper.
 // The path is ~/.arx-cert-service/agent.yaml unless SetAgentConfigPath was called.
 func InitAgentConfig() error {
 	configPath, err := agentConfigFilePath()
@@ -499,7 +499,7 @@ func AgentConfigFromViper() AgentConfig {
 	return cfg
 }
 
-// ApplyServerRuntimeFromViper exports server.yaml values into CA_API_* and OTEL_* when unset.
+// ApplyServerRuntimeFromViper exports server.toml values into CA_API_* and OTEL_* when unset.
 func ApplyServerRuntimeFromViper() {
 	cfg := ServerConfigFromViper()
 	setEnvIfEmpty("CA_API_LISTEN_ADDR", cfg.ListenAddress())
@@ -606,16 +606,35 @@ func ensureYAMLConfigFile(path string, defaults any, fileMode os.FileMode) error
 }
 
 func marshalYAMLConfig(v any) ([]byte, error) {
+	m, err := structToMap(v)
+	if err != nil {
+		return nil, err
+	}
 	var buf strings.Builder
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
-	if err := enc.Encode(v); err != nil {
+	if err := enc.Encode(m); err != nil {
 		return nil, err
 	}
 	if err := enc.Close(); err != nil {
 		return nil, err
 	}
 	return []byte(buf.String()), nil
+}
+
+func structToMap(v any) (map[string]any, error) {
+	var m map[string]any
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		TagName: "mapstructure",
+		Result:  &m,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := dec.Decode(v); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func unmarshalServerConfig(v *viper.Viper, cfg *ServerConfig) error {

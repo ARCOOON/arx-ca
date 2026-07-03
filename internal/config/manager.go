@@ -5,18 +5,30 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 // MaskedSecretValue is returned by the settings API instead of sensitive fields.
 const MaskedSecretValue = "***"
 
-// Manager provides concurrent read/write access to server.yaml.
+// marshalTOMLConfig serializes v as TOML bytes for server.toml persistence.
+func marshalTOMLConfig(v any) ([]byte, error) {
+	return toml.Marshal(v)
+}
+
+// unmarshalTOMLConfig parses TOML bytes into v.
+func unmarshalTOMLConfig(data []byte, v any) error {
+	return toml.Unmarshal(data, v)
+}
+
+// Manager provides concurrent read/write access to server.toml.
 type Manager struct {
 	mu   sync.RWMutex
 	path string
 }
 
-// NewManager constructs a Manager for the active server.yaml path.
+// NewManager constructs a Manager for the active server.toml path.
 func NewManager() (*Manager, error) {
 	path, err := ServerConfigPath()
 	if err != nil {
@@ -25,7 +37,7 @@ func NewManager() (*Manager, error) {
 	return &Manager{path: path}, nil
 }
 
-// Path returns the absolute server.yaml path managed by this instance.
+// Path returns the absolute server.toml path managed by this instance.
 func (m *Manager) Path() string {
 	if m == nil {
 		return ""

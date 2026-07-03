@@ -2,28 +2,28 @@ package config
 
 import "strings"
 
-// CAProvisionersConfig groups enrollment provisioners controlled from server.yaml.
+// CAProvisionersConfig groups enrollment provisioners controlled from server.toml.
 type CAProvisionersConfig struct {
-	ACME ACMEProvisionerConfig `json:"acme" mapstructure:"acme" yaml:"acme"`
-	SCEP SCEPProvisionerConfig `json:"scep" mapstructure:"scep" yaml:"scep"`
+	ACME ACMEProvisionerConfig `json:"acme" mapstructure:"acme" toml:"acme"`
+	SCEP SCEPProvisionerConfig `json:"scep" mapstructure:"scep" toml:"scep"`
 }
 
 // ACMEProvisionerConfig controls the step-ca ACME provisioner entry in ca.json.
 type ACMEProvisionerConfig struct {
-	Enabled           *bool    `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
-	RequireEAB        bool     `json:"require_eab" mapstructure:"require_eab" yaml:"require_eab"`
-	Challenges        []string `json:"challenges" mapstructure:"challenges" yaml:"challenges"`
-	DeviceAttestation bool     `json:"device_attestation" mapstructure:"device_attestation" yaml:"device_attestation"`
+	Enabled           *bool    `json:"enabled" mapstructure:"enabled" toml:"enabled"`
+	RequireEAB        bool     `json:"require_eab" mapstructure:"require_eab" toml:"require_eab"`
+	Challenges        []string `json:"challenges" mapstructure:"challenges" toml:"challenges"`
+	DeviceAttestation bool     `json:"device_attestation" mapstructure:"device_attestation" toml:"device_attestation"`
 }
 
 // SCEPProvisionerConfig controls the step-ca SCEP provisioner entry in ca.json.
 type SCEPProvisionerConfig struct {
-	Enabled           *bool  `json:"enabled" mapstructure:"enabled" yaml:"enabled"`
-	DeviceAttestation bool   `json:"device_attestation" mapstructure:"device_attestation" yaml:"device_attestation"`
-	ChallengePassword string `json:"challenge_password" mapstructure:"challenge_password" yaml:"challenge_password"`
+	Enabled           *bool  `json:"enabled" mapstructure:"enabled" toml:"enabled"`
+	DeviceAttestation bool   `json:"device_attestation" mapstructure:"device_attestation" toml:"device_attestation"`
+	ChallengePassword string `json:"challenge_password" mapstructure:"challenge_password" toml:"challenge_password"`
 }
 
-// DefaultCAProvisionersConfig returns enrollment defaults when server.yaml omits the block.
+// DefaultCAProvisionersConfig returns enrollment defaults when server.toml omits the block.
 func DefaultCAProvisionersConfig() CAProvisionersConfig {
 	return CAProvisionersConfig{
 		ACME: ACMEProvisionerConfig{
