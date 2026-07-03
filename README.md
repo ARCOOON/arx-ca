@@ -1,6 +1,6 @@
 # ARX CA — Enterprise X.509 & SSH Certificate Authority
 
-**ARX CA** is an enterprise-grade Certificate Authority platform: a **Go** control plane (PKI engine, REST API, enrollment protocols) and a **Vue 3** operator WebUI. Three static binaries ship with zero external database required for default deployments.
+**ARX CA** is an enterprise-grade Certificate Authority platform: a **Go** control plane (PKI engine, REST API, enrollment protocols) and a **Vue 3 + Tailwind CSS v4** operator WebUI with a WinUI 3 × ARX design system. Three static binaries ship with zero external database required for default deployments.
 
 | Binary | Role |
 | ------ | ---- |
@@ -73,6 +73,7 @@ Host-specific variants (Debian, Proxmox VE, RHEL) are documented in the [Wiki �
 - Immutable audit log with WebUI forensics dashboard
 - Webhook + SSE notification engine
 - Embedded SQLite — optional PostgreSQL for enterprise scale
+- WebUI: Vue 3 · Tailwind CSS v4 · WinUI 3 flat design · Light/Dark/Auto theme
 
 ---
 

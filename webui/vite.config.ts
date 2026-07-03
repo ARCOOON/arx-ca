@@ -12,7 +12,6 @@ export default defineConfig({
         optionsAPI: false,
         prodDevtools: false,
         prodHydrationMismatchDetails: false,
-        componentIdGenerator: 'filepath',
       },
     }),
     tailwindcss(),

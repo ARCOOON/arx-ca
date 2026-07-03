@@ -1,64 +1,79 @@
-# Arx CA WebUI
+# ARX CA WebUI
 
-Vue 3 management console for the Arx Certificate Authority API. Built with Vite, TypeScript, Pinia, Vue Router, Tailwind CSS v4, and Axios.
+Vue 3 + Vite operator console for ARX CA.
+
+## Stack
+
+| Technology     | Version | Role                                 |
+|----------------|---------|--------------------------------------|
+| Vue 3          | ^3.5    | Reactive SPA framework               |
+| Vite 6         | ^6.0    | Build tool and dev server            |
+| Tailwind CSS 4 | ^4.0    | Utility-first styling (CSS-native)   |
+| Radix Vue      | ^1.9    | Accessible headless UI primitives    |
+| Pinia 2        | ^2.3    | Lightweight state management         |
+| Vue Router 4   | ^4.5    | Client-side routing                  |
+| Axios          | ^1.7    | HTTP client with auth interceptors   |
+
+## Design System
+
+The UI follows a **WinUI 3 × ARX** aesthetic:
+
+- **Flat surfaces** with subtle background elevation shifts instead of heavy shadows
+- **Smooth rounded corners** (`radius: 0.5rem` globally)
+- **Structured spacing** with consistent 4-point grid
+- **Clean borders** using `hsl(--border)` tokens
+- **Three-mode theme switcher**: Light / Dark / Auto (OS-level)
+
+CSS design tokens are defined via Tailwind v4 `@theme` directive in `src/assets/main.css`.
 
 ## Development
 
-Run the Go backend once, then start Vite in a second terminal for HMR without rebuilding `arx-ca`:
-
 ```bash
-# Terminal A (repository root)
-./bin/arx-ca server start
+# Install dependencies
+npm install
 
-# Terminal B
-npm ci
+# Start dev server (proxies /api → http://127.0.0.1:8080)
 npm run dev
+
+# Type-check + production build
+npm run build
+
+# Preview production build
+npm run preview
 ```
 
-Open **http://localhost:5173**. Vite binds `0.0.0.0:5173` and proxies `/api` to `http://127.0.0.1:8080` by default. See the [Wiki → Development Workflow](https://github.com/ARCOOON/arx-ca/wiki/Development-Workflow) for TLS WebUI proxy targets and the full rapid UI loop.
+The dev server runs on `http://localhost:5173` and proxies all `/api/...` requests to `http://127.0.0.1:8080` (the ARX CA backend).
 
-Optional: set `VITE_API_BASE_URL` (see `.env.example`) when the API is not proxied on the same origin. By default the browser uses `{origin}/api/v1`.
+## Project Structure
 
-## Production build
+```
+src/
+├── api/              # Axios API clients (one file per domain)
+├── assets/           # Global CSS (main.css — design tokens)
+├── components/
+│   ├── layout/       # AppShell, SideNav, TopBar
+│   ├── modals/       # PostUpdateChangelogModal
+│   └── ui/           # Primitive components (Button, Input, Dialog, …)
+├── composables/      # useTheme, useToast, useNotifications, useUpdater
+├── router/           # Vue Router (auth guard)
+├── store/            # Pinia stores (auth, notifications)
+├── types/            # TypeScript API types
+├── utils/            # cn(), format, errors
+└── views/            # Route-level page components
+```
+
+## API Proxy
+
+Set `VITE_API_BASE_URL` to override the default same-origin `/api/v1` base URL:
 
 ```bash
-npm run build
+VITE_API_BASE_URL=https://ca.example.com/api/v1 npm run build
 ```
 
-Output is written to `dist/`. Package with the release workflow or copy into `webui.ui_dir` on the server.
+## Authentication
 
-### Build performance
+JWT tokens are stored in `localStorage` under `arx_auth_token`. All API requests attach the token as a `Bearer` header. A 401 response from any endpoint (except `/auth/login`) triggers automatic logout and redirects to `/login`.
 
-`vite.config.ts` sets explicit `resolve.extensions` and an absolute `@` → `src` alias (mirrored in `tsconfig.app.json` `paths`) so Rolldown does not probe the filesystem for extension guesses.
+## Theme Persistence
 
-Import Lucide icons from per-icon ESM paths (for example `lucide-vue-next/dist/esm/icons/shield-check.js`), not from the package root entry. The root `lucide-vue-next` module is a barrel that re-exports every icon and forces `rolldown:vite-resolve` to walk thousands of modules during production builds.
-
-There are no application-level barrel files under `src/`; use direct module paths (or `@/…` aliases) for local code. Per-icon Lucide types are declared in `src/lucide-icons.d.ts`.
-
-## Routes
-
-| Path | View | API usage |
-| ---- | ---- | --------- |
-| `/login` | Login | `POST /auth/login` |
-| `/dashboard` | Dashboard | `GET /health`, `GET /certificates` (count) |
-| `/certificates` | Certificates | `GET /certificates`, `POST /certificates/issue`, `POST /certificates/generate`, `GET /crl` |
-| `/acme` | ACME | `GET /acme/status` |
-| `/scep` | SCEP | `GET /scep/status` |
-| `/settings` | Settings | `GET /health`, session metadata |
-
-Authenticated routes render inside `src/components/layout/AppShell.vue` with a collapsible sidebar (hamburger drawer on viewports below `md`), top bar (including a light/dark theme toggle persisted in `localStorage`), and CSS-variable theming in `src/assets/theme.css`. The shell uses a fixed viewport-height layout: the sidebar and top bar remain pinned while only the main content region scrolls (`overflow-y-auto` with `custom-scrollbar`). Modals, tables, and grid layouts adapt to narrow screens via shared `ui-modal-footer` and `ui-table-wrap` classes in `src/style.css`.
-
-**UI Preferences** (Settings → localStorage): notification drawer layout, default sidebar collapse, and **Show Developer API Hints** (`arx_ui_show_api_hints`, default off). Audit and Certificates search panels are collapsed by default.
-
-The Certificates view exposes CRL download (`GET /crl`), CSR signing, native generation with a server-built ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) via `POST /certificates/generate?format=zip`, plus standard/extended key usage toggles, and SuperAdmin-only escrowed key retrieval in the certificate details modal. The Dashboard exposes **Download CA Bundle (.zip)** (`GET /ca/chain`, `ca-bundle.zip`).
-
-## Structure
-
-- `src/api/` — Axios client and endpoint helpers
-- `src/composables/` — Shared reactive state (theme, notifications, UI preferences)
-- `src/components/layout/` — App shell, navigation, top bar
-- `src/components/ui/` — Shared flat UI primitives
-- `src/router/` — Route table and auth guard
-- `src/store/auth.ts` — JWT and roles in `localStorage`
-- `src/views/` — Page components
-- `src/lucide-icons.d.ts` — TypeScript module declarations for per-icon Lucide imports
+Theme preference (`light` | `dark` | `auto`) is stored in `localStorage` under `arx_theme`. `auto` tracks the OS `prefers-color-scheme` media query and reacts to live changes.
