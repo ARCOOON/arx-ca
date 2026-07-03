@@ -1,61 +1,67 @@
 {
   "mcpServers": {
-    "vue-docs": {
+    "go-gopls": {
+      "command": "${userHome}/go/bin/mcp-gopls",
+      "args": []
+    },
+    "sqlite": {
       "command": "npx",
       "args": [
         "-y",
-        "@joelbarmettler/vue-mcp"
+        "mcp-server-sqlite",
+        "--db-path",
+        "${workspaceFolder}/data/arx.db"
       ]
     },
-    "shadcn-vue": {
+    "git": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "mcp_server_git",
+        "--repository",
+        "${workspaceFolder}"
+      ]
+    },
+    "memory": {
       "command": "npx",
       "args": [
         "-y",
-        "shadcn-vue-mcp"
-      ]
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {
+        "MEMORY_FILE_PATH": "${workspaceFolder}/.cursor/arx-ca-memory.jsonl"
+      }
     },
-    "vite-vue-runtime": {
-      "command": "npx",
+    "fetch": {
+      "command": "python3",
       "args": [
-        "-y",
-        "vite-plugin-vue-mcp"
+        "-m",
+        "mcp_server_fetch"
       ]
     },
-    "go-dev": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "go-dev-mcp"
-      ]
-    },
-    "firecrawl": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "firecrawl-mcp"
-      ]
-    },
-    "codebase-graph": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@optave/codegraph",
-        "mcp"
-      ]
-    },
-    "ast-structure": {
+    "ast-grep": {
       "command": "npx",
       "args": [
         "-y",
         "ast-grep-mcp"
       ]
     },
-    "sequential-thinking": {
+    "vite-vue": {
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-sequential-thinking"
+        "vite-plugin-vue-mcp"
       ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
     }
   }
 }

@@ -89,6 +89,32 @@ The `arx-ca` server includes a background updater (`updater` block in `server.ya
 
 ---
 
+## Cursor MCP (AI agent tooling)
+
+Project-scoped MCP servers are defined in [`.cursor/mcp.json`](.cursor/mcp.json). All configured servers are free, open-source, and locally runnable.
+
+| Server | Purpose |
+| ------ | ------- |
+| `go-gopls` | Go LSP analysis (definitions, tests, diagnostics) |
+| `sqlite` | Inspect embedded `data/arx.db` (users, audit, certificates) |
+| `git` | Repository history, blame, and diffs |
+| `memory` | Cross-session project knowledge graph (`.cursor/arx-ca-memory.jsonl`) |
+| `fetch` | Fetch external docs (step-ca, RFCs, wiki) as markdown |
+| `ast-grep` | Structural pattern search in Go and Vue/TypeScript |
+| `vite-vue` | Vue 3 component graph and route awareness |
+| `github` | GitHub Issues/PRs and release workflow (requires `GITHUB_PERSONAL_ACCESS_TOKEN`) |
+
+**Prerequisites:**
+
+```bash
+go install github.com/hloiseau/mcp-gopls/v2/cmd/mcp-gopls@latest
+pip install mcp-server-fetch mcp-server-git
+```
+
+Node.js 22+ (`npx`) covers the remaining servers. Enable them in **Cursor Settings → Tools & MCP**.
+
+---
+
 ## License
 
 See the repository license file.
