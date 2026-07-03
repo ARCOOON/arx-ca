@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import router from '../router'
+import router from '@/router'
 
 const TOKEN_STORAGE_KEY = 'arx_auth_token'
 const ROLES_STORAGE_KEY = 'arx_auth_roles'

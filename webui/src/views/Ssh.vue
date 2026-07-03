@@ -7,26 +7,41 @@ import {
   generateSshUser,
   inspectSshCertificate,
   listSshCertificates,
-} from '../api/ssh'
+} from '@/api/ssh'
 import type {
   SshCertificateInspection,
   SshCertificateListItem,
   SshCertificateResponse,
   SshRootKey,
   SshStatsResponse,
-} from '../types/api'
-import DataTable from '../components/ui/DataTable.vue'
-import Modal from '../components/ui/Modal.vue'
-import Pagination from '../components/Pagination.vue'
-import StatusBadge from '../components/ui/StatusBadge.vue'
-import { usePreferences } from '../composables/usePreferences'
-import { downloadTextFile } from '../utils/download'
-import { extractApiError } from '../utils/errors'
-import { formatDateTime } from '../utils/format'
+} from '@/types/api'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import { Textarea } from '@/components/ui/textarea'
+import { downloadTextFile } from '@/utils/download'
+import { extractApiError } from '@/utils/errors'
+import { formatDateTime } from '@/utils/format'
 
 const PAGE_SIZE = 50
-
-const { showApiHints } = usePreferences()
 
 const certificates = ref<SshCertificateListItem[]>([])
 const total = ref(0)
@@ -36,12 +51,9 @@ const tableError = ref('')
 
 const stats = ref<SshStatsResponse | null>(null)
 const statsLoading = ref(true)
-const statsError = ref('')
 
 const userRoots = ref<SshRootKey[]>([])
 const hostRoots = ref<SshRootKey[]>([])
-const rootsLoading = ref(true)
-const rootsError = ref('')
 
 const userModalOpen = ref(false)
 const userPublicKey = ref('')
@@ -65,37 +77,13 @@ const inspectLoading = ref(false)
 const inspectError = ref('')
 const inspectResult = ref<SshCertificateInspection | null>(null)
 
-const tableColumns = [
-  { key: 'cert_type', label: 'Type' },
-  { key: 'principals', label: 'Principals' },
-  { key: 'fingerprint', label: 'Fingerprint', cellClass: 'font-mono text-[11px]' },
-  { key: 'valid_after', label: 'Valid From' },
-  { key: 'valid_before', label: 'Expires At' },
-]
-
 function parsePrincipals(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0)
+  return raw.split(',').map((v) => v.trim()).filter((v) => v.length > 0)
 }
 
 function truncateFingerprint(value: string): string {
-  if (!value) {
-    return '—'
-  }
-  if (value.length <= 20) {
-    return value
-  }
+  if (!value || value.length <= 20) return value || '—'
   return `${value.slice(0, 10)}…${value.slice(-10)}`
-}
-
-function certTypeLabel(certType: string): string {
-  return certType === 'host' ? 'Host' : 'User'
-}
-
-function certTypeTone(certType: string): 'valid' | 'neutral' {
-  return certType === 'host' ? 'neutral' : 'valid'
 }
 
 function isActive(row: SshCertificateListItem): boolean {
@@ -107,12 +95,9 @@ function isActive(row: SshCertificateListItem): boolean {
 
 async function loadStats(): Promise<void> {
   statsLoading.value = true
-  statsError.value = ''
-
   try {
     stats.value = await fetchSshStats()
-  } catch (error) {
-    statsError.value = extractApiError(error, 'Failed to load SSH statistics')
+  } catch {
     stats.value = null
   } finally {
     statsLoading.value = false
@@ -122,7 +107,6 @@ async function loadStats(): Promise<void> {
 async function loadCertificates(): Promise<void> {
   tableLoading.value = true
   tableError.value = ''
-
   try {
     const response = await listSshCertificates(PAGE_SIZE, offset.value)
     certificates.value = response.certificates
@@ -137,17 +121,13 @@ async function loadCertificates(): Promise<void> {
 }
 
 async function loadRoots(): Promise<void> {
-  rootsLoading.value = true
-  rootsError.value = ''
-
   try {
     const roots = await fetchSshRoots()
     userRoots.value = roots.user_keys
     hostRoots.value = roots.host_keys
-  } catch (error) {
-    rootsError.value = extractApiError(error, 'Failed to load SSH CA roots')
-  } finally {
-    rootsLoading.value = false
+  } catch {
+    userRoots.value = []
+    hostRoots.value = []
   }
 }
 
@@ -157,74 +137,20 @@ onMounted(() => {
   void loadRoots()
 })
 
-watch(offset, () => {
-  void loadCertificates()
-})
+watch(offset, () => void loadCertificates())
 
-function openUserModal(): void {
-  userError.value = ''
-  userResult.value = null
-  userModalOpen.value = true
-}
-
-function closeUserModal(): void {
-  if (userLoading.value) {
-    return
-  }
-  userModalOpen.value = false
-}
-
-function openHostModal(): void {
-  hostError.value = ''
-  hostResult.value = null
-  hostModalOpen.value = true
-}
-
-function closeHostModal(): void {
-  if (hostLoading.value) {
-    return
-  }
-  hostModalOpen.value = false
-}
-
-function openInspectModal(): void {
-  inspectError.value = ''
-  inspectResult.value = null
-  inspectModalOpen.value = true
-}
-
-function closeInspectModal(): void {
-  if (inspectLoading.value) {
-    return
-  }
-  inspectModalOpen.value = false
-}
-
-async function submitUserCertificate(): Promise<void> {
-  userError.value = ''
-  userResult.value = null
-
-  const publicKey = userPublicKey.value.trim()
-  const principals = parsePrincipals(userPrincipals.value)
-
-  if (!publicKey) {
-    userError.value = 'Public key is required.'
-    return
-  }
-  if (principals.length === 0) {
-    userError.value = 'At least one principal is required.'
-    return
-  }
-
+async function submitUserCert(): Promise<void> {
   userLoading.value = true
-
+  userError.value = ''
+  userResult.value = null
   try {
     userResult.value = await generateSshUser({
-      public_key: publicKey,
-      principals,
+      public_key: userPublicKey.value.trim(),
+      principals: parsePrincipals(userPrincipals.value),
       ttl: userTtl.value.trim() || undefined,
     })
-    await Promise.all([loadCertificates(), loadStats()])
+    void loadCertificates()
+    void loadStats()
   } catch (error) {
     userError.value = extractApiError(error, 'Failed to generate SSH user certificate')
   } finally {
@@ -232,31 +158,18 @@ async function submitUserCertificate(): Promise<void> {
   }
 }
 
-async function submitHostCertificate(): Promise<void> {
+async function submitHostCert(): Promise<void> {
+  hostLoading.value = true
   hostError.value = ''
   hostResult.value = null
-
-  const publicKey = hostPublicKey.value.trim()
-  const principals = parsePrincipals(hostPrincipals.value)
-
-  if (!publicKey) {
-    hostError.value = 'Public key is required.'
-    return
-  }
-  if (principals.length === 0) {
-    hostError.value = 'At least one principal is required.'
-    return
-  }
-
-  hostLoading.value = true
-
   try {
     hostResult.value = await generateSshHost({
-      public_key: publicKey,
-      principals,
+      public_key: hostPublicKey.value.trim(),
+      principals: parsePrincipals(hostPrincipals.value),
       ttl: hostTtl.value.trim() || undefined,
     })
-    await Promise.all([loadCertificates(), loadStats()])
+    void loadCertificates()
+    void loadStats()
   } catch (error) {
     hostError.value = extractApiError(error, 'Failed to generate SSH host certificate')
   } finally {
@@ -265,19 +178,11 @@ async function submitHostCertificate(): Promise<void> {
 }
 
 async function submitInspect(): Promise<void> {
+  inspectLoading.value = true
   inspectError.value = ''
   inspectResult.value = null
-
-  const certificate = inspectCertificate.value.trim()
-  if (!certificate) {
-    inspectError.value = 'Certificate is required.'
-    return
-  }
-
-  inspectLoading.value = true
-
   try {
-    inspectResult.value = await inspectSshCertificate({ certificate })
+    inspectResult.value = await inspectSshCertificate({ certificate: inspectCertificate.value.trim() })
   } catch (error) {
     inspectError.value = extractApiError(error, 'Failed to inspect SSH certificate')
   } finally {
@@ -285,354 +190,216 @@ async function submitInspect(): Promise<void> {
   }
 }
 
-function downloadCertificate(result: SshCertificateResponse, filename: string): void {
-  downloadTextFile(filename, `${result.certificate.trim()}\n`, 'text/plain')
-}
-
-function downloadRootKey(key: SshRootKey, filename: string): void {
-  downloadTextFile(filename, `${key.public_key.trim()}\n`)
+function downloadCert(result: SshCertificateResponse, filename: string): void {
+  downloadTextFile(filename, result.certificate)
 }
 </script>
 
 <template>
   <div class="space-y-4">
-    <section class="grid grid-cols-1 gap-4 md:grid-cols-3 mb-6">
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">User Certificates</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
-          {{ statsLoading ? '…' : (stats?.total_user_certs ?? '—') }}
-        </p>
-        <p class="text-xs ui-text-muted">Persisted user certificate records</p>
-      </article>
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Host Certificates</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
-          {{ statsLoading ? '…' : (stats?.total_host_certs ?? '—') }}
-        </p>
-        <p class="text-xs ui-text-muted">Persisted host certificate records</p>
-      </article>
-      <article class="ui-surface-muted px-4 py-3">
-        <p class="text-[10px] uppercase tracking-wide ui-text-muted">Currently Active</p>
-        <p class="mt-1 text-lg font-semibold ui-text-primary">
-          {{ statsLoading ? '…' : (stats?.active_now ?? '—') }}
-        </p>
-        <p class="text-xs ui-text-muted">Valid at the current time</p>
-      </article>
+    <section class="grid grid-cols-1 gap-3 md:grid-cols-3">
+      <Card class="rounded-lg border border-border shadow-none">
+        <CardHeader class="pb-2">
+          <CardTitle class="text-xs font-normal uppercase tracking-wide text-muted-foreground">User certs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="text-lg font-semibold">{{ stats?.total_user_certs ?? '—' }}</p>
+        </CardContent>
+      </Card>
+      <Card class="rounded-lg border border-border shadow-none">
+        <CardHeader class="pb-2">
+          <CardTitle class="text-xs font-normal uppercase tracking-wide text-muted-foreground">Host certs</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="text-lg font-semibold">{{ stats?.total_host_certs ?? '—' }}</p>
+        </CardContent>
+      </Card>
+      <Card class="rounded-lg border border-border shadow-none">
+        <CardHeader class="pb-2">
+          <CardTitle class="text-xs font-normal uppercase tracking-wide text-muted-foreground">Active now</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p class="text-lg font-semibold">{{ stats?.active_now ?? '—' }}</p>
+        </CardContent>
+      </Card>
     </section>
 
-    <p v-if="statsError" class="ui-alert-error rounded-[var(--radius-control)] px-3 py-2 text-xs" role="alert">
-      {{ statsError }}
-    </p>
+    <div class="flex flex-wrap gap-2">
+      <Button class="rounded-lg" @click="userModalOpen = true">Generate user cert</Button>
+      <Button variant="secondary" class="rounded-lg" @click="hostModalOpen = true">Generate host cert</Button>
+      <Button variant="outline" class="rounded-lg" @click="inspectModalOpen = true">Inspect certificate</Button>
+    </div>
 
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 class="text-sm font-semibold ui-text-primary">SSH Certificate Inventory</h2>
-            <p v-if="showApiHints" class="mt-0.5 text-xs ui-text-muted">
-              Issued certificates persisted for auditing via
-              <code class="ui-code">GET /api/v1/ssh/certificates</code>.
-            </p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-primary" @click="openUserModal">New User Cert</button>
-            <button type="button" class="ui-btn-secondary" @click="openHostModal">New Host Cert</button>
-            <button type="button" class="ui-btn-secondary" @click="openInspectModal">Inspect Key</button>
-          </div>
-        </div>
-      </header>
-
-      <div class="px-4 py-3">
-        <div v-if="tableError" class="mb-3 ui-alert-error rounded-[var(--radius-control)] text-xs" role="alert">
-          {{ tableError }}
-        </div>
-
-        <DataTable
-          :columns="tableColumns"
-          :rows="certificates"
-          :row-key="(row) => row.id"
-          :loading="tableLoading"
-          empty-message="No SSH certificates have been issued yet."
-        >
-          <template #cell-cert_type="{ row }">
-            <StatusBadge :label="certTypeLabel(row.cert_type)" :tone="certTypeTone(row.cert_type)" />
-          </template>
-
-          <template #cell-principals="{ row }">
-            <span class="text-xs ui-text-secondary">{{ row.principals.join(', ') || '—' }}</span>
-          </template>
-
-          <template #cell-fingerprint="{ row }">
-            <span :title="row.fingerprint">{{ truncateFingerprint(row.fingerprint) }}</span>
-          </template>
-
-          <template #cell-valid_after="{ row }">
-            {{ formatDateTime(row.valid_after) }}
-          </template>
-
-          <template #cell-valid_before="{ row }">
-            <span class="inline-flex items-center gap-2">
-              {{ formatDateTime(row.valid_before) }}
-              <StatusBadge v-if="isActive(row)" label="Active" tone="valid" />
-            </span>
-          </template>
-        </DataTable>
-
-        <Pagination
-          v-if="total > PAGE_SIZE"
-          class="mt-3"
-          :total="total"
-          :limit="PAGE_SIZE"
-          :offset="offset"
-          @update:offset="offset = $event"
-        />
-      </div>
-    </section>
-
-    <section class="ui-surface-muted">
-      <header class="ui-border-b px-4 py-2.5">
-        <h2 class="text-sm font-semibold ui-text-primary">SSH CA Roots</h2>
-        <p class="mt-0.5 text-xs ui-text-muted">
-          Trust anchors for client and server configuration.<template v-if="showApiHints">
-            See
-            <a
-              href="https://github.com/ARCOOON/arx-ca/wiki/SSH-CA-Setup"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="ui-link"
-            >Wiki → SSH CA Setup</a>
-            for deployment steps.</template>
-        </p>
-      </header>
-
-      <div v-if="rootsLoading" class="px-4 py-3 text-sm ui-text-muted">Loading SSH roots…</div>
-      <div v-else-if="rootsError" class="px-4 py-3 ui-alert-error text-xs" role="alert">
-        {{ rootsError }}
-      </div>
-      <div v-else class="grid grid-cols-1 gap-px lg:grid-cols-2" style="background-color: var(--border-subtle)">
-        <article
-          v-for="section in [
-            { title: 'User CA', keys: userRoots, prefix: 'ssh-user-ca' },
-            { title: 'Host CA', keys: hostRoots, prefix: 'ssh-host-ca' },
-          ]"
-          :key="section.title"
-          class="px-4 py-3"
-          style="background-color: var(--bg-inset)"
-        >
-          <p class="text-[10px] uppercase tracking-wide ui-text-muted">{{ section.title }}</p>
-          <div v-if="section.keys.length === 0" class="mt-2 text-xs ui-text-muted">No keys configured.</div>
-          <ul v-else class="mt-2 space-y-2">
-            <li
-              v-for="(key, index) in section.keys"
-              :key="`${section.prefix}-${index}`"
-              class="rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-2 text-xs"
-            >
-              <div class="flex flex-wrap items-start justify-between gap-2">
-                <div class="min-w-0">
-                  <StatusBadge :label="key.key_type" tone="neutral" />
-                  <p class="mt-1 truncate font-mono ui-text-secondary" :title="key.fingerprint">
-                    {{ key.fingerprint }}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  class="ui-btn-secondary shrink-0 text-[11px]"
-                  @click="downloadRootKey(key, `${section.prefix}-${index + 1}.pub`)"
-                >
-                  Download .pub
-                </button>
-              </div>
-            </li>
+    <Card class="rounded-lg border border-border shadow-none">
+      <CardHeader>
+        <CardTitle class="text-sm">SSH CA roots</CardTitle>
+      </CardHeader>
+      <CardContent class="grid grid-cols-1 gap-4 md:grid-cols-2 text-sm">
+        <div>
+          <p class="mb-2 font-medium">User keys</p>
+          <ul class="space-y-1 text-muted-foreground">
+            <li v-for="(key, index) in userRoots" :key="index">{{ key.key_type }} · {{ truncateFingerprint(key.fingerprint) }}</li>
+            <li v-if="userRoots.length === 0">No user CA keys</li>
           </ul>
-        </article>
-      </div>
-    </section>
+        </div>
+        <div>
+          <p class="mb-2 font-medium">Host keys</p>
+          <ul class="space-y-1 text-muted-foreground">
+            <li v-for="(key, index) in hostRoots" :key="index">{{ key.key_type }} · {{ truncateFingerprint(key.fingerprint) }}</li>
+            <li v-if="hostRoots.length === 0">No host CA keys</li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
 
-    <Modal :open="userModalOpen" title="New User Certificate" wide @close="closeUserModal">
-      <div class="space-y-3">
-        <p v-if="showApiHints" class="text-xs ui-text-muted">
-          <code class="ui-code">POST /api/v1/ssh/generate/user</code>
-        </p>
+    <Card class="rounded-lg border border-border shadow-none">
+      <CardHeader class="flex-row items-center justify-between">
+        <CardTitle class="text-sm">Certificate inventory</CardTitle>
+        <span class="text-xs text-muted-foreground">{{ total }} total</span>
+      </CardHeader>
+      <CardContent>
+        <Alert v-if="tableError" variant="destructive" class="mb-3 rounded-lg">
+          <AlertDescription>{{ tableError }}</AlertDescription>
+        </Alert>
 
-        <div v-if="userError" class="ui-alert-error rounded-[var(--radius-control)] text-xs" role="alert">
-          {{ userError }}
+        <div class="overflow-x-auto rounded-lg border border-border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Principals</TableHead>
+                <TableHead>Fingerprint</TableHead>
+                <TableHead>Valid from</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-if="tableLoading">
+                <TableCell colspan="6" class="text-center text-muted-foreground">Loading…</TableCell>
+              </TableRow>
+              <TableRow v-else-if="certificates.length === 0">
+                <TableCell colspan="6" class="text-center text-muted-foreground">No SSH certificates found.</TableCell>
+              </TableRow>
+              <TableRow v-for="row in certificates" :key="row.id">
+                <TableCell>
+                  <Badge variant="outline" class="rounded-md capitalize">{{ row.cert_type }}</Badge>
+                </TableCell>
+                <TableCell>{{ row.principals.join(', ') || '—' }}</TableCell>
+                <TableCell class="font-mono text-xs">{{ truncateFingerprint(row.fingerprint) }}</TableCell>
+                <TableCell class="text-xs">{{ formatDateTime(row.valid_after) }}</TableCell>
+                <TableCell class="text-xs">{{ formatDateTime(row.valid_before) }}</TableCell>
+                <TableCell>
+                  <Badge :variant="isActive(row) ? 'default' : 'secondary'" class="rounded-md">
+                    {{ isActive(row) ? 'Active' : 'Inactive' }}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
         </div>
 
-        <label class="block text-xs font-medium ui-text-secondary">SSH public key</label>
-        <textarea
-          v-model="userPublicKey"
-          rows="4"
-          class="ui-textarea font-mono text-[11px]"
-          placeholder="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
-          spellcheck="false"
-        />
-
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary">Principals</label>
-            <input
-              v-model="userPrincipals"
-              type="text"
-              class="ui-input mt-1.5"
-              placeholder="root, admin"
-              autocomplete="off"
-            />
-            <p class="mt-1 text-[10px] ui-text-muted">Comma-separated Unix usernames.</p>
-          </div>
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary">TTL / validity</label>
-            <input v-model="userTtl" type="text" class="ui-input mt-1.5" placeholder="4h" />
-          </div>
+        <div v-if="total > PAGE_SIZE" class="mt-3 flex justify-end gap-2">
+          <Button variant="outline" size="sm" class="rounded-lg" :disabled="offset === 0" @click="offset -= PAGE_SIZE">Previous</Button>
+          <Button variant="outline" size="sm" class="rounded-lg" :disabled="offset + PAGE_SIZE >= total" @click="offset += PAGE_SIZE">Next</Button>
         </div>
+      </CardContent>
+    </Card>
 
-        <div v-if="userResult" class="space-y-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <p class="text-xs ui-text-secondary">
-              Signed {{ userResult.certificate_type }} certificate (serial {{ userResult.serial }}).
-            </p>
-            <button
-              type="button"
-              class="ui-btn-secondary text-[11px]"
-              @click="downloadCertificate(userResult, 'ssh-user-cert.pub')"
-            >
-              Download .pub
-            </button>
+    <!-- User cert dialog -->
+    <Dialog v-model:open="userModalOpen">
+      <DialogContent class="max-w-lg rounded-lg">
+        <DialogHeader>
+          <DialogTitle>Generate SSH user certificate</DialogTitle>
+        </DialogHeader>
+        <div class="space-y-3">
+          <div class="space-y-2">
+            <Label>Public key</Label>
+            <Textarea v-model="userPublicKey" rows="3" class="rounded-lg font-mono text-xs" />
           </div>
-          <pre class="ui-inset max-h-48 overflow-auto rounded-[var(--radius-control)] p-3 font-mono text-[10px] ui-text-secondary">{{ userResult.certificate }}</pre>
-        </div>
-      </div>
-
-      <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="userLoading" @click="closeUserModal">Cancel</button>
-        <button type="button" class="ui-btn-primary" :disabled="userLoading" @click="submitUserCertificate">
-          {{ userLoading ? 'Generating…' : 'Generate User Certificate' }}
-        </button>
-      </template>
-    </Modal>
-
-    <Modal :open="hostModalOpen" title="New Host Certificate" wide @close="closeHostModal">
-      <div class="space-y-3">
-        <p v-if="showApiHints" class="text-xs ui-text-muted">
-          <code class="ui-code">POST /api/v1/ssh/generate/host</code>
-        </p>
-
-        <div v-if="hostError" class="ui-alert-error rounded-[var(--radius-control)] text-xs" role="alert">
-          {{ hostError }}
-        </div>
-
-        <label class="block text-xs font-medium ui-text-secondary">SSH public key</label>
-        <textarea
-          v-model="hostPublicKey"
-          rows="4"
-          class="ui-textarea font-mono text-[11px]"
-          placeholder="ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
-          spellcheck="false"
-        />
-
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary">Principals</label>
-            <input
-              v-model="hostPrincipals"
-              type="text"
-              class="ui-input mt-1.5"
-              placeholder="web-01.example.com, 10.0.0.5"
-              autocomplete="off"
-            />
-            <p class="mt-1 text-[10px] ui-text-muted">Comma-separated hostnames or IP addresses.</p>
+          <div class="space-y-2">
+            <Label>Principals (comma-separated)</Label>
+            <Input v-model="userPrincipals" class="rounded-lg" />
           </div>
-          <div>
-            <label class="block text-xs font-medium ui-text-secondary">TTL / validity</label>
-            <input v-model="hostTtl" type="text" class="ui-input mt-1.5" placeholder="8760h" />
+          <div class="space-y-2">
+            <Label>TTL</Label>
+            <Input v-model="userTtl" class="rounded-lg" />
+          </div>
+          <Alert v-if="userError" variant="destructive" class="rounded-lg">
+            <AlertDescription>{{ userError }}</AlertDescription>
+          </Alert>
+          <div v-if="userResult" class="rounded-lg border border-border bg-muted/30 p-3 text-xs">
+            <p class="font-medium">Certificate issued (serial {{ userResult.serial }})</p>
+            <Button variant="link" class="h-auto p-0" @click="downloadCert(userResult, 'ssh-user-cert.pub')">Download</Button>
           </div>
         </div>
+        <DialogFooter>
+          <Button class="rounded-lg" :disabled="userLoading" @click="submitUserCert">
+            {{ userLoading ? 'Generating…' : 'Generate' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-        <div v-if="hostResult" class="space-y-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3">
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <p class="text-xs ui-text-secondary">
-              Signed {{ hostResult.certificate_type }} certificate (serial {{ hostResult.serial }}).
-            </p>
-            <button
-              type="button"
-              class="ui-btn-secondary text-[11px]"
-              @click="downloadCertificate(hostResult, 'ssh-host-cert.pub')"
-            >
-              Download .pub
-            </button>
+    <!-- Host cert dialog -->
+    <Dialog v-model:open="hostModalOpen">
+      <DialogContent class="max-w-lg rounded-lg">
+        <DialogHeader>
+          <DialogTitle>Generate SSH host certificate</DialogTitle>
+        </DialogHeader>
+        <div class="space-y-3">
+          <div class="space-y-2">
+            <Label>Public key</Label>
+            <Textarea v-model="hostPublicKey" rows="3" class="rounded-lg font-mono text-xs" />
           </div>
-          <pre class="ui-inset max-h-48 overflow-auto rounded-[var(--radius-control)] p-3 font-mono text-[10px] ui-text-secondary">{{ hostResult.certificate }}</pre>
+          <div class="space-y-2">
+            <Label>Principals (comma-separated)</Label>
+            <Input v-model="hostPrincipals" class="rounded-lg" />
+          </div>
+          <div class="space-y-2">
+            <Label>TTL</Label>
+            <Input v-model="hostTtl" class="rounded-lg" />
+          </div>
+          <Alert v-if="hostError" variant="destructive" class="rounded-lg">
+            <AlertDescription>{{ hostError }}</AlertDescription>
+          </Alert>
+          <div v-if="hostResult" class="rounded-lg border border-border bg-muted/30 p-3 text-xs">
+            <p class="font-medium">Certificate issued (serial {{ hostResult.serial }})</p>
+            <Button variant="link" class="h-auto p-0" @click="downloadCert(hostResult, 'ssh-host-cert.pub')">Download</Button>
+          </div>
         </div>
-      </div>
+        <DialogFooter>
+          <Button class="rounded-lg" :disabled="hostLoading" @click="submitHostCert">
+            {{ hostLoading ? 'Generating…' : 'Generate' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-      <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="hostLoading" @click="closeHostModal">Cancel</button>
-        <button type="button" class="ui-btn-primary" :disabled="hostLoading" @click="submitHostCertificate">
-          {{ hostLoading ? 'Generating…' : 'Generate Host Certificate' }}
-        </button>
-      </template>
-    </Modal>
-
-    <Modal :open="inspectModalOpen" title="Inspect SSH Certificate" wide @close="closeInspectModal">
-      <div class="space-y-3">
-        <p v-if="showApiHints" class="text-xs ui-text-muted">
-          <code class="ui-code">POST /api/v1/ssh/inspect</code>
-        </p>
-
-        <div v-if="inspectError" class="ui-alert-error rounded-[var(--radius-control)] text-xs" role="alert">
-          {{ inspectError }}
+    <!-- Inspect dialog -->
+    <Dialog v-model:open="inspectModalOpen">
+      <DialogContent class="max-w-lg rounded-lg">
+        <DialogHeader>
+          <DialogTitle>Inspect SSH certificate</DialogTitle>
+        </DialogHeader>
+        <div class="space-y-3">
+          <Textarea v-model="inspectCertificate" rows="5" class="rounded-lg font-mono text-xs" placeholder="Paste certificate…" />
+          <Alert v-if="inspectError" variant="destructive" class="rounded-lg">
+            <AlertDescription>{{ inspectError }}</AlertDescription>
+          </Alert>
+          <div v-if="inspectResult" class="space-y-1 rounded-lg border border-border bg-muted/30 p-3 text-sm">
+            <p><span class="text-muted-foreground">Type:</span> {{ inspectResult.certificate_type }}</p>
+            <p><span class="text-muted-foreground">Key ID:</span> {{ inspectResult.key_id }}</p>
+            <p><span class="text-muted-foreground">Principals:</span> {{ inspectResult.principals.join(', ') }}</p>
+            <p><span class="text-muted-foreground">Valid:</span> {{ formatDateTime(inspectResult.valid_after) }} – {{ formatDateTime(inspectResult.valid_before) }}</p>
+          </div>
         </div>
-
-        <label class="block text-xs font-medium ui-text-secondary">SSH certificate</label>
-        <textarea
-          v-model="inspectCertificate"
-          rows="6"
-          class="ui-textarea font-mono text-[11px]"
-          placeholder="ssh-ed25519-cert-v01@openssh.com AAAA..."
-          spellcheck="false"
-        />
-
-        <div v-if="inspectResult" class="space-y-2 rounded-[var(--radius-control)] border border-[var(--border-subtle)] p-3 text-xs">
-          <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div>
-              <dt class="ui-text-muted">Type</dt>
-              <dd class="ui-text-secondary">{{ inspectResult.certificate_type }}</dd>
-            </div>
-            <div>
-              <dt class="ui-text-muted">Serial</dt>
-              <dd class="font-mono ui-text-secondary">{{ inspectResult.serial }}</dd>
-            </div>
-            <div>
-              <dt class="ui-text-muted">Key ID</dt>
-              <dd class="ui-text-secondary">{{ inspectResult.key_id }}</dd>
-            </div>
-            <div>
-              <dt class="ui-text-muted">Public key type</dt>
-              <dd class="ui-text-secondary">{{ inspectResult.public_key_type }}</dd>
-            </div>
-            <div>
-              <dt class="ui-text-muted">Valid after</dt>
-              <dd class="ui-text-secondary">{{ formatDateTime(inspectResult.valid_after) }}</dd>
-            </div>
-            <div>
-              <dt class="ui-text-muted">Valid before</dt>
-              <dd class="ui-text-secondary">{{ formatDateTime(inspectResult.valid_before) }}</dd>
-            </div>
-            <div class="sm:col-span-2">
-              <dt class="ui-text-muted">Principals</dt>
-              <dd class="ui-text-secondary">{{ inspectResult.principals.join(', ') || '—' }}</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-
-      <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="inspectLoading" @click="closeInspectModal">
-          Close
-        </button>
-        <button type="button" class="ui-btn-primary" :disabled="inspectLoading" @click="submitInspect">
-          {{ inspectLoading ? 'Inspecting…' : 'Inspect Certificate' }}
-        </button>
-      </template>
-    </Modal>
+        <DialogFooter>
+          <Button class="rounded-lg" :disabled="inspectLoading" @click="submitInspect">
+            {{ inspectLoading ? 'Inspecting…' : 'Inspect' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

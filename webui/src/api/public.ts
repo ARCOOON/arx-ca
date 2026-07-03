@@ -1,4 +1,4 @@
-import type { ApiEnvelope, PublicListCertificatesResponse } from '../types/api'
+import type { ApiEnvelope, PublicListCertificatesResponse } from '@/types/api'
 import { apiClient } from './client'
 
 export async function listPublicCertificates(): Promise<PublicListCertificatesResponse> {

@@ -5,10 +5,10 @@ import {
   listNotifications,
   markAllNotificationsRead as markAllNotificationsReadApi,
   markNotificationRead,
-} from '../api/notifications'
-import { resolveApiBaseURL } from '../api/client'
-import { useAuthStore } from '../store/auth'
-import type { NotificationEntry } from '../types/api'
+} from '@/api/notifications'
+import { resolveApiBaseURL } from '@/api/client'
+import { useAuthStore } from '@/store/auth'
+import type { NotificationEntry } from '@/types/api'
 
 export interface AuditNotificationPayload {
   notification_id?: string
@@ -31,29 +31,16 @@ export interface AuditNotificationPayload {
   status_code?: number
 }
 
-export interface UINotification {
-  id: string
-  action: string
-  message: string
-  timestamp: string
-  sticky: boolean
-  tone: 'critical' | 'info' | 'success'
-}
-
-const MAX_TOAST_NOTIFICATIONS = 50
-const AUTO_DISMISS_MS = 7000
 const MAX_PERSISTENT_NOTIFICATIONS = 200
 
 const CRITICAL_ACTIONS = new Set(['AUTH_LOGIN_FAILED', 'CERT_REVOKE', 'EAB_REVOKE'])
 
-const notifications = ref<UINotification[]>([])
 const persistentNotifications = ref<NotificationEntry[]>([])
 const unreadCount = computed(
   () => persistentNotifications.value.filter((item) => !item.is_read).length,
 )
 
 let eventSource: EventSource | null = null
-let nextToastId = 1
 
 function isCriticalAction(action: string): boolean {
   return CRITICAL_ACTIONS.has(action.trim().toUpperCase())
@@ -63,45 +50,10 @@ function levelForAction(action: string): NotificationEntry['level'] {
   return isCriticalAction(action) ? 'critical' : 'info'
 }
 
-function toneForAction(action: string): UINotification['tone'] {
-  if (isCriticalAction(action)) {
-    return 'critical'
-  }
-  if (action.includes('SUCCESS') || action.includes('CREATED') || action.includes('ISSUE')) {
-    return 'success'
-  }
-  return 'info'
-}
-
 function formatMessage(payload: AuditNotificationPayload): string {
   const actor = payload.actor?.id?.trim() || 'system'
   const action = payload.action.replaceAll('_', ' ').toLowerCase()
   return `${actor}: ${action}`
-}
-
-function scheduleAutoRemove(id: string): void {
-  window.setTimeout(() => {
-    removeToast(id)
-  }, AUTO_DISMISS_MS)
-}
-
-function pushToast(payload: AuditNotificationPayload): void {
-  const id = String(nextToastId++)
-  const sticky = isCriticalAction(payload.action)
-  const entry: UINotification = {
-    id,
-    action: payload.action,
-    message: formatMessage(payload),
-    timestamp: payload.timestamp,
-    sticky,
-    tone: toneForAction(payload.action),
-  }
-
-  notifications.value = [entry, ...notifications.value].slice(0, MAX_TOAST_NOTIFICATIONS)
-
-  if (!sticky) {
-    scheduleAutoRemove(id)
-  }
 }
 
 function prependPersistent(entry: NotificationEntry): void {
@@ -116,8 +68,6 @@ function prependPersistent(entry: NotificationEntry): void {
 }
 
 function handleAuditPayload(payload: AuditNotificationPayload): void {
-  pushToast(payload)
-
   const notificationId = payload.notification_id?.trim()
   if (!notificationId) {
     return
@@ -199,14 +149,6 @@ function disconnect(): void {
   }
 }
 
-function removeToast(id: string): void {
-  notifications.value = notifications.value.filter((item) => item.id !== id)
-}
-
-function clearAllToasts(): void {
-  notifications.value = []
-}
-
 async function markAsRead(id: string): Promise<void> {
   await markNotificationRead(id)
   persistentNotifications.value = persistentNotifications.value.map((item) =>
@@ -234,14 +176,11 @@ async function archiveAllPersistent(): Promise<void> {
 
 export function useNotifications() {
   return {
-    notifications,
     persistentNotifications,
     unreadCount,
     connect,
     disconnect,
     loadPersistentNotifications,
-    remove: removeToast,
-    clearAll: clearAllToasts,
     markAsRead,
     markAllAsRead,
     deletePersistent,

@@ -3,7 +3,7 @@ import type {
   ArchiveAllNotificationsResponse,
   ListNotificationsResponse,
   MarkAllNotificationsReadResponse,
-} from '../types/api'
+} from '@/types/api'
 import { apiClient } from './client'
 
 export interface ListNotificationsParams {

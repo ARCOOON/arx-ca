@@ -1,4 +1,4 @@
-import type { ApiEnvelope, UpdaterChangelogResponse } from '../types/api'
+import type { ApiEnvelope, UpdaterChangelogResponse } from '@/types/api'
 import { apiClient } from './client'
 
 export async function fetchCurrentChangelog(): Promise<UpdaterChangelogResponse> {

@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import ShieldCheck from 'lucide-vue-next/dist/esm/icons/shield-check.js'
-import axios from 'axios'
-import { login } from '../api/auth'
-import { useAuthStore } from '../store/auth'
+import { login } from '@/api/auth'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useAuthStore } from '@/store/auth'
+import { extractApiError } from '@/utils/errors'
 
 const router = useRouter()
 const route = useRoute()
@@ -12,97 +16,62 @@ const authStore = useAuthStore()
 
 const email = ref('')
 const password = ref('')
+const isLoading = ref(false)
 const errorMessage = ref('')
-const isSubmitting = ref(false)
 
 async function handleSubmit(): Promise<void> {
+  isLoading.value = true
   errorMessage.value = ''
-  isSubmitting.value = true
 
   try {
-    const session = await login({
-      email: email.value.trim(),
-      password: password.value,
-    })
-
-    authStore.setSession(session.token, session.roles ?? [])
+    const response = await login({ email: email.value.trim(), password: password.value })
+    authStore.setSession(response.token, response.roles ?? [])
 
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/dashboard'
     await router.push(redirect)
   } catch (error) {
-    if (axios.isAxiosError(error)) {
-      const apiError = error.response?.data as { error?: string } | undefined
-      if (error.response?.status === 401) {
-        errorMessage.value = apiError?.error ?? 'Invalid email or password'
-      } else {
-        errorMessage.value = apiError?.error ?? 'Unable to sign in. Please try again.'
-      }
-    } else if (error instanceof Error) {
-      errorMessage.value = error.message
-    } else {
-      errorMessage.value = 'Unable to sign in. Please try again.'
-    }
+    errorMessage.value = extractApiError(error, 'Login failed')
   } finally {
-    isSubmitting.value = false
+    isLoading.value = false
   }
 }
 </script>
 
 <template>
-  <div class="ui-shell flex min-h-screen items-center justify-center px-4 py-12">
-    <div class="w-full max-w-md">
-      <div class="mb-8 text-center">
-        <div class="ui-brand-icon mx-auto mb-4 flex h-14 w-14 items-center justify-center bg-[var(--bg-elevated)]">
-          <ShieldCheck class="h-7 w-7" style="color: var(--accent-color)" aria-hidden="true" />
-        </div>
-        <h1 class="text-2xl font-semibold tracking-tight ui-text-primary">Arx Certificate Authority</h1>
-        <p class="mt-2 text-sm ui-text-muted">Sign in with your administrator credentials</p>
-      </div>
+  <div class="flex min-h-screen items-center justify-center bg-background p-4">
+    <Card class="w-full max-w-md rounded-lg border border-border shadow-none">
+      <CardHeader>
+        <CardTitle>ARX CA</CardTitle>
+        <CardDescription>Sign in to the certificate authority console.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form class="space-y-4" @submit.prevent="handleSubmit">
+          <Alert v-if="errorMessage" variant="destructive" class="rounded-lg">
+            <AlertDescription>{{ errorMessage }}</AlertDescription>
+          </Alert>
 
-      <form class="ui-elevated ui-dialog p-6" @submit.prevent="handleSubmit">
-        <div v-if="errorMessage" class="mb-4 ui-alert-error text-sm" role="alert">
-          {{ errorMessage }}
-        </div>
-
-        <div class="space-y-4">
-          <div>
-            <label for="email" class="mb-1.5 block text-sm font-medium ui-text-secondary">Email</label>
-            <input
-              id="email"
-              v-model="email"
-              type="email"
-              name="email"
-              autocomplete="username"
-              required
-              class="ui-input py-2.5 text-sm"
-              placeholder="admin@example.com"
-            />
+          <div class="space-y-2">
+            <Label for="email">Email</Label>
+            <Input id="email" v-model="email" type="email" autocomplete="username" required class="rounded-lg" />
           </div>
 
-          <div>
-            <label for="password" class="mb-1.5 block text-sm font-medium ui-text-secondary">Password</label>
-            <input
+          <div class="space-y-2">
+            <Label for="password">Password</Label>
+            <Input
               id="password"
               v-model="password"
               type="password"
-              name="password"
               autocomplete="current-password"
               required
-              class="ui-input py-2.5 text-sm"
-              placeholder="Enter your password"
+              class="rounded-lg"
             />
           </div>
-        </div>
 
-        <button
-          type="submit"
-          :disabled="isSubmitting"
-          class="ui-btn-primary mt-6 w-full py-2.5"
-          style="background-color: var(--accent-color); color: var(--text-inverse); border-color: var(--accent-muted)"
-        >
-          {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
-        </button>
-      </form>
-    </div>
+          <Button type="submit" class="w-full rounded-lg" :disabled="isLoading">
+            {{ isLoading ? 'Signing in…' : 'Sign in' }}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   </div>
 </template>

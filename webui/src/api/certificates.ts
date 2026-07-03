@@ -17,7 +17,7 @@ import type {
   RenewCertificateRequest,
   RevokeCertificateRequest,
   RevokeCertificateResponse,
-} from '../types/api'
+} from '@/types/api'
 import { apiClient } from './client'
 
 export interface ListCertificatesParams {

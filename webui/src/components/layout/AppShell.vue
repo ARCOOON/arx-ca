@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
-import { useNotifications } from '../../composables/useNotifications'
-import { useUpdater } from '../../composables/useUpdater'
-import { useAuthStore } from '../../store/auth'
-import PostUpdateChangelogModal from '../modals/PostUpdateChangelogModal.vue'
-import NotificationToaster from '../NotificationToaster.vue'
-import ToastHost from '../ui/ToastHost.vue'
-import SideNav from './SideNav.vue'
-import TopBar from './TopBar.vue'
+import PostUpdateChangelogModal from '@/components/modals/PostUpdateChangelogModal.vue'
+import SideNav from '@/components/layout/SideNav.vue'
+import TopBar from '@/components/layout/TopBar.vue'
+import { useNotifications } from '@/composables/useNotifications'
+import { useUpdater } from '@/composables/useUpdater'
+import { useAuthStore } from '@/store/auth'
 
 const SIDEBAR_COLLAPSED_KEY = 'arx_sidebar_collapsed'
 
@@ -73,10 +71,10 @@ watch(
 </script>
 
 <template>
-  <div class="ui-shell flex h-screen w-screen overflow-hidden">
+  <div class="flex h-screen w-screen overflow-hidden bg-background">
     <div
       v-if="mobileNavOpen"
-      class="ui-mobile-nav-backdrop fixed inset-0 z-30 md:hidden"
+      class="fixed inset-0 z-30 bg-background/60 backdrop-blur-sm md:hidden"
       role="presentation"
       aria-hidden="true"
       @click="closeMobileNav"
@@ -90,17 +88,13 @@ watch(
     />
 
     <div class="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
-      <div class="shrink-0">
-        <TopBar @toggle-mobile-nav="toggleMobileNav" @logout="handleLogout" />
-      </div>
+      <TopBar @toggle-mobile-nav="toggleMobileNav" @logout="handleLogout" />
 
-      <main class="custom-scrollbar flex-1 overflow-y-auto p-4 md:p-6">
+      <main class="flex-1 overflow-y-auto p-4 md:p-6">
         <RouterView />
       </main>
     </div>
 
-    <NotificationToaster />
-    <ToastHost />
     <PostUpdateChangelogModal
       :open="triggerChangelogModal"
       @close="dismissChangelogModal"

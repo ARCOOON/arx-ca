@@ -4,13 +4,11 @@ import type {
   GenerateSshUserRequest,
   InspectSshCertificateRequest,
   ListSshCertificatesResponse,
-  SignSshHostRequest,
-  SignSshUserRequest,
   SshCertificateInspection,
   SshCertificateResponse,
   SshRootsResponse,
   SshStatsResponse,
-} from '../types/api'
+} from '@/types/api'
 import { apiClient } from './client'
 
 export async function generateSshUser(request: GenerateSshUserRequest): Promise<SshCertificateResponse> {
@@ -30,36 +28,6 @@ export async function generateSshUser(request: GenerateSshUserRequest): Promise<
 
 export async function generateSshHost(request: GenerateSshHostRequest): Promise<SshCertificateResponse> {
   const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/generate/host', request)
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH host certificate response did not include data')
-  }
-
-  return payload.data
-}
-
-export async function signSshUser(request: SignSshUserRequest): Promise<SshCertificateResponse> {
-  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/sign-user', request)
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('SSH user certificate response did not include data')
-  }
-
-  return payload.data
-}
-
-export async function signSshHost(request: SignSshHostRequest): Promise<SshCertificateResponse> {
-  const response = await apiClient.post<ApiEnvelope<SshCertificateResponse>>('/ssh/sign-host', request)
   const payload = response.data
 
   if (payload.error) {

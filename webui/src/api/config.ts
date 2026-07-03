@@ -1,4 +1,4 @@
-import type { ApiEnvelope, SettingsConfigResponse } from '../types/api'
+import type { ApiEnvelope, SettingsConfigResponse } from '@/types/api'
 import { apiClient } from './client'
 
 export async function fetchSettingsConfig(): Promise<SettingsConfigResponse> {

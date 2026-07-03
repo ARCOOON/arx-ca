@@ -1,4 +1,4 @@
-import type { ApiEnvelope, HealthReport } from '../types/api'
+import type { ApiEnvelope, HealthReport } from '@/types/api'
 import { apiClient } from './client'
 
 export async function fetchHealth(): Promise<HealthReport> {

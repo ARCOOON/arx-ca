@@ -1,37 +1,62 @@
-export type ThemeMode = 'light' | 'dark'
+import { onMounted, readonly, ref } from 'vue'
 
-const STORAGE_KEY = 'arx_theme'
+export type ThemePreference = 'light' | 'dark' | 'auto'
+export type ResolvedTheme = 'light' | 'dark'
 
-export function resolveInitialTheme(): ThemeMode {
-  if (typeof window === 'undefined') {
-    return 'light'
-  }
+const STORAGE_KEY = 'arx_theme_preference'
 
+const preference = ref<ThemePreference>('auto')
+const resolvedTheme = ref<ResolvedTheme>('light')
+
+let mediaQuery: MediaQueryList | null = null
+
+function readStoredPreference(): ThemePreference {
+  if (typeof window === 'undefined') return 'auto'
   const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored === 'light' || stored === 'dark') {
-    return stored
+  if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored
+  return 'auto'
+}
+
+function getSystemTheme(): ResolvedTheme {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function resolveTheme(pref: ThemePreference): ResolvedTheme {
+  return pref === 'auto' ? getSystemTheme() : pref
+}
+
+function applyResolvedTheme(theme: ResolvedTheme): void {
+  document.documentElement.classList.toggle('dark', theme === 'dark')
+}
+
+function syncTheme(): void {
+  const next = resolveTheme(preference.value)
+  resolvedTheme.value = next
+  applyResolvedTheme(next)
+}
+
+function setPreference(next: ThemePreference): void {
+  preference.value = next
+  localStorage.setItem(STORAGE_KEY, next)
+  syncTheme()
+}
+
+function onSystemThemeChange(): void {
+  if (preference.value === 'auto') syncTheme()
+}
+
+export function initTheme(): void {
+  preference.value = readStoredPreference()
+  syncTheme()
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+  mediaQuery.addEventListener('change', onSystemThemeChange)
+}
+
+export function useTheme() {
+  onMounted(() => syncTheme())
+  return {
+    preference: readonly(preference),
+    resolvedTheme: readonly(resolvedTheme),
+    setPreference,
   }
-
-  return 'light'
-}
-
-export function applyTheme(theme: ThemeMode): void {
-  if (typeof document === 'undefined') {
-    return
-  }
-
-  document.documentElement.setAttribute('data-theme', theme)
-  localStorage.setItem(STORAGE_KEY, theme)
-}
-
-export function initTheme(): ThemeMode {
-  const theme = resolveInitialTheme()
-  applyTheme(theme)
-  return theme
-}
-
-export function toggleTheme(current: ThemeMode): ThemeMode {
-  const next: ThemeMode = current === 'dark' ? 'light' : 'dark'
-  applyTheme(next)
-  return next
 }

@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { ApiEnvelope, CAInfoResponse, CAProvisionersResponse } from '../types/api'
+import type { ApiEnvelope, CAInfoResponse, CAProvisionersResponse } from '@/types/api'
 
 interface RootCertResponse {
   pem: string

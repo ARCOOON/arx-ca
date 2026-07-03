@@ -1,7 +1,7 @@
 import { readonly, ref } from 'vue'
-import { fetchSettingsConfig } from '../api/config'
-import { fetchHealth } from '../api/health'
-import { useAuthStore } from '../store/auth'
+import { fetchSettingsConfig } from '@/api/config'
+import { fetchHealth } from '@/api/health'
+import { useAuthStore } from '@/store/auth'
 
 const LAST_SEEN_VERSION_KEY = 'arx_last_seen_version'
 
@@ -46,7 +46,7 @@ export function useUpdater() {
 
       localStorage.setItem(LAST_SEEN_VERSION_KEY, currentVersion)
     } catch {
-      // Drift detection is best-effort during bootstrap; ignore transient failures.
+      // Drift detection is best-effort during bootstrap.
     }
   }
 

@@ -4,7 +4,7 @@ import type {
   LoginRequest,
   LoginResponse,
   ServiceAccountResponse,
-} from '../types/api'
+} from '@/types/api'
 import { apiClient } from './client'
 
 export async function login(credentials: LoginRequest): Promise<LoginResponse> {
