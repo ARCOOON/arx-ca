@@ -18,7 +18,7 @@ Usage: $(basename "$0") [--user|--system]
             Directory: /opt/arx-ca
             Symlink:   /usr/local/bin/arx-ca
 
-If server.yaml or .pki/ remain in the install directory, the directory is retained.
+If server.toml or .pki/ remain in the install directory, the directory is retained.
 EOF
 }
 
@@ -79,7 +79,7 @@ main() {
   remove_if_exists "${INSTALL_DIR}/ui"
 
   local preserved=false
-  if [[ -f "${INSTALL_DIR}/server.yaml" ]]; then
+  if [[ -f "${INSTALL_DIR}/server.toml" ]]; then
     preserved=true
   fi
   if [[ -d "${INSTALL_DIR}/.pki" ]]; then
@@ -89,7 +89,7 @@ main() {
   if [[ "${preserved}" == true ]]; then
     echo ""
     echo "Preserved data in ${INSTALL_DIR}:"
-    [[ -f "${INSTALL_DIR}/server.yaml" ]] && echo "  - server.yaml"
+    [[ -f "${INSTALL_DIR}/server.toml" ]] && echo "  - server.toml"
     [[ -d "${INSTALL_DIR}/.pki" ]] && echo "  - .pki/"
     echo "Install directory retained: ${INSTALL_DIR}"
   elif [[ -d "${INSTALL_DIR}" ]]; then

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -24,8 +25,19 @@ func SetCLIServerURL(url string) error {
 
 	cfg := CLIConfig{LogLevel: DefaultCLIConfig().LogLevel}
 	if raw, err := os.ReadFile(path); err == nil {
-		if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		var data map[string]any
+		if err := yaml.Unmarshal(raw, &data); err != nil {
 			return fmt.Errorf("parse CLI config %s: %w", path, err)
+		}
+		dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+			TagName: "mapstructure",
+			Result:  &cfg,
+		})
+		if err != nil {
+			return fmt.Errorf("decode CLI config %s: %w", path, err)
+		}
+		if err := dec.Decode(data); err != nil {
+			return fmt.Errorf("decode CLI config %s: %w", path, err)
 		}
 	} else if !os.IsNotExist(err) {
 		return fmt.Errorf("read CLI config %s: %w", path, err)

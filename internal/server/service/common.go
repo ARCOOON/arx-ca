@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const configFileName = "server.yaml"
+const configFileName = "server.toml"
 
 func (o InstallOptions) resolvedInstallDir() (string, error) {
 	if dir := strings.TrimSpace(o.InstallDir); dir != "" {

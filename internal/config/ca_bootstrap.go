@@ -8,14 +8,14 @@ import (
 
 // CABootstrapConfig holds subject and key parameters used when generating a new PKI tree.
 type CABootstrapConfig struct {
-	RootCN         string `json:"root_cn" mapstructure:"root_cn" yaml:"root_cn"`
-	IntermediateCN string `json:"intermediate_cn" mapstructure:"intermediate_cn" yaml:"intermediate_cn"`
-	Organization   string `json:"organization" mapstructure:"organization" yaml:"organization"`
-	Country        string `json:"country" mapstructure:"country" yaml:"country"`
-	KeySize        int    `json:"key_size" mapstructure:"key_size" yaml:"key_size"`
+	RootCN         string `json:"root_cn" mapstructure:"root_cn" toml:"root_cn"`
+	IntermediateCN string `json:"intermediate_cn" mapstructure:"intermediate_cn" toml:"intermediate_cn"`
+	Organization   string `json:"organization" mapstructure:"organization" toml:"organization"`
+	Country        string `json:"country" mapstructure:"country" toml:"country"`
+	KeySize        int    `json:"key_size" mapstructure:"key_size" toml:"key_size"`
 }
 
-// CABootstrapFromMap parses a CABootstrap block from server.yaml keys (snake_case or PascalCase).
+// CABootstrapFromMap parses a CABootstrap block from server.toml keys (snake_case or PascalCase).
 func CABootstrapFromMap(raw map[string]any) CABootstrapConfig {
 	if len(raw) == 0 {
 		return CABootstrapConfig{}
@@ -56,7 +56,7 @@ func bootstrapInt(raw map[string]any, keys ...string) int {
 	return 0
 }
 
-// DefaultCABootstrapConfig returns safe defaults when CABootstrap is omitted from server.yaml.
+// DefaultCABootstrapConfig returns safe defaults when CABootstrap is omitted from server.toml.
 func DefaultCABootstrapConfig() CABootstrapConfig {
 	return CABootstrapConfig{
 		RootCN:         "Arx Root CA",

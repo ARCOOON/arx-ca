@@ -88,10 +88,10 @@ Remove-InstallPath -Directory $InstallDir -Target $PathTarget
 Sync-SessionPath
 
 $preserved = $false
-$serverYaml = Join-Path $InstallDir 'server.yaml'
+$serverToml = Join-Path $InstallDir 'server.toml'
 $pkiDir = Join-Path $InstallDir '.pki'
 
-if (Test-Path $serverYaml) {
+if (Test-Path $serverToml) {
     $preserved = $true
 }
 if (Test-Path $pkiDir) {
@@ -101,8 +101,8 @@ if (Test-Path $pkiDir) {
 if ($preserved) {
     Write-Host ''
     Write-Host "Preserved data in ${InstallDir}:"
-    if (Test-Path $serverYaml) {
-        Write-Host '  - server.yaml'
+    if (Test-Path $serverToml) {
+        Write-Host '  - server.toml'
     }
     if (Test-Path $pkiDir) {
         Write-Host '  - .pki/'

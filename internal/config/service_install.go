@@ -5,10 +5,10 @@ import (
 	"os"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/pelletier/go-toml/v2"
 )
 
-// ReadServerConfig loads server.yaml from the path resolved by configFlag.
+// ReadServerConfig loads server.toml from the path resolved by configFlag.
 // When the file does not exist, it returns found=false and a zero ServerConfig without error.
 func ReadServerConfig(configFlag string) (ServerConfig, bool, error) {
 	path, err := ResolveServerConfigPath(configFlag)
@@ -25,13 +25,13 @@ func ReadServerConfig(configFlag string) (ServerConfig, bool, error) {
 	}
 
 	var cfg ServerConfig
-	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+	if err := toml.Unmarshal(raw, &cfg); err != nil {
 		return ServerConfig{}, false, fmt.Errorf("parse server config %s: %w", path, err)
 	}
 	return cfg, true, nil
 }
 
-// ServiceInstallSettingsFromConfig returns service install fields from server.yaml when present.
+// ServiceInstallSettingsFromConfig returns service install fields from server.toml when present.
 func ServiceInstallSettingsFromConfig(configFlag string) (runAsUser, installDir string, err error) {
 	cfg, found, err := ReadServerConfig(configFlag)
 	if err != nil {

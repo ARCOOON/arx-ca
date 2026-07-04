@@ -38,7 +38,7 @@ type gitHubAsset struct {
 }
 
 // DownloadAndBootstrapWebUI fetches webui-dist.tar.gz from GitHub for the given release tag,
-// extracts it into the configured webui.ui_dir, and enables the WebUI block in server.yaml.
+// extracts it into the configured webui.ui_dir, and enables the WebUI block in server.toml.
 // When requestedVersion is empty, the release tag is derived from the running arx binary version.
 func DownloadAndBootstrapWebUI(configPath, requestedVersion string) error {
 	return downloadAndBootstrap(context.Background(), nil, os.Stdout, configPath, requestedVersion)
@@ -119,7 +119,7 @@ func downloadAndBootstrap(ctx context.Context, client *http.Client, out io.Write
 		return fmt.Errorf("update server configuration: %w", err)
 	}
 
-	fmt.Fprintln(out, "WebUI successfully enabled in server.yaml!")
+	fmt.Fprintln(out, "WebUI successfully enabled in server.toml!")
 	return nil
 }
 

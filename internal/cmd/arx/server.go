@@ -41,7 +41,7 @@ func newServerCmd() *cobra.Command {
 		},
 	}
 
-	server.PersistentFlags().StringVar(&serverConfigFlag, "config", "", "Path to server.yaml (default: server.yaml beside the executable)")
+	server.PersistentFlags().StringVar(&serverConfigFlag, "config", "", "Path to server.toml (default: server.toml beside the executable)")
 
 	server.AddCommand(
 		newServerStartCmd(),
@@ -72,7 +72,7 @@ func newServerConfigCmd() *cobra.Command {
 
 	init := &cobra.Command{
 		Use:   "init",
-		Short: "Generate a default server.yaml configuration file",
+		Short: "Generate a default server.toml configuration file",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			path, err := arxconfig.ResolveServerConfigPath(serverConfigFlag)
 			if err != nil {
@@ -102,7 +102,7 @@ func newServerServiceCmd() *cobra.Command {
 	svc := &cobra.Command{
 		Use:   "service",
 		Short: "Install or remove the Arx CA server daemon",
-		Long: `Self-install the arx-ca binary, bootstrap server.yaml, and register a daemon.
+		Long: `Self-install the arx-ca binary, bootstrap server.toml, and register a daemon.
 
 Linux: --system writes /etc/systemd/system/arx-ca.service (/opt/arx-ca by default).
        --user writes ~/.config/systemd/user/arx-ca.service ($HOME/.arx-ca by default).
@@ -117,8 +117,8 @@ When neither --user nor --system is set, user scope is used unless the process i
 	addServiceFlags := func(cmd *cobra.Command) {
 		cmd.Flags().BoolVar(&flagUser, "user", false, "Install for the current user (default when non-privileged)")
 		cmd.Flags().BoolVar(&flagSystem, "system", false, "Install system-wide (requires root on Linux or Administrator on Windows)")
-		cmd.Flags().StringVar(&runAsUser, "run-as-user", "", "POSIX account for --system on Linux (overrides server.yaml service.run_as_user)")
-		cmd.Flags().StringVar(&installDir, "install-dir", "", "Install root for binary and server.yaml (overrides server.yaml service.install_dir)")
+		cmd.Flags().StringVar(&runAsUser, "run-as-user", "", "POSIX account for --system on Linux (overrides server.toml service.run_as_user)")
+		cmd.Flags().StringVar(&installDir, "install-dir", "", "Install root for binary and server.toml (overrides server.toml service.install_dir)")
 	}
 
 	install := &cobra.Command{

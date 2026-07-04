@@ -318,5 +318,5 @@ func printInstallSuccess(scope, serviceName, binary, config, unitPath string) {
 	fmt.Printf("Unit:     %s\n", unitPath)
 	fmt.Printf("Binary:   %s\n", binary)
 	fmt.Printf("Config:   %s\n", config)
-	fmt.Println("Edit server.yaml (JWT secret, bootstrap password hash) before production use.")
+	fmt.Println("Edit server.toml (JWT secret, bootstrap password hash) before production use.")
 }

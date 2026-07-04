@@ -15,7 +15,7 @@ func PersistServerConfig(path string, cfg ServerConfig) error {
 	path = abs
 
 	cfg = normalizeServerConfig(cfg)
-	raw, err := marshalYAMLConfig(cfg)
+	raw, err := marshalTOMLConfig(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal server config: %w", err)
 	}

@@ -8,6 +8,8 @@ project_name: arx-ca
 before:
   hooks:
     - go mod download
+    - npm --prefix webui install
+    - npm --prefix webui run build
 
 builds:
   - id: arx-ca
@@ -32,7 +34,7 @@ builds:
     hooks:
       pre:
         - npm --prefix webui install
-        - npm --prefix webui run build
+        - sh -c 'test -f webui/dist/index.html || flock /tmp/arx-webui-build.lock npm --prefix webui run build'
 
   - id: arx-ca-cli
     main: ./cmd/arx-ca-cli
@@ -73,9 +75,6 @@ builds:
       - -s -w
       - -X main.Version={{.Tag}}
       - -X main.Commit={{.Commit}}
-    hooks:
-      pre:
-        - sh -c 'test -f webui/dist/index.html || (npm --prefix webui install && npm --prefix webui run build)'
 
 archives:
   - id: arx-ca

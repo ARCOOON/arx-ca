@@ -11,10 +11,18 @@
   },
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:3": {
-      "version": "latest"
+      "version": "latest",
+      "moby": false
     },
     "ghcr.io/devcontainers/features/node:1": {
       "version": "22"
+    },
+    "features": {
+      "ghcr.io/devcontainers/features/python:1": {
+        "version": "3.12",
+        "installTools": true,
+        "toolsToInstall": "ruff,flake8,autopep8,black,mypy,bandit,pipenv,virtualenv,pylint"
+      }
     }
   },
   "customizations": {

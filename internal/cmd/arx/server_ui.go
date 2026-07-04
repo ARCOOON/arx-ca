@@ -12,14 +12,14 @@ func newServerUICmd() *cobra.Command {
 	uiRoot := &cobra.Command{
 		Use:   "ui",
 		Short: "Manage the dedicated WebUI static server",
-		Long:  "Download release-matching WebUI assets from GitHub and enable the webui block in server.yaml.",
+		Long:  "Download release-matching WebUI assets from GitHub and enable the webui block in server.toml.",
 	}
 
 	download := &cobra.Command{
 		Use:   "download",
 		Short: "Download and install WebUI assets from GitHub",
 		Long: `Downloads webui-dist.tar.gz from an ARCOOON/arx-ca GitHub release, extracts static
-assets into webui.ui_dir, and sets webui.enabled to true in server.yaml.
+assets into webui.ui_dir, and sets webui.enabled to true in server.toml.
 
 By default the release tag matches the running arx binary version (or latest when built
 as v0.0.0-dev). Use --version to fetch a specific release tag instead (for example when

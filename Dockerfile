@@ -69,4 +69,4 @@ ENV ARX_WEBUI_ENABLED=true \
 HEALTHCHECK --interval=60s --timeout=10s --start-period=120s --retries=3 \
     CMD ["/app/docker-healthcheck.sh"]
 
-ENTRYPOINT ["/app/arx-ca", "server", "start", "--config", "/data/server.yaml"]
+ENTRYPOINT ["/app/arx-ca", "server", "start", "--config", "/data/server.toml"]

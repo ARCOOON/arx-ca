@@ -65,7 +65,7 @@ func HealServerConfig(configPath string, cfg *ServerConfig) error {
 		return nil
 	}
 
-	raw, err := marshalYAMLConfig(*cfg)
+	raw, err := marshalTOMLConfig(*cfg)
 	if err != nil {
 		return &ErrConfigHealPersist{Path: configPath, Err: err}
 	}
