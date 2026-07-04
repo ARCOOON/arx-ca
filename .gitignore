@@ -40,6 +40,7 @@ secrets/
 # IDE and editor
 .idea/
 .vscode/
+.cursor/arx-ca-memory.jsonl
 *.swp
 *.swo
 *~
