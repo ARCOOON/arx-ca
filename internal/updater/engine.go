@@ -9,17 +9,15 @@ import (
 	"time"
 
 	"github.com/ARCOOON/arx-ca/internal/config"
-	"github.com/ARCOOON/arx-ca/internal/db"
+	"github.com/ARCOOON/arx-ca/internal/events"
 	"github.com/ARCOOON/arx-ca/internal/logging"
-	"github.com/ARCOOON/arx-ca/internal/notifications"
 	"github.com/ARCOOON/arx-ca/internal/version"
 )
 
 // Engine polls GitHub releases on a schedule and notifies operators or auto-applies updates.
 type Engine struct {
 	cfg       config.UpdaterConfig
-	audit     *db.AuditStore
-	notify    *notifications.Dispatcher
+	events    *events.Manager
 	onRestart func()
 	client    *http.Client
 
@@ -28,17 +26,15 @@ type Engine struct {
 	lastAppliedVer  string
 }
 
-// NewEngine constructs a background updater bound to server configuration and notification hooks.
+// NewEngine constructs a background updater bound to server configuration and the event bus.
 func NewEngine(
 	cfg config.UpdaterConfig,
-	audit *db.AuditStore,
-	notify *notifications.Dispatcher,
+	eventManager *events.Manager,
 	onRestart func(),
 ) *Engine {
 	return &Engine{
 		cfg:       cfg,
-		audit:     audit,
-		notify:    notify,
+		events:    eventManager,
 		onRestart: onRestart,
 		client:    &http.Client{Timeout: requestTimeout},
 	}
@@ -139,9 +135,9 @@ func (e *Engine) notifyUpdateAvailable(log *slog.Logger, channel, current, remot
 		slog.String("message", message),
 	)
 
-	notifications.RecordSystemEvent(e.audit, e.notify, db.ActionSysUpdateAvailable, map[string]any{
+	events.EmitSystemEvent(e.events, events.EventSystemUpdateAvail, map[string]any{
 		"message":           message,
-		"channel":           channel,
+		events.KeyChannel:   channel,
 		"current_version":   normalizeTag(current),
 		"available_version": remoteTag,
 		"release_tag":       rawTag,
@@ -193,9 +189,9 @@ func (e *Engine) applyUpdate(ctx context.Context, log *slog.Logger, channel, cur
 		slog.String("new_version", remoteTag),
 	)
 
-	notifications.RecordSystemEvent(e.audit, e.notify, db.ActionSysUpdateApplied, map[string]any{
+	events.EmitSystemEvent(e.events, events.EventSystemUpdateApplied, map[string]any{
 		"message":          fmt.Sprintf("Updated arx-ca from %s to %s on channel %q", normalizeTag(current), remoteTag, channel),
-		"channel":          channel,
+		events.KeyChannel:  channel,
 		"previous_version": normalizeTag(current),
 		"new_version":      remoteTag,
 	})

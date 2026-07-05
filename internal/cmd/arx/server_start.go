@@ -21,9 +21,11 @@ import (
 	arxconfig "github.com/ARCOOON/arx-ca/internal/config"
 	"github.com/ARCOOON/arx-ca/internal/database"
 	auditdb "github.com/ARCOOON/arx-ca/internal/db"
+	"github.com/ARCOOON/arx-ca/internal/events"
 	"github.com/ARCOOON/arx-ca/internal/logging"
 	"github.com/ARCOOON/arx-ca/internal/notifications"
 	"github.com/ARCOOON/arx-ca/internal/repository"
+	arxruntime "github.com/ARCOOON/arx-ca/internal/runtime"
 	arxserver "github.com/ARCOOON/arx-ca/internal/server"
 	"github.com/ARCOOON/arx-ca/internal/telemetry"
 	"github.com/ARCOOON/arx-ca/internal/updater"
@@ -118,11 +120,23 @@ func runServer() error {
 	webhookDispatcher := notifications.NewDispatcher(webhookStore, notificationStore)
 	webhookHandler := handlers.NewWebhookHandler(webhookStore, webhookDispatcher)
 	notificationHandler := handlers.NewNotificationHandler(webhookDispatcher, notificationStore)
+	eventManager := events.NewManager()
+	events.RegisterBridges(eventManager, events.BridgeDeps{
+		AuditStore: auditStore,
+		Notifier:   webhookDispatcher,
+	})
+
+	apiFirewall := middleware.NewFirewall()
+	runtimeApplier := arxruntime.NewApplier(apiFirewall, eventManager)
+	if err := runtimeApplier.Apply(serverCfg); err != nil {
+		return fmt.Errorf("apply initial runtime configuration: %w", err)
+	}
+
 	configManager, err := arxconfig.NewManager()
 	if err != nil {
 		return fmt.Errorf("initialize configuration manager: %w", err)
 	}
-	configHandler := handlers.NewConfigHandler(configManager, auditStore, webhookDispatcher)
+	configHandler := handlers.NewConfigHandler(configManager, eventManager)
 	updaterHandler := handlers.NewUpdaterHandler()
 
 	adminPerm := func(perm auth.Permission, h http.Handler) http.Handler {
@@ -213,12 +227,11 @@ func runServer() error {
 		ca.LogNDESConnectors(pkiEngine.NDESRegistryRef())
 	}
 
-	notifications.RecordSystemEvent(auditStore, webhookDispatcher, auditdb.ActionSysStart, map[string]any{
-		"listen_addr": listenAddr,
-	})
+	events.EmitSystemEvent(eventManager, events.EventSystemStarted, events.PayloadSystemEvent(listenAddr, nil))
 
-	handler := middleware.Logger(mux)
-	handler = middleware.Audit(auditStore, webhookDispatcher, handler)
+	handler := middleware.FirewallMiddleware(apiFirewall, mux)
+	handler = middleware.Logger(handler)
+	handler = middleware.Audit(eventManager, handler)
 	corsOpts := middleware.CORSOptions{
 		AllowedOrigins:   serverCfg.WebUI.CORS.AllowedOrigins,
 		AllowedMethods:   serverCfg.WebUI.CORS.AllowedMethods,
@@ -277,7 +290,7 @@ func runServer() error {
 
 	restartCh := make(chan struct{}, 1)
 	if serverCfg.Updater.Enabled {
-		updateEngine := updater.NewEngine(serverCfg.Updater, auditStore, webhookDispatcher, func() {
+		updateEngine := updater.NewEngine(serverCfg.Updater, eventManager, func() {
 			select {
 			case restartCh <- struct{}{}:
 			default:

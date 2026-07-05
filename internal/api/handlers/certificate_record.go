@@ -20,6 +20,8 @@ func persistIssuedCertificate(
 	certPEM string,
 	privateKeyPEM string,
 	caPassword string,
+	alias string,
+	customID string,
 ) error {
 	if store == nil {
 		return nil
@@ -37,6 +39,8 @@ func persistIssuedCertificate(
 
 	rec := database.IssuedCertificate{
 		Serial:         cert.SerialNumber.String(),
+		Alias:          strings.TrimSpace(alias),
+		CustomID:       strings.TrimSpace(customID),
 		CommonName:     cert.Subject.CommonName,
 		Subject:        cert.Subject.String(),
 		CertificatePEM: pemData,
@@ -68,6 +72,8 @@ func certificateRecordFromStore(rec *database.IssuedCertificate, revoked bool) m
 
 	isRevoked := revoked || rec.Status == database.CertificateStatusRevoked
 	detail := models.CertificateRecordDetail{
+		Alias:            rec.Alias,
+		CustomID:         rec.CustomID,
 		Serial:           rec.Serial,
 		CommonName:       rec.CommonName,
 		Subject:          rec.Subject,
@@ -95,4 +101,26 @@ func certificateRecordFromStore(rec *database.IssuedCertificate, revoked bool) m
 	}
 
 	return detail
+}
+
+func enrichCertificateSummaries(ctx context.Context, store *database.CertificateStore, certs []models.CertificateSummary) {
+	if store == nil || len(certs) == 0 {
+		return
+	}
+	serials := make([]string, 0, len(certs))
+	for _, cert := range certs {
+		if serial := strings.TrimSpace(cert.Serial); serial != "" {
+			serials = append(serials, serial)
+		}
+	}
+	tracking, err := store.LookupTrackingBySerials(ctx, serials)
+	if err != nil || len(tracking) == 0 {
+		return
+	}
+	for i := range certs {
+		if meta, ok := tracking[certs[i].Serial]; ok {
+			certs[i].Alias = meta.Alias
+			certs[i].CustomID = meta.CustomID
+		}
+	}
 }

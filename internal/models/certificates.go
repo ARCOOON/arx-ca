@@ -7,6 +7,8 @@ import (
 
 // IssueCertificateRequest carries a PEM-encoded CSR to be signed by the intermediate CA.
 type IssueCertificateRequest struct {
+	Alias               string         `json:"alias,omitempty"`
+	CustomID            string         `json:"custom_id,omitempty"`
 	CSR                 string         `json:"csr"`
 	TTL                 string         `json:"ttl,omitempty"`
 	TemplateID          string         `json:"template_id,omitempty"`
@@ -24,6 +26,8 @@ type IssueCertificateRequest struct {
 
 // AutoCertificateRequest describes a certificate to be generated and signed in one step.
 type AutoCertificateRequest struct {
+	Alias      string         `json:"alias,omitempty"`
+	CustomID   string         `json:"custom_id,omitempty"`
 	CommonName string         `json:"common_name"`
 	DNSSANs    []string       `json:"dns_sans,omitempty"`
 	IPSANs     []string       `json:"ip_sans,omitempty"`
@@ -67,6 +71,8 @@ type AutoCertificateResponse struct {
 
 // GenerateCertificateRequest describes a native key generation and issuance request.
 type GenerateCertificateRequest struct {
+	Alias               string   `json:"alias,omitempty"`
+	CustomID            string   `json:"custom_id,omitempty"`
 	CommonName          string   `json:"common_name"`
 	SANs                []string `json:"sans,omitempty"`
 	TTL                 string   `json:"ttl,omitempty"`
@@ -93,6 +99,8 @@ type GenerateCertificateResponse struct {
 
 // CertificateRecordDetail is a persisted issued certificate with operator metadata.
 type CertificateRecordDetail struct {
+	Alias            string   `json:"alias,omitempty"`
+	CustomID         string   `json:"custom_id,omitempty"`
 	Serial           string   `json:"serial"`
 	CommonName       string   `json:"common_name"`
 	Subject          string   `json:"subject"`
@@ -123,6 +131,8 @@ type RevokeCertificateResponse struct {
 
 // CertificateSummary is a compact view of an issued certificate stored in the CA database.
 type CertificateSummary struct {
+	Alias         string    `json:"alias,omitempty"`
+	CustomID      string    `json:"custom_id,omitempty"`
 	Serial        string    `json:"serial"`
 	Subject       string    `json:"subject"`
 	DNSNames      []string  `json:"dns_names,omitempty"`

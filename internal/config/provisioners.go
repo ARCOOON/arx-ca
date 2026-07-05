@@ -75,6 +75,12 @@ func (p CAProvisionersConfig) SCEPEnabled() bool {
 	return boolOrDefault(p.SCEP.Enabled, boolPtr(false))
 }
 
+// ApplyProvisionerRuntimeEnv synchronizes provisioner feature flags to process environment variables.
+func ApplyProvisionerRuntimeEnv(prov CAProvisionersConfig) error {
+	applyProvisionerRuntimeEnv(prov)
+	return nil
+}
+
 func applyProvisionerRuntimeEnv(prov CAProvisionersConfig) {
 	if !prov.ACMEEnabled() {
 		setEnvIfEmpty("CA_API_ACME_DISABLED", "true")

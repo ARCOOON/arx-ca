@@ -95,12 +95,19 @@ type CABootstrapConfigView struct {
 	KeySize        int    `json:"key_size"`
 }
 
+// FirewallConfigView mirrors API firewall allowlist settings.
+type FirewallConfigView struct {
+	Enabled   bool     `json:"enabled"`
+	Allowlist []string `json:"allowlist"`
+}
+
 // SecurityConfigView mirrors authentication settings with secrets redacted.
 type SecurityConfigView struct {
-	JWTSecret            string `json:"jwt_secret"`
-	TokenExpirationHours int    `json:"token_expiration_hours"`
-	CookieSameSite       string `json:"cookie_same_site"`
-	CookieSecure         *bool  `json:"cookie_secure"`
+	JWTSecret            string             `json:"jwt_secret"`
+	TokenExpirationHours int                `json:"token_expiration_hours"`
+	CookieSameSite       string             `json:"cookie_same_site"`
+	CookieSecure         *bool              `json:"cookie_secure"`
+	Firewall             FirewallConfigView `json:"firewall"`
 }
 
 // BootstrapView mirrors bootstrap admin credentials with secrets redacted.
@@ -224,6 +231,10 @@ func NewSettingsConfigResponse(cfg config.ServerConfig) SettingsConfigResponse {
 			TokenExpirationHours: cfg.Security.TokenExpirationHours,
 			CookieSameSite:       cfg.Security.CookieSameSite,
 			CookieSecure:         cfg.Security.CookieSecure,
+			Firewall: FirewallConfigView{
+				Enabled:   cfg.Security.Firewall.Enabled,
+				Allowlist: append([]string(nil), cfg.Security.Firewall.Allowlist...),
+			},
 		},
 		Bootstrap: BootstrapView{
 			AdminEmail:    cfg.Bootstrap.AdminEmail,

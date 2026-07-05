@@ -306,6 +306,18 @@ func mergeSecurityConfig(current, patch SecurityConfig) SecurityConfig {
 	if patch.CookieSecure != nil {
 		out.CookieSecure = patch.CookieSecure
 	}
+	out.Firewall = mergeFirewallConfig(current.Firewall, patch.Firewall)
+	return out
+}
+
+func mergeFirewallConfig(current, patch FirewallConfig) FirewallConfig {
+	out := current
+	if patch.Enabled != current.Enabled {
+		out.Enabled = patch.Enabled
+	}
+	if len(patch.Allowlist) > 0 {
+		out.Allowlist = append([]string(nil), patch.Allowlist...)
+	}
 	return out
 }
 

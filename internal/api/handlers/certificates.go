@@ -72,7 +72,7 @@ func (h *CertificateHandler) Issue() http.Handler {
 			return
 		}
 
-		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM, "", ""); err != nil {
+		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM, "", "", req.Alias, req.CustomID); err != nil {
 			return
 		}
 
@@ -265,8 +265,20 @@ func (h *CertificateHandler) Generate() http.Handler {
 			return
 		}
 
-		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM, resp.PrivateKeyPEM, h.engine.CAPassword()); err != nil {
+		if err := h.persistCertificate(r.Context(), w, resp.CertificatePEM, resp.PrivateKeyPEM, h.engine.CAPassword(), req.Alias, req.CustomID); err != nil {
 			return
+		}
+
+		recordCertAudit(r, db.ActionCertIssueNative, "", resp.CertificatePEM)
+		if ac := auditFromRequest(r); ac != nil {
+			ac.PutMetadata("serial", resp.Serial)
+			ac.PutMetadata("common_name", req.CommonName)
+			if alias := strings.TrimSpace(req.Alias); alias != "" {
+				ac.PutMetadata("alias", alias)
+			}
+			if customID := strings.TrimSpace(req.CustomID); customID != "" {
+				ac.PutMetadata("custom_id", customID)
+			}
 		}
 
 		if wantsCertificateBundleZip(r) {
@@ -279,12 +291,6 @@ func (h *CertificateHandler) Generate() http.Handler {
 				api.WriteError(w, http.StatusInternalServerError, "failed to build certificate bundle")
 			}
 			return
-		}
-
-		recordCertAudit(r, db.ActionCertIssueNative, "", resp.CertificatePEM)
-		if ac := auditFromRequest(r); ac != nil {
-			ac.PutMetadata("serial", resp.Serial)
-			ac.PutMetadata("common_name", req.CommonName)
 		}
 
 		api.WriteSuccess(w, http.StatusCreated, resp)
@@ -438,7 +444,7 @@ func (h *CertificateHandler) GetBySerial() http.Handler {
 	})
 }
 
-func (h *CertificateHandler) persistCertificate(ctx context.Context, w http.ResponseWriter, certPEM, privateKeyPEM, caPassword string) error {
+func (h *CertificateHandler) persistCertificate(ctx context.Context, w http.ResponseWriter, certPEM, privateKeyPEM, caPassword, alias, customID string) error {
 	if h.certStore == nil {
 		return nil
 	}
@@ -450,7 +456,7 @@ func (h *CertificateHandler) persistCertificate(ctx context.Context, w http.Resp
 		return err
 	}
 
-	if err := persistIssuedCertificate(ctx, h.certStore, requestorID, certPEM, privateKeyPEM, caPassword); err != nil {
+	if err := persistIssuedCertificate(ctx, h.certStore, requestorID, certPEM, privateKeyPEM, caPassword, alias, customID); err != nil {
 		log.Printf("certificates: persist record: %v", err)
 		api.WriteError(w, http.StatusInternalServerError, "failed to archive issued certificate")
 		return err
@@ -570,6 +576,8 @@ func (h *CertificateHandler) List() http.Handler {
 			api.WriteError(w, status, message)
 			return
 		}
+
+		enrichCertificateSummaries(r.Context(), h.certStore, resp.Certificates)
 
 		api.WriteSuccess(w, http.StatusOK, resp)
 	})

@@ -19,6 +19,8 @@ const (
 // only as AES-256-GCM encrypted bytes when escrow is enabled for native generation.
 type IssuedCertificate struct {
 	Serial              string
+	Alias               string
+	CustomID            string
 	CommonName          string
 	Subject             string
 	CertificatePEM      string
@@ -36,6 +38,8 @@ type IssuedCertificate struct {
 const issuedCertificatesDDL = `
 CREATE TABLE IF NOT EXISTS issued_certificates (
 	serial TEXT PRIMARY KEY,
+	alias TEXT NOT NULL DEFAULT '',
+	custom_id TEXT NOT NULL DEFAULT '',
 	common_name TEXT NOT NULL,
 	subject TEXT NOT NULL,
 	certificate_pem TEXT NOT NULL,
@@ -94,9 +98,11 @@ func (s *CertificateStore) Save(ctx context.Context, rec IssuedCertificate) erro
 	}
 
 	query := `INSERT INTO issued_certificates (
-		serial, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at, status
-	) VALUES (` + s.placeholders(10) + `)
+		serial, alias, custom_id, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at, status
+	) VALUES (` + s.placeholders(12) + `)
 	ON CONFLICT(serial) DO UPDATE SET
+		alias = excluded.alias,
+		custom_id = excluded.custom_id,
 		common_name = excluded.common_name,
 		subject = excluded.subject,
 		certificate_pem = excluded.certificate_pem,
@@ -117,6 +123,8 @@ func (s *CertificateStore) Save(ctx context.Context, rec IssuedCertificate) erro
 
 	_, err := s.db.ExecContext(ctx, query,
 		serial,
+		strings.TrimSpace(rec.Alias),
+		strings.TrimSpace(rec.CustomID),
 		strings.TrimSpace(rec.CommonName),
 		strings.TrimSpace(rec.Subject),
 		pem,
@@ -144,7 +152,7 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 		return nil, fmt.Errorf("serial is required")
 	}
 
-	query := `SELECT serial, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at, status, revoked_at, reason_code, revocation_reason
+	query := `SELECT serial, alias, custom_id, common_name, subject, certificate_pem, encrypted_private_key, not_before, not_after, requestor_id, created_at, status, revoked_at, reason_code, revocation_reason
 		FROM issued_certificates WHERE serial = ` + s.placeholder(1)
 
 	var (
@@ -160,6 +168,8 @@ func (s *CertificateStore) GetBySerial(ctx context.Context, serial string) (*Iss
 
 	err := s.db.QueryRowContext(ctx, query, serial).Scan(
 		&rec.Serial,
+		&rec.Alias,
+		&rec.CustomID,
 		&rec.CommonName,
 		&rec.Subject,
 		&rec.CertificatePEM,
@@ -255,6 +265,58 @@ func (s *CertificateStore) MarkRevoked(ctx context.Context, serial string, reaso
 		return fmt.Errorf("certificate record not found")
 	}
 	return nil
+}
+
+// CertificateTracking holds UI-only metadata stored in the application archive.
+type CertificateTracking struct {
+	Alias    string
+	CustomID string
+}
+
+// LookupTrackingBySerials returns alias/custom_id pairs for the given serial numbers.
+func (s *CertificateStore) LookupTrackingBySerials(ctx context.Context, serials []string) (map[string]CertificateTracking, error) {
+	result := make(map[string]CertificateTracking)
+	if s == nil || s.db == nil || len(serials) == 0 {
+		return result, nil
+	}
+
+	filtered := make([]string, 0, len(serials))
+	for _, serial := range serials {
+		if serial = strings.TrimSpace(serial); serial != "" {
+			filtered = append(filtered, serial)
+		}
+	}
+	if len(filtered) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(filtered))
+	args := make([]any, len(filtered))
+	for i, serial := range filtered {
+		placeholders[i] = s.placeholder(i + 1)
+		args[i] = serial
+	}
+
+	query := `SELECT serial, alias, custom_id FROM issued_certificates WHERE serial IN (` +
+		strings.Join(placeholders, ", ") + `)`
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("lookup certificate tracking: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var serial, alias, customID string
+		if err := rows.Scan(&serial, &alias, &customID); err != nil {
+			return nil, fmt.Errorf("scan certificate tracking: %w", err)
+		}
+		result[serial] = CertificateTracking{Alias: alias, CustomID: customID}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate certificate tracking: %w", err)
+	}
+	return result, nil
 }
 
 func (s *CertificateStore) placeholder(n int) string {

@@ -71,12 +71,19 @@ func (c CAConfig) MaxTTLDuration() (time.Duration, error) {
 	return d, nil
 }
 
+// FirewallConfig holds IP/CIDR allowlist settings for the API firewall middleware.
+type FirewallConfig struct {
+	Enabled   bool     `json:"enabled" mapstructure:"enabled" toml:"enabled"`
+	Allowlist []string `json:"allowlist" mapstructure:"allowlist" toml:"allowlist"`
+}
+
 // SecurityConfig holds authentication and token policy for the API.
 type SecurityConfig struct {
-	JWTSecret            string `json:"jwt_secret" mapstructure:"jwt_secret" toml:"jwt_secret"`
-	TokenExpirationHours int    `json:"token_expiration_hours" mapstructure:"token_expiration_hours" toml:"token_expiration_hours"`
-	CookieSameSite       string `json:"cookie_same_site" mapstructure:"cookie_same_site" toml:"cookie_same_site"`
-	CookieSecure         *bool  `json:"cookie_secure" mapstructure:"cookie_secure" toml:"cookie_secure"`
+	JWTSecret            string         `json:"jwt_secret" mapstructure:"jwt_secret" toml:"jwt_secret"`
+	TokenExpirationHours int            `json:"token_expiration_hours" mapstructure:"token_expiration_hours" toml:"token_expiration_hours"`
+	CookieSameSite       string         `json:"cookie_same_site" mapstructure:"cookie_same_site" toml:"cookie_same_site"`
+	CookieSecure         *bool          `json:"cookie_secure" mapstructure:"cookie_secure" toml:"cookie_secure"`
+	Firewall             FirewallConfig `json:"firewall" mapstructure:"firewall" toml:"firewall"`
 }
 
 // Bootstrap holds first-run admin credentials seeded when the users table is empty.

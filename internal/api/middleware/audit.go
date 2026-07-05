@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
-	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -15,8 +14,7 @@ import (
 
 	"github.com/ARCOOON/arx-ca/internal/auth"
 	"github.com/ARCOOON/arx-ca/internal/db"
-	"github.com/ARCOOON/arx-ca/internal/logging"
-	"github.com/ARCOOON/arx-ca/internal/notifications"
+	"github.com/ARCOOON/arx-ca/internal/events"
 	"github.com/google/uuid"
 )
 
@@ -115,10 +113,10 @@ func (r *auditResponseRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-// Audit returns middleware that captures network context, injects AuditContext, and persists immutable audit logs.
-func Audit(store *db.AuditStore, notifier *notifications.Dispatcher, next http.Handler) http.Handler {
+// Audit returns middleware that captures network context, injects AuditContext, and emits audit events.
+func Audit(eventManager *events.Manager, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if store == nil {
+		if eventManager == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -167,20 +165,66 @@ func Audit(store *db.AuditStore, notifier *notifications.Dispatcher, next http.H
 
 		resolveActor(r.Context(), auditCtx, &entry)
 
-		insertCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := store.Insert(insertCtx, entry); err != nil {
-			logging.Logger().Error("audit: persist log entry",
-				slog.Any("error", err),
-				slog.String("request_id", requestID),
-				slog.String("action", action),
-			)
-			return
-		}
-		if notifier != nil {
-			notifier.NotifyAudit(entry)
-		}
+		eventManager.Trigger(events.EventAuditRecorded, events.PayloadAuditRecorded(
+			entry.Action,
+			entry.RequestID,
+			entry.IPAddress,
+			entry.HTTPMethod,
+			entry.Endpoint,
+			entry.StatusCode,
+			entry.ActorType,
+			entry.ActorID,
+			entry.ActorRoles,
+			entry.Provisioner,
+			entry.Fingerprint,
+			cloneMetadata(auditCtx.Metadata),
+		))
+		emitCertificateEvent(eventManager, action, auditCtx)
 	})
+}
+
+func emitCertificateEvent(eventManager *events.Manager, action string, auditCtx *AuditContext) {
+	if eventManager == nil || auditCtx == nil {
+		return
+	}
+
+	var eventName string
+	switch action {
+	case db.ActionCertIssueNative:
+		eventName = events.EventCertIssuedNative
+	case db.ActionCertIssueCSR:
+		eventName = events.EventCertIssuedCSR
+	case "CERT_AUTO":
+		eventName = events.EventCertIssuedAuto
+	case db.ActionCertRevoke:
+		eventName = events.EventCertRevoked
+	case db.ActionCertRenew:
+		eventName = events.EventCertRenewed
+	case "CERT_REKEY":
+		eventName = events.EventCertRekeyed
+	default:
+		return
+	}
+
+	serial := stringMetadata(auditCtx.Metadata, "serial")
+	alias := stringMetadata(auditCtx.Metadata, "alias")
+	customID := stringMetadata(auditCtx.Metadata, "custom_id")
+	eventManager.Trigger(eventName, events.PayloadCertIssued(serial, alias, customID, auditCtx.Provisioner, auditCtx.Fingerprint))
+}
+
+func stringMetadata(metadata map[string]any, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, ok := metadata[key]
+	if !ok || value == nil {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(text)
 }
 
 func shouldSkipAudit(path string) bool {

@@ -9,9 +9,8 @@ import (
 
 	"github.com/ARCOOON/arx-ca/internal/api"
 	"github.com/ARCOOON/arx-ca/internal/config"
-	"github.com/ARCOOON/arx-ca/internal/db"
+	"github.com/ARCOOON/arx-ca/internal/events"
 	"github.com/ARCOOON/arx-ca/internal/models"
-	"github.com/ARCOOON/arx-ca/internal/notifications"
 )
 
 const maxSettingsConfigBody = 256 * 1024
@@ -19,16 +18,14 @@ const maxSettingsConfigBody = 256 * 1024
 // ConfigHandler serves server.toml settings management endpoints.
 type ConfigHandler struct {
 	manager *config.Manager
-	audit   *db.AuditStore
-	notify  *notifications.Dispatcher
+	events  *events.Manager
 }
 
 // NewConfigHandler constructs a ConfigHandler.
-func NewConfigHandler(manager *config.Manager, audit *db.AuditStore, notify *notifications.Dispatcher) *ConfigHandler {
+func NewConfigHandler(manager *config.Manager, eventManager *events.Manager) *ConfigHandler {
 	return &ConfigHandler{
 		manager: manager,
-		audit:   audit,
-		notify:  notify,
+		events:  eventManager,
 	}
 }
 
@@ -91,13 +88,13 @@ func (h *ConfigHandler) Put() http.Handler {
 			return
 		}
 
-		notifications.RecordSystemEvent(h.audit, h.notify, db.ActionSysConfigUpdate, map[string]any{
-			"path":    h.manager.Path(),
-			"source":  "webui",
-			"method":  r.Method,
-			"actor":   actorFromRequest(r),
-			"updated": changedSections(patch),
-		})
+		sections := changedSections(patch)
+		events.EmitSystemEvent(h.events, events.EventSystemConfigUpdated, events.PayloadConfigUpdated(
+			h.manager.Path(),
+			"webui",
+			actorFromRequest(r),
+			sections,
+		))
 
 		api.WriteSuccess(w, http.StatusOK, models.NewSettingsConfigResponse(updated))
 	})
