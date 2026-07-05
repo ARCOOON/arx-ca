@@ -18,7 +18,10 @@
         "mcp-server-sqlite",
         "--db",
         "${workspaceFolder}/data/arx.db"
-      ]
+      ],
+      "env": {
+        "SQLITE_DB_PATH": "${workspaceFolder}/data/arx.db"
+      }
     },
     "memory": {
       "command": "npx",
