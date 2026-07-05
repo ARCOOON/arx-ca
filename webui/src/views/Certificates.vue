@@ -3,14 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import type { CertificateLifecycleStatus } from '../utils/certificate'
 import { downloadCRL, fetchCRLStatus, type CRLStatus } from '../api/crl'
 import {
-  autoCertificate,
-  downloadCertificateBundleFile,
   fetchCertificateBySerial,
   fetchCertificatePrivateKey,
   fetchCertificateStats,
+  downloadCertificateBundleFile,
   generateCertificateBundleFile,
   issueCertificate,
-  issueCertificateWithToken,
   lintCertificate,
   listCertificates,
   rekeyCertificate,
@@ -25,20 +23,20 @@ import type {
   LintCertificateResponse,
 } from '../types/api'
 import DataTable from '../components/ui/DataTable.vue'
+import Button from '../components/ui/Button.vue'
 import FlatToggle from '../components/ui/FlatToggle.vue'
 import Modal from '../components/ui/Modal.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import TagInput from '../components/ui/TagInput.vue'
 import { extractCommonName, resolveCertificateStatus } from '../utils/certificate'
-import { downloadCertificateBundleZip, downloadTextFile } from '../utils/download'
+import { downloadTextFile } from '../utils/download'
 import { extractApiError } from '../utils/errors'
 import { formatDateTime } from '../utils/format'
 import { useAuthStore } from '../store/auth'
 import { usePreferences } from '../composables/usePreferences'
 import Filter from 'lucide-vue-next/dist/esm/icons/list-filter.js'
 import ChevronDown from 'lucide-vue-next/dist/esm/icons/chevron-down.js'
-
-type IssueMode = 'csr' | 'native' | 'token' | 'auto'
+import MoreVertical from 'lucide-vue-next/dist/esm/icons/ellipsis-vertical.js'
 
 const REVOKE_REASONS: Array<{ label: string; code: number }> = [
   { label: 'Unspecified', code: 0 },
@@ -81,8 +79,14 @@ const crlLoading = ref(true)
 const crlDownloading = ref(false)
 const crlError = ref('')
 
+const issueAlias = ref('')
+const issueCustomId = ref('')
+const csrImportModalOpen = ref(false)
+const listActionsOpen = ref(false)
+const csrImportAlias = ref('')
+const csrImportCustomId = ref('')
+
 const issueModalOpen = ref(false)
-const issueMode = ref<IssueMode>('csr')
 const csrInput = ref('')
 const ttlInput = ref('720h')
 const isIssuing = ref(false)
@@ -111,15 +115,6 @@ const nativeClientAuth = ref(false)
 const nativeDigitalSignature = ref(true)
 const nativeKeyEncipherment = ref(true)
 
-const tokenInput = ref('')
-const tokenCsrInput = ref('')
-const tokenTtlInput = ref('720h')
-
-const autoCommonName = ref('')
-const autoDnsSans = ref<string[]>([])
-const autoIpSans = ref<string[]>([])
-const autoTtlInput = ref('720h')
-
 const revokeModalOpen = ref(false)
 const revokeTargetSerial = ref('')
 const revokeReasonCode = ref(0)
@@ -142,6 +137,7 @@ const lintError = ref('')
 const lintResult = ref<LintCertificateResponse | null>(null)
 
 const tableColumns = [
+  { key: 'alias', label: 'Alias' },
   { key: 'serial', label: 'Serial Number', cellClass: 'font-mono text-[11px]' },
   { key: 'commonName', label: 'Common Name' },
   { key: 'not_before', label: 'Issue Date' },
@@ -153,6 +149,7 @@ const tableColumns = [
 const tableRows = computed(() =>
   certificates.value.map((certificate) => ({
     ...certificate,
+    alias: certificate.alias || '—',
     commonName: extractCommonName(certificate.subject),
     status: resolveCertificateStatus(certificate),
   })),
@@ -286,8 +283,24 @@ onMounted(() => {
 function openIssueModal(): void {
   issueError.value = ''
   issueSuccess.value = ''
-  issueMode.value = 'csr'
   issueModalOpen.value = true
+}
+
+function openCsrImportModal(): void {
+  listActionsOpen.value = false
+  csrInput.value = ''
+  csrImportAlias.value = ''
+  csrImportCustomId.value = ''
+  issueError.value = ''
+  issueSuccess.value = ''
+  csrImportModalOpen.value = true
+}
+
+function closeCsrImportModal(): void {
+  if (isIssuing.value) {
+    return
+  }
+  csrImportModalOpen.value = false
 }
 
 function closeIssueModal(): void {
@@ -295,12 +308,6 @@ function closeIssueModal(): void {
     return
   }
   issueModalOpen.value = false
-}
-
-function setIssueMode(mode: IssueMode): void {
-  issueMode.value = mode
-  issueError.value = ''
-  issueSuccess.value = ''
 }
 
 async function submitIssueCSR(): Promise<void> {
@@ -319,9 +326,12 @@ async function submitIssueCSR(): Promise<void> {
     const result = await issueCertificate({
       csr,
       ttl: ttlInput.value.trim() || undefined,
+      alias: csrImportAlias.value.trim() || undefined,
+      custom_id: csrImportCustomId.value.trim() || undefined,
     })
     issueSuccess.value = `Issued certificate serial ${result.serial}`
     csrInput.value = ''
+    csrImportModalOpen.value = false
     await refreshCertificateView()
   } catch (error) {
     issueError.value = extractApiError(error, 'Failed to issue certificate')
@@ -350,6 +360,8 @@ async function submitNativeGeneration(): Promise<void> {
 
   try {
     const request = {
+      alias: issueAlias.value.trim() || undefined,
+      custom_id: issueCustomId.value.trim() || undefined,
       common_name: commonName,
       sans: nativeSansTags.value.length > 0 ? nativeSansTags.value : undefined,
       ttl: ttl || undefined,
@@ -370,6 +382,8 @@ async function submitNativeGeneration(): Promise<void> {
 
     issueSuccess.value =
       'Certificate bundle downloaded. The private key is also escrowed on the server (AES-256-GCM encrypted) for SuperAdmin retrieval.'
+    issueAlias.value = ''
+    issueCustomId.value = ''
     nativeCommonName.value = ''
     nativeSansTags.value = []
     nativeOrganization.value = ''
@@ -391,19 +405,7 @@ async function submitNativeGeneration(): Promise<void> {
 }
 
 async function submitIssue(): Promise<void> {
-  if (issueMode.value === 'native') {
-    await submitNativeGeneration()
-    return
-  }
-  if (issueMode.value === 'token') {
-    await submitIssueWithToken()
-    return
-  }
-  if (issueMode.value === 'auto') {
-    await submitAutoIssue()
-    return
-  }
-  await submitIssueCSR()
+  await submitNativeGeneration()
 }
 
 async function openCertificateDetails(serial: string): Promise<void> {
@@ -655,77 +657,6 @@ async function submitRekey(): Promise<void> {
   }
 }
 
-async function submitIssueWithToken(): Promise<void> {
-  issueError.value = ''
-  issueSuccess.value = ''
-
-  const token = tokenInput.value.trim()
-  const csr = tokenCsrInput.value.trim()
-
-  if (!token) {
-    issueError.value = 'Provisioner token is required.'
-    return
-  }
-  if (!csr.includes('BEGIN CERTIFICATE REQUEST')) {
-    issueError.value = 'Paste a PEM-encoded certificate signing request.'
-    return
-  }
-
-  isIssuing.value = true
-
-  try {
-    const result = await issueCertificateWithToken({
-      token,
-      csr,
-      ttl: tokenTtlInput.value.trim() || undefined,
-    })
-    issueSuccess.value = `Issued certificate serial ${result.serial}`
-    tokenCsrInput.value = ''
-    await refreshCertificateView()
-  } catch (error) {
-    issueError.value = extractApiError(error, 'Failed to issue certificate with token')
-  } finally {
-    isIssuing.value = false
-  }
-}
-
-async function submitAutoIssue(): Promise<void> {
-  issueError.value = ''
-  issueSuccess.value = ''
-
-  const commonName = autoCommonName.value.trim()
-  if (!commonName) {
-    issueError.value = 'Common Name is required.'
-    return
-  }
-
-  isIssuing.value = true
-
-  try {
-    const result = await autoCertificate({
-      common_name: commonName,
-      dns_sans: autoDnsSans.value.length > 0 ? autoDnsSans.value : undefined,
-      ip_sans: autoIpSans.value.length > 0 ? autoIpSans.value : undefined,
-      ttl: autoTtlInput.value.trim() || undefined,
-    })
-
-    const safeName = commonName.replace(/[^a-zA-Z0-9._-]+/g, '_')
-    downloadCertificateBundleZip(`${safeName}-auto.zip`, {
-      certificatePem: result.certificate_pem,
-      privateKeyPem: result.private_key_pem,
-    })
-
-    issueSuccess.value = `Auto-issued certificate serial ${result.serial}. Bundle downloaded.`
-    autoCommonName.value = ''
-    autoDnsSans.value = []
-    autoIpSans.value = []
-    await refreshCertificateView()
-  } catch (error) {
-    issueError.value = extractApiError(error, 'Failed to auto-issue certificate')
-  } finally {
-    isIssuing.value = false
-  }
-}
 </script>
 
 <template>
@@ -776,22 +707,12 @@ async function submitAutoIssue(): Promise<void> {
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button
-            type="button"
-            class="ui-btn-secondary"
-            :disabled="crlDownloading"
-            @click="handleDownloadCRL('pem')"
-          >
+          <Button variant="secondary" :disabled="crlDownloading" @click="handleDownloadCRL('pem')">
             {{ crlDownloading ? 'Downloading…' : 'Download CRL (PEM)' }}
-          </button>
-          <button
-            type="button"
-            class="ui-btn-secondary"
-            :disabled="crlDownloading"
-            @click="handleDownloadCRL('der')"
-          >
+          </Button>
+          <Button variant="secondary" :disabled="crlDownloading" @click="handleDownloadCRL('der')">
             Download CRL (DER)
-          </button>
+          </Button>
         </div>
       </div>
     </section>
@@ -803,7 +724,29 @@ async function submitAutoIssue(): Promise<void> {
           <code class="ui-code">GET /api/v1/certificates</code>
         </p>
       </div>
-      <button type="button" class="ui-btn-primary" @click="openIssueModal">Issue Certificate</button>
+      <div class="relative">
+        <Button
+          variant="secondary"
+          aria-haspopup="menu"
+          :aria-expanded="listActionsOpen"
+          @click="listActionsOpen = !listActionsOpen"
+        >
+          <MoreVertical class="h-4 w-4" aria-hidden="true" />
+          Actions
+        </Button>
+        <div
+          v-if="listActionsOpen"
+          class="absolute right-0 z-20 mt-1 min-w-[12rem] rounded-[var(--radius-surface)] border border-[var(--border-subtle)] bg-[var(--bg-elevated)] py-1"
+          role="menu"
+        >
+          <button type="button" class="block w-full px-3 py-2 text-left text-xs ui-text-secondary hover:bg-[var(--bg-surface)]" role="menuitem" @click="openIssueModal(); listActionsOpen = false">
+            Issue Certificate
+          </button>
+          <button type="button" class="block w-full px-3 py-2 text-left text-xs ui-text-secondary hover:bg-[var(--bg-surface)]" role="menuitem" @click="openCsrImportModal">
+            Import CSR
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-if="errorMessage" class="ui-alert-error" role="alert">
@@ -874,17 +817,12 @@ async function submitAutoIssue(): Promise<void> {
         </div>
 
         <div class="flex flex-wrap items-end gap-2 sm:col-span-3">
-          <button type="button" class="ui-btn-primary" :disabled="isLoading" @click="applyFilters">
+          <Button :disabled="isLoading" @click="applyFilters">
             Apply Search
-          </button>
-          <button
-            type="button"
-            class="ui-btn-secondary"
-            :disabled="isLoading || !hasActiveFilters"
-            @click="clearFilters"
-          >
+          </Button>
+          <Button variant="secondary" :disabled="isLoading || !hasActiveFilters" @click="clearFilters">
             Clear
-          </button>
+          </Button>
         </div>
       </div>
     </section>
@@ -907,17 +845,17 @@ async function submitAutoIssue(): Promise<void> {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex flex-wrap gap-1">
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openCertificateDetails(row.serial)">
+          <Button variant="secondary" size="sm" @click="openCertificateDetails(row.serial)">
             Details
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="row.status !== 'revoked'"
-            type="button"
-            class="ui-btn-danger text-[11px]"
+            variant="danger"
+            size="sm"
             @click="openRevokeModal(row.serial)"
           >
             Revoke
-          </button>
+          </Button>
         </div>
       </template>
     </DataTable>
@@ -929,6 +867,14 @@ async function submitAutoIssue(): Promise<void> {
       </div>
       <template v-else-if="certificateDetail">
         <dl class="grid gap-3 text-xs sm:grid-cols-2">
+          <div>
+            <dt class="font-medium ui-text-muted">Alias</dt>
+            <dd class="mt-0.5 ui-text-primary">{{ certificateDetail.alias || '—' }}</dd>
+          </div>
+          <div>
+            <dt class="font-medium ui-text-muted">Custom ID</dt>
+            <dd class="mt-0.5 font-mono ui-text-primary">{{ certificateDetail.custom_id || '—' }}</dd>
+          </div>
           <div>
             <dt class="font-medium ui-text-muted">Serial</dt>
             <dd class="mt-0.5 font-mono ui-text-primary">{{ certificateDetail.serial }}</dd>
@@ -1089,64 +1035,8 @@ async function submitAutoIssue(): Promise<void> {
     </Modal>
 
     <Modal :open="issueModalOpen" title="Issue Certificate" wide @close="closeIssueModal">
-      <div class="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'csr' }"
-          @click="setIssueMode('csr')"
-        >
-          Paste CSR
-        </button>
-        <button
-          type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'native' }"
-          @click="setIssueMode('native')"
-        >
-          Native Generation
-        </button>
-        <button
-          type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'token' }"
-          @click="setIssueMode('token')"
-        >
-          Provisioner Token
-        </button>
-        <button
-          v-if="isSuperAdmin"
-          type="button"
-          class="ui-tab"
-          :class="{ 'ui-tab-active': issueMode === 'auto' }"
-          @click="setIssueMode('auto')"
-        >
-          Auto Issue
-        </button>
-      </div>
-
-      <p v-if="issueMode === 'csr'" class="mb-3 text-xs ui-text-muted">
-        Signs a PEM CSR<template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/issue</code></template>.
-        The private key never leaves your client.
-      </p>
-      <p v-else-if="issueMode === 'token'" class="mb-3 text-xs ui-text-muted">
-        Signs a CSR using a provisioner token<template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/issue-with-token</code></template>.
-      </p>
-      <p v-else-if="issueMode === 'auto'" class="mb-3 text-xs ui-text-muted">
-        Generates key pair and certificate in one step<template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/auto</code></template>
-        (SuperAdmin).
-      </p>
-      <p v-else class="mb-3 text-xs ui-text-muted">
-        Generates a key pair and signs the certificate<template v-if="showApiHints">
-          via
-          <code class="ui-code">POST /api/v1/certificates/generate</code></template>.
-        The private key is returned immediately in a ZIP bundle (`certificate.crt`, `certificate.pem`, `private.key`) and escrowed encrypted at rest for SuperAdmin retrieval. Download the CA chain separately from the Dashboard.
+      <p class="mb-3 text-xs ui-text-muted">
+        Generate a key pair and sign the certificate. Private key material is returned in a ZIP bundle and escrowed encrypted at rest.
       </p>
 
       <div v-if="issueError" class="mb-3 ui-alert-error text-xs" role="alert">
@@ -1157,27 +1047,22 @@ async function submitAutoIssue(): Promise<void> {
         {{ issueSuccess }}
       </div>
 
-      <template v-if="issueMode === 'csr'">
-        <label class="block text-xs font-medium ui-text-secondary" for="csr-input">
-          Certificate signing request
-        </label>
-        <textarea
-          id="csr-input"
-          v-model="csrInput"
-          rows="10"
-          class="ui-textarea mt-1.5"
-          placeholder="-----BEGIN CERTIFICATE REQUEST-----&#10;...&#10;-----END CERTIFICATE REQUEST-----"
-          spellcheck="false"
-        />
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs font-medium ui-text-secondary" for="issue-alias">
+            Alias (optional)
+          </label>
+          <input id="issue-alias" v-model="issueAlias" type="text" class="ui-input mt-1.5" placeholder="web-server-01" autocomplete="off" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium ui-text-secondary" for="issue-custom-id">
+            Custom ID (optional)
+          </label>
+          <input id="issue-custom-id" v-model="issueCustomId" type="text" class="ui-input mt-1.5 font-mono text-[11px]" placeholder="asset-uuid" autocomplete="off" />
+        </div>
+      </div>
 
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="ttl-input">
-          TTL (optional)
-        </label>
-        <input id="ttl-input" v-model="ttlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
-      </template>
-
-      <template v-else-if="issueMode === 'native'">
-        <label class="block text-xs font-medium ui-text-secondary" for="cn-input">Common Name</label>
+      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="cn-input">Common Name</label>
         <input
           id="cn-input"
           v-model="nativeCommonName"
@@ -1294,62 +1179,55 @@ async function submitAutoIssue(): Promise<void> {
             />
           </div>
         </div>
-      </template>
-
-      <template v-else-if="issueMode === 'token'">
-        <label class="block text-xs font-medium ui-text-secondary" for="token-input">Provisioner token</label>
-        <input id="token-input" v-model="tokenInput" type="text" class="ui-input mt-1.5 font-mono text-[11px]" autocomplete="off" />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="token-csr-input">
-          Certificate signing request
-        </label>
-        <textarea
-          id="token-csr-input"
-          v-model="tokenCsrInput"
-          rows="10"
-          class="ui-textarea mt-1.5"
-          placeholder="-----BEGIN CERTIFICATE REQUEST-----"
-          spellcheck="false"
-        />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="token-ttl-input">
-          TTL (optional)
-        </label>
-        <input id="token-ttl-input" v-model="tokenTtlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
-      </template>
-
-      <template v-else-if="issueMode === 'auto'">
-        <label class="block text-xs font-medium ui-text-secondary" for="auto-cn-input">Common Name</label>
-        <input id="auto-cn-input" v-model="autoCommonName" type="text" class="ui-input mt-1.5" autocomplete="off" />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary">DNS SANs</label>
-        <TagInput v-model="autoDnsSans" placeholder="api.example.com" />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary">IP SANs</label>
-        <TagInput v-model="autoIpSans" placeholder="10.0.0.1" />
-
-        <label class="mt-3 block text-xs font-medium ui-text-secondary" for="auto-ttl-input">
-          TTL (optional)
-        </label>
-        <input id="auto-ttl-input" v-model="autoTtlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
-      </template>
 
       <template #footer>
         <button type="button" class="ui-btn-secondary" :disabled="isIssuing" @click="closeIssueModal">
           Cancel
         </button>
         <button type="button" class="ui-btn-primary" :disabled="isIssuing" @click="submitIssue">
-          {{
-            isIssuing
-              ? 'Working…'
-              : issueMode === 'csr'
-                ? 'Sign CSR'
-                : issueMode === 'token'
-                  ? 'Sign with Token'
-                  : issueMode === 'auto'
-                    ? 'Auto Issue & Download'
-                    : 'Generate & Download'
-          }}
+          {{ isIssuing ? 'Working…' : 'Generate & Download' }}
+        </button>
+      </template>
+    </Modal>
+
+    <Modal :open="csrImportModalOpen" title="Import CSR" wide @close="closeCsrImportModal">
+      <p class="mb-3 text-xs ui-text-muted">
+        Sign an existing certificate signing request. The private key never leaves your client.
+      </p>
+
+      <div v-if="issueError" class="mb-3 ui-alert-error text-xs" role="alert">{{ issueError }}</div>
+      <div v-if="issueSuccess" class="mb-3 ui-alert-success" role="status">{{ issueSuccess }}</div>
+
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label class="block text-xs font-medium ui-text-secondary" for="csr-alias">Alias (optional)</label>
+          <input id="csr-alias" v-model="csrImportAlias" type="text" class="ui-input mt-1.5" autocomplete="off" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium ui-text-secondary" for="csr-custom-id">Custom ID (optional)</label>
+          <input id="csr-custom-id" v-model="csrImportCustomId" type="text" class="ui-input mt-1.5 font-mono text-[11px]" autocomplete="off" />
+        </div>
+      </div>
+
+      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="csr-input">
+        Certificate signing request
+      </label>
+      <textarea
+        id="csr-input"
+        v-model="csrInput"
+        rows="10"
+        class="ui-textarea mt-1.5"
+        placeholder="-----BEGIN CERTIFICATE REQUEST-----"
+        spellcheck="false"
+      />
+
+      <label class="mt-3 block text-xs font-medium ui-text-secondary" for="ttl-input">TTL (optional)</label>
+      <input id="ttl-input" v-model="ttlInput" type="text" class="ui-input mt-1.5 max-w-xs" placeholder="720h" />
+
+      <template #footer>
+        <button type="button" class="ui-btn-secondary" :disabled="isIssuing" @click="closeCsrImportModal">Cancel</button>
+        <button type="button" class="ui-btn-primary" :disabled="isIssuing" @click="submitIssueCSR">
+          {{ isIssuing ? 'Working…' : 'Sign CSR' }}
         </button>
       </template>
     </Modal>

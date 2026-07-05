@@ -3,7 +3,9 @@ import { onMounted, ref } from 'vue'
 import { createTemplate, listTemplates } from '../api/templates'
 import type { CertificateTemplate } from '../types/api'
 import { usePreferences } from '../composables/usePreferences'
+import Button from '@/components/ui/Button.vue'
 import DataTable from '../components/ui/DataTable.vue'
+import Input from '@/components/ui/Input.vue'
 import Modal from '../components/ui/Modal.vue'
 import { extractApiError } from '../utils/errors'
 import { formatDateTime } from '../utils/format'
@@ -120,7 +122,7 @@ async function submitCreate(): Promise<void> {
         Issuance templates from
         <code class="ui-code">GET /api/v1/templates</code>
       </p>
-      <button type="button" class="ui-btn-primary" @click="openCreateModal">Create Template</button>
+      <Button @click="openCreateModal">Create Template</Button>
     </div>
 
     <div v-if="errorMessage" class="ui-alert-error" role="alert">
@@ -138,9 +140,9 @@ async function submitCreate(): Promise<void> {
         {{ formatDateTime(row.created_at) }}
       </template>
       <template #cell-actions="{ row }">
-        <button type="button" class="ui-btn-secondary text-[11px]" @click="openTemplateDetail(row)">
+        <Button variant="secondary" size="sm" class="text-[11px]" @click="openTemplateDetail(row)">
           View
-        </button>
+        </Button>
       </template>
     </DataTable>
 
@@ -158,16 +160,15 @@ async function submitCreate(): Promise<void> {
       </div>
 
       <label class="block text-xs font-medium ui-text-secondary" for="template-name">Name</label>
-      <input id="template-name" v-model="createName" type="text" class="ui-input mt-1.5" autocomplete="off" />
+      <Input id="template-name" v-model="createName" class="mt-1.5" autocomplete="off" />
 
       <label class="mt-3 block text-xs font-medium ui-text-secondary" for="template-desc">
         Description (optional)
       </label>
-      <input
+      <Input
         id="template-desc"
         v-model="createDescription"
-        type="text"
-        class="ui-input mt-1.5"
+        class="mt-1.5"
         autocomplete="off"
       />
 
@@ -184,12 +185,12 @@ async function submitCreate(): Promise<void> {
       />
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="isCreating" @click="closeCreateModal">
+        <Button variant="secondary" :disabled="isCreating" @click="closeCreateModal">
           Cancel
-        </button>
-        <button type="button" class="ui-btn-primary" :disabled="isCreating" @click="submitCreate">
+        </Button>
+        <Button :disabled="isCreating" @click="submitCreate">
           {{ isCreating ? 'Creating…' : 'Create Template' }}
-        </button>
+        </Button>
       </template>
     </Modal>
 
@@ -224,7 +225,7 @@ async function submitCreate(): Promise<void> {
       </template>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" @click="closeTemplateDetail">Close</button>
+        <Button variant="secondary" @click="closeTemplateDetail">Close</Button>
       </template>
     </Modal>
   </div>

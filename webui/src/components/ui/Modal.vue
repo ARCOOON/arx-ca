@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue'
 import X from 'lucide-vue-next/dist/esm/icons/x.js'
+import Button from './Button.vue'
 
 const props = defineProps<{
   open: boolean
@@ -51,14 +52,9 @@ onUnmounted(() => {
       >
         <header class="ui-border-b flex shrink-0 items-center justify-between gap-3 px-4 py-3">
           <h2 class="min-w-0 text-sm font-semibold ui-text-primary">{{ title }}</h2>
-          <button
-            type="button"
-            class="ui-btn-secondary inline-flex h-7 w-7 shrink-0 items-center justify-center p-0"
-            aria-label="Close dialog"
-            @click="emit('close')"
-          >
+          <Button variant="secondary" size="icon" aria-label="Close dialog" @click="emit('close')">
             <X class="h-4 w-4" aria-hidden="true" />
-          </button>
+          </Button>
         </header>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4">

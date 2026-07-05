@@ -17,6 +17,8 @@ export interface LoginResponse {
 
 export interface CertificateSummary {
   serial: string
+  alias?: string
+  custom_id?: string
   subject: string
   dns_names?: string[]
   ip_addresses?: string[]
@@ -33,6 +35,8 @@ export interface ListCertificatesResponse {
 }
 
 export interface IssueCertificateRequest {
+  alias?: string
+  custom_id?: string
   csr: string
   ttl?: string
   template_id?: string
@@ -57,6 +61,8 @@ export interface IssueCertificateResponse {
 export type KeyAlgorithm = 'RSA2048' | 'ECDSA256'
 
 export interface GenerateCertificateRequest {
+  alias?: string
+  custom_id?: string
   common_name: string
   sans?: string[]
   ttl?: string
@@ -82,6 +88,8 @@ export interface GenerateCertificateResponse {
 
 export interface CertificateRecordDetail {
   serial: string
+  alias?: string
+  custom_id?: string
   common_name: string
   subject: string
   dns_names?: string[]

@@ -3,7 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { createAcmeEabKey, fetchAcmeStatus } from '../api/acme'
 import type { AcmeEabKeyResponse, AcmeStatus } from '../types/api'
 import { usePreferences } from '../composables/usePreferences'
+import Button from '@/components/ui/Button.vue'
 import FlatToggle from '../components/ui/FlatToggle.vue'
+import Input from '@/components/ui/Input.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import { copyToClipboard } from '../utils/clipboard'
 import { extractApiError } from '../utils/errors'
@@ -177,10 +179,10 @@ function dismissEabResult(): void {
               </div>
             </dl>
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="ui-btn-primary" @click="copyHmacKey">
+              <Button @click="copyHmacKey">
                 {{ eabCopied ? 'Copied' : 'Copy HMAC Key' }}
-              </button>
-              <button type="button" class="ui-btn-secondary" @click="dismissEabResult">Dismiss</button>
+              </Button>
+              <Button variant="secondary" @click="dismissEabResult">Dismiss</Button>
             </div>
           </div>
 
@@ -189,11 +191,10 @@ function dismissEabResult(): void {
               <label class="block text-xs font-medium ui-text-secondary" for="eab-provisioner">
                 Provisioner (optional)
               </label>
-              <input
+              <Input
                 id="eab-provisioner"
                 v-model="eabProvisioner"
-                type="text"
-                class="ui-input mt-1.5"
+                class="mt-1.5"
                 placeholder="acme"
                 autocomplete="off"
               />
@@ -202,24 +203,18 @@ function dismissEabResult(): void {
               <label class="block text-xs font-medium ui-text-secondary" for="eab-reference">
                 Reference (optional)
               </label>
-              <input
+              <Input
                 id="eab-reference"
                 v-model="eabReference"
-                type="text"
-                class="ui-input mt-1.5"
+                class="mt-1.5"
                 placeholder="customer-123"
                 autocomplete="off"
               />
             </div>
           </div>
-          <button
-            type="button"
-            class="ui-btn-primary"
-            :disabled="eabGenerating || !status.enabled"
-            @click="submitEabGeneration"
-          >
+          <Button :disabled="eabGenerating || !status.enabled" @click="submitEabGeneration">
             {{ eabGenerating ? 'Generating…' : 'Generate EAB Key' }}
-          </button>
+          </Button>
           <p v-if="!status.enabled" class="text-xs ui-text-muted">
             ACME must be enabled in ca.json before EAB keys can be issued.
           </p>

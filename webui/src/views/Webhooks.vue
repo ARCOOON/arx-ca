@@ -9,7 +9,9 @@ import {
   updateWebhook,
 } from '../api/webhooks'
 import type { WebhookEventOption, WebhookResponse } from '../types/api'
+import Button from '@/components/ui/Button.vue'
 import DataTable from '../components/ui/DataTable.vue'
+import Input from '@/components/ui/Input.vue'
 import Modal from '../components/ui/Modal.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import { usePreferences } from '../composables/usePreferences'
@@ -253,7 +255,7 @@ function eventSummary(events: string[]): string {
           <code class="ui-code">GET /api/v1/webhooks</code></template>
         — Discord, Slack, Gotify, and custom HTTP receivers.
       </p>
-      <button type="button" class="ui-btn-primary" @click="openCreateModal">Add Webhook</button>
+      <Button @click="openCreateModal">Add Webhook</Button>
     </div>
 
     <div v-if="errorMessage" class="ui-alert-error" role="alert">
@@ -278,9 +280,9 @@ function eventSummary(events: string[]): string {
       </template>
       <template #cell-actions="{ row }">
         <div class="flex flex-wrap gap-1.5">
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openEditModal(row)">Edit</button>
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="runTestFromRow(row)">Test</button>
-          <button type="button" class="ui-btn-secondary text-[11px]" @click="openDeleteConfirm(row)">Delete</button>
+          <Button variant="secondary" size="sm" class="text-[11px]" @click="openEditModal(row)">Edit</Button>
+          <Button variant="secondary" size="sm" class="text-[11px]" @click="runTestFromRow(row)">Test</Button>
+          <Button variant="secondary" size="sm" class="text-[11px]" @click="openDeleteConfirm(row)">Delete</Button>
         </div>
       </template>
     </DataTable>
@@ -299,15 +301,15 @@ function eventSummary(events: string[]): string {
       <div class="grid gap-3 sm:grid-cols-2">
         <div>
           <label class="block text-xs font-medium ui-text-secondary" for="webhook-name">Name</label>
-          <input id="webhook-name" v-model="editorName" type="text" class="ui-input mt-1.5" autocomplete="off" />
+          <Input id="webhook-name" v-model="editorName" class="mt-1.5" autocomplete="off" />
         </div>
         <div>
           <label class="block text-xs font-medium ui-text-secondary" for="webhook-url">URL endpoint</label>
-          <input
+          <Input
             id="webhook-url"
             v-model="editorURL"
             type="url"
-            class="ui-input mt-1.5 font-mono text-[11px]"
+            class="mt-1.5 font-mono text-[11px]"
             placeholder="https://discord.com/api/webhooks/..."
             autocomplete="off"
           />
@@ -318,11 +320,11 @@ function eventSummary(events: string[]): string {
         <label class="block text-xs font-medium ui-text-secondary" for="webhook-secret">
           Secret token (optional)
         </label>
-        <input
+        <Input
           id="webhook-secret"
           v-model="editorSecret"
           type="password"
-          class="ui-input mt-1.5 font-mono text-[11px]"
+          class="mt-1.5 font-mono text-[11px]"
           :placeholder="editorMode === 'edit' ? 'Leave blank to keep existing secret' : 'HMAC signing key'"
           autocomplete="new-password"
         />
@@ -371,23 +373,22 @@ function eventSummary(events: string[]): string {
 
       <template #footer>
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <button
+          <Button
             v-if="editorMode === 'edit'"
-            type="button"
-            class="ui-btn-secondary"
+            variant="secondary"
             :disabled="editorSaving || editorTesting"
             @click="runTestFromEditor"
           >
             {{ editorTesting ? 'Testing…' : 'Test Connection' }}
-          </button>
+          </Button>
           <div v-else />
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-secondary" :disabled="editorSaving" @click="closeEditor">
+            <Button variant="secondary" :disabled="editorSaving" @click="closeEditor">
               Cancel
-            </button>
-            <button type="button" class="ui-btn-primary" :disabled="editorSaving" @click="submitEditor">
+            </Button>
+            <Button :disabled="editorSaving" @click="submitEditor">
               {{ editorSaving ? 'Saving…' : editorMode === 'create' ? 'Create Webhook' : 'Save Changes' }}
-            </button>
+            </Button>
           </div>
         </div>
       </template>
@@ -405,12 +406,12 @@ function eventSummary(events: string[]): string {
       </p>
       <template #footer>
         <div class="flex justify-end gap-2">
-          <button type="button" class="ui-btn-secondary" :disabled="deleteInProgress" @click="closeDeleteConfirm">
+          <Button variant="secondary" :disabled="deleteInProgress" @click="closeDeleteConfirm">
             Cancel
-          </button>
-          <button type="button" class="ui-btn-primary" :disabled="deleteInProgress" @click="confirmDelete">
+          </Button>
+          <Button :disabled="deleteInProgress" @click="confirmDelete">
             {{ deleteInProgress ? 'Deleting…' : 'Delete' }}
-          </button>
+          </Button>
         </div>
       </template>
     </Modal>

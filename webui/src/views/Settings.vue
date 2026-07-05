@@ -13,6 +13,8 @@ import { useAuthStore } from '../store/auth'
 import { copyToClipboard } from '../utils/clipboard'
 import { downloadTextFile } from '../utils/download'
 import { extractApiError } from '../utils/errors'
+import ConfigEditor from '../components/ConfigEditor.vue'
+import Button from '../components/ui/Button.vue'
 import { formatBytes } from '../utils/format'
 
 const authStore = useAuthStore()
@@ -82,7 +84,7 @@ const updateActionOptions = [
   },
 ] as const
 
-const publicListUrl = computed(() => `${appOrigin}${apiBaseUrl}/public/certificates`)
+const publicListUrl = computed(() => `${apiBaseUrl}/public/certificates`)
 
 onMounted(async () => {
   isLoading.value = true
@@ -256,6 +258,8 @@ function dismissServiceAccountResult(): void {
       {{ errorMessage }}
     </div>
 
+    <ConfigEditor v-if="canManageSettings" :can-edit="canManageSettings" />
+
     <section class="ui-surface-muted">
       <header class="ui-border-b px-4 py-2.5">
         <h2 class="text-sm font-semibold ui-text-primary">Session</h2>
@@ -330,17 +334,12 @@ function dismissServiceAccountResult(): void {
         <p class="mt-0.5 text-xs ui-text-muted">Public PEM downloads for trust store configuration.</p>
       </header>
       <div class="flex flex-wrap gap-2 px-4 py-3">
-        <button type="button" class="ui-btn-secondary" :disabled="rootDownloading" @click="downloadRootCert">
+        <Button variant="secondary" :disabled="rootDownloading" @click="downloadRootCert">
           {{ rootDownloading ? 'Downloading…' : 'Download Root CA (.pem)' }}
-        </button>
-        <button
-          type="button"
-          class="ui-btn-secondary"
-          :disabled="intermediateDownloading"
-          @click="downloadIntermediateCert"
-        >
+        </Button>
+        <Button variant="secondary" :disabled="intermediateDownloading" @click="downloadIntermediateCert">
           {{ intermediateDownloading ? 'Downloading…' : 'Download Intermediate CA (.pem)' }}
-        </button>
+        </Button>
       </div>
       <p v-if="certDownloadError" class="px-4 pb-3 text-xs" style="color: var(--danger-text)" role="alert">
         {{ certDownloadError }}
@@ -410,10 +409,10 @@ function dismissServiceAccountResult(): void {
             </div>
           </dl>
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-primary" @click="copyApiKey">
+            <Button @click="copyApiKey">
               {{ saCopied ? 'Copied' : 'Copy API Key' }}
-            </button>
-            <button type="button" class="ui-btn-secondary" @click="dismissServiceAccountResult">Dismiss</button>
+            </Button>
+            <Button variant="secondary" @click="dismissServiceAccountResult">Dismiss</Button>
           </div>
         </div>
 
@@ -440,9 +439,9 @@ function dismissServiceAccountResult(): void {
             </datalist>
           </div>
         </div>
-        <button type="button" class="ui-btn-primary" :disabled="saCreating" @click="submitServiceAccount">
+        <Button :disabled="saCreating" @click="submitServiceAccount">
           {{ saCreating ? 'Creating…' : 'Create Service Account' }}
-        </button>
+        </Button>
       </div>
     </section>
 
@@ -567,14 +566,9 @@ function dismissServiceAccountResult(): void {
       </div>
 
       <div class="ui-border-t px-4 py-3">
-        <button
-          type="button"
-          class="ui-btn-primary"
-          :disabled="updaterLoading || updaterSaving"
-          @click="saveUpdaterSettings"
-        >
+        <Button :disabled="updaterLoading || updaterSaving" @click="saveUpdaterSettings">
           {{ updaterSaving ? 'Saving…' : updaterLoading ? 'Loading…' : 'Save Auto-Updater Settings' }}
-        </button>
+        </Button>
       </div>
     </section>
 
@@ -656,9 +650,9 @@ function dismissServiceAccountResult(): void {
       </div>
 
       <div class="ui-border-t px-4 py-3">
-        <button type="button" class="ui-btn-secondary" @click="persistSidebarPreference">
+        <Button variant="secondary" @click="persistSidebarPreference">
           Save sidebar preference
-        </button>
+        </Button>
       </div>
     </section>
   </div>

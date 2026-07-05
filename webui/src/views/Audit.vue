@@ -2,7 +2,9 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { listAuditLogs } from '../api/audit'
 import type { AuditLogEntry } from '../types/api'
+import Button from '@/components/ui/Button.vue'
 import DataTable from '../components/ui/DataTable.vue'
+import Input from '@/components/ui/Input.vue'
 import Pagination from '../components/Pagination.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import { extractApiError } from '../utils/errors'
@@ -216,9 +218,9 @@ onMounted(() => {
       </header>
 
       <div class="ui-border-b px-4 py-3">
-        <button
-          type="button"
-          class="flex w-full items-center gap-2 text-left text-xs font-medium ui-text-secondary"
+        <Button
+          variant="ghost"
+          class="flex h-auto w-full items-center gap-2 p-0 text-left text-xs font-medium ui-text-secondary hover:bg-transparent"
           :aria-expanded="filtersOpen"
           @click="filtersOpen = !filtersOpen"
         >
@@ -230,7 +232,7 @@ onMounted(() => {
             :class="{ 'rotate-180': filtersOpen }"
             aria-hidden="true"
           />
-        </button>
+        </Button>
 
         <div
           v-show="filtersOpen"
@@ -252,11 +254,10 @@ onMounted(() => {
             <label class="block text-xs font-medium ui-text-secondary" for="audit-filter-actor">
               Actor
             </label>
-            <input
+            <Input
               id="audit-filter-actor"
               v-model="draftActor"
-              type="text"
-              class="ui-input mt-1.5 w-full"
+              class="mt-1.5 w-full"
               placeholder="User ID or type"
               autocomplete="off"
               @keydown.enter.prevent="applyFilters"
@@ -267,11 +268,10 @@ onMounted(() => {
             <label class="block text-xs font-medium ui-text-secondary" for="audit-filter-ip">
               IP
             </label>
-            <input
+            <Input
               id="audit-filter-ip"
               v-model="draftIP"
-              type="text"
-              class="ui-input mt-1.5 w-full"
+              class="mt-1.5 w-full"
               placeholder="203.0.113.10"
               autocomplete="off"
               @keydown.enter.prevent="applyFilters"
@@ -279,17 +279,16 @@ onMounted(() => {
           </div>
 
           <div class="flex flex-wrap items-end gap-2 sm:col-span-3">
-            <button type="button" class="ui-btn-primary" :disabled="isLoading" @click="applyFilters">
+            <Button :disabled="isLoading" @click="applyFilters">
               Apply Search
-            </button>
-            <button
-              type="button"
-              class="ui-btn-secondary"
+            </Button>
+            <Button
+              variant="secondary"
               :disabled="isLoading || !hasActiveFilters"
               @click="clearFilters"
             >
               Clear
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -302,16 +301,17 @@ onMounted(() => {
         empty-message="No audit events match the current filters."
       >
         <template #cell-expand="{ row }">
-          <button
-            type="button"
-            class="ui-btn-secondary inline-flex h-7 w-7 items-center justify-center p-0"
+          <Button
+            variant="secondary"
+            size="icon"
+            class="h-7 w-7"
             :aria-expanded="isExpanded(row.id)"
             :aria-label="isExpanded(row.id) ? 'Collapse details' : 'Expand details'"
             @click="toggleExpanded(row.id)"
           >
             <ChevronDown v-if="isExpanded(row.id)" class="h-4 w-4" aria-hidden="true" />
             <ChevronRight v-else class="h-4 w-4" aria-hidden="true" />
-          </button>
+          </Button>
         </template>
 
         <template #cell-timestamp="{ row }">

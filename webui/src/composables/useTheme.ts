@@ -1,37 +1,65 @@
-export type ThemeMode = 'light' | 'dark'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 
-const STORAGE_KEY = 'arx_theme'
+export type ThemePreference = 'light' | 'dark' | 'auto'
 
-export function resolveInitialTheme(): ThemeMode {
-  if (typeof window === 'undefined') {
-    return 'light'
-  }
+const STORAGE_KEY = 'arx_theme_preference'
 
+const preference = ref<ThemePreference>('auto')
+const resolved = ref<'light' | 'dark'>('light')
+
+let mediaQuery: MediaQueryList | null = null
+
+function readStoredPreference(): ThemePreference {
   const stored = localStorage.getItem(STORAGE_KEY)
-  if (stored === 'light' || stored === 'dark') {
+  if (stored === 'light' || stored === 'dark' || stored === 'auto') {
     return stored
   }
-
-  return 'light'
+  const legacy = localStorage.getItem('arx_theme')
+  if (legacy === 'light' || legacy === 'dark') {
+    return legacy
+  }
+  return 'auto'
 }
 
-export function applyTheme(theme: ThemeMode): void {
-  if (typeof document === 'undefined') {
-    return
+function resolveTheme(pref: ThemePreference): 'light' | 'dark' {
+  if (pref === 'light' || pref === 'dark') {
+    return pref
+  }
+  return mediaQuery?.matches ? 'dark' : 'light'
+}
+
+export function applyTheme(theme: 'light' | 'dark') {
+  resolved.value = theme
+  document.documentElement.setAttribute('data-theme', theme)
+}
+
+function syncFromPreference() {
+  applyTheme(resolveTheme(preference.value))
+}
+
+export function useTheme() {
+  function setPreference(next: ThemePreference) {
+    preference.value = next
+    localStorage.setItem(STORAGE_KEY, next)
+    syncFromPreference()
   }
 
-  document.documentElement.setAttribute('data-theme', theme)
-  localStorage.setItem(STORAGE_KEY, theme)
-}
+  onMounted(() => {
+    preference.value = readStoredPreference()
+    mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    syncFromPreference()
+    mediaQuery.addEventListener('change', syncFromPreference)
+  })
 
-export function initTheme(): ThemeMode {
-  const theme = resolveInitialTheme()
-  applyTheme(theme)
-  return theme
-}
+  onUnmounted(() => {
+    mediaQuery?.removeEventListener('change', syncFromPreference)
+  })
 
-export function toggleTheme(current: ThemeMode): ThemeMode {
-  const next: ThemeMode = current === 'dark' ? 'light' : 'dark'
-  applyTheme(next)
-  return next
+  watch(preference, syncFromPreference)
+
+  return {
+    preference,
+    resolved,
+    setPreference,
+  }
 }

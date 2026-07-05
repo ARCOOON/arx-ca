@@ -8,9 +8,10 @@ import Moon from 'lucide-vue-next/dist/esm/icons/moon.js'
 import Sun from 'lucide-vue-next/dist/esm/icons/sun.js'
 import UserRound from 'lucide-vue-next/dist/esm/icons/user-round.js'
 import NotificationDrawer from '../NotificationDrawer.vue'
+import Button from '../ui/Button.vue'
 import { useNotifications } from '../../composables/useNotifications'
+import { useTheme } from '../../composables/useTheme'
 import { useAuthStore } from '../../store/auth'
-import { applyTheme, resolveInitialTheme, type ThemeMode, toggleTheme } from '../../composables/useTheme'
 
 const emit = defineEmits<{
   logout: []
@@ -20,7 +21,7 @@ const emit = defineEmits<{
 const route = useRoute()
 const authStore = useAuthStore()
 const { unreadCount } = useNotifications()
-const theme = ref<ThemeMode>(resolveInitialTheme())
+const { resolved, setPreference } = useTheme()
 const drawerOpen = ref(false)
 
 const pageTitle = computed(() => {
@@ -40,7 +41,7 @@ const roleLabel = computed(() => {
   return 'Administrator'
 })
 
-const isDark = computed(() => theme.value === 'dark')
+const isDark = computed(() => resolved.value === 'dark')
 
 const badgeLabel = computed(() => {
   const count = unreadCount.value
@@ -51,17 +52,15 @@ const badgeLabel = computed(() => {
 })
 
 function onThemeToggle(): void {
-  theme.value = toggleTheme(theme.value)
+  setPreference(resolved.value === 'dark' ? 'light' : 'dark')
 }
 
 function setLightTheme(): void {
-  theme.value = 'light'
-  applyTheme('light')
+  setPreference('light')
 }
 
 function setDarkTheme(): void {
-  theme.value = 'dark'
-  applyTheme('dark')
+  setPreference('dark')
 }
 
 function toggleDrawer(): void {
@@ -76,14 +75,15 @@ function closeDrawer(): void {
 <template>
   <header class="ui-border-b ui-chrome-bar flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-5">
     <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-      <button
-        type="button"
-        class="ui-btn-secondary inline-flex h-8 w-8 shrink-0 items-center justify-center p-0 md:hidden"
+      <Button
+        variant="secondary"
+        size="icon"
+        class="md:hidden"
         aria-label="Open navigation menu"
         @click="emit('toggle-mobile-nav')"
       >
         <Menu class="h-4 w-4" aria-hidden="true" />
-      </button>
+      </Button>
 
       <div class="min-w-0">
         <h1 class="truncate text-base font-semibold ui-text-primary">{{ pageTitle }}</h1>
@@ -109,9 +109,10 @@ function closeDrawer(): void {
         </button>
       </div>
 
-      <button
-        type="button"
-        class="ui-topbar-control ui-btn-secondary relative inline-flex h-8 w-8 shrink-0 items-center justify-center p-0"
+      <Button
+        variant="secondary"
+        size="icon"
+        class="relative"
         :aria-label="unreadCount > 0 ? `${unreadCount} unread notifications` : 'Open notifications'"
         @click="toggleDrawer"
       >
@@ -123,7 +124,7 @@ function closeDrawer(): void {
         >
           {{ badgeLabel }}
         </span>
-      </button>
+      </Button>
 
       <div class="ui-topbar-user-badge hidden sm:flex" aria-label="Signed in user">
         <UserRound class="h-3.5 w-3.5 shrink-0 ui-text-muted" aria-hidden="true" />
@@ -137,14 +138,10 @@ function closeDrawer(): void {
         </div>
       </div>
 
-      <button
-        type="button"
-        class="ui-topbar-control ui-btn-secondary inline-flex shrink-0 items-center gap-1.5"
-        @click="emit('logout')"
-      >
+      <Button variant="secondary" class="shrink-0" @click="emit('logout')">
         <LogOut class="h-3.5 w-3.5" aria-hidden="true" />
         Logout
-      </button>
+      </Button>
     </div>
   </header>
 

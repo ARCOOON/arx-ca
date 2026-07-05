@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ShieldCheck from 'lucide-vue-next/dist/esm/icons/shield-check.js'
 import axios from 'axios'
+import Button from '../components/ui/Button.vue'
 import { login } from '../api/auth'
 import { useAuthStore } from '../store/auth'
 
@@ -94,14 +95,9 @@ async function handleSubmit(): Promise<void> {
           </div>
         </div>
 
-        <button
-          type="submit"
-          :disabled="isSubmitting"
-          class="ui-btn-primary mt-6 w-full py-2.5"
-          style="background-color: var(--accent-color); color: var(--text-inverse); border-color: var(--accent-muted)"
-        >
+        <Button type="submit" :disabled="isSubmitting" class="mt-6 w-full" size="lg">
           {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
-        </button>
+        </Button>
       </form>
     </div>
   </div>

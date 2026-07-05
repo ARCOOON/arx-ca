@@ -3,7 +3,9 @@ import { onMounted, ref } from 'vue'
 import { createProvisionerToken, fetchK8sStatus } from '../api/provisioners'
 import type { K8sProvisionerStatus, ProvisionerTokenResponse } from '../types/api'
 import { usePreferences } from '../composables/usePreferences'
+import Button from '@/components/ui/Button.vue'
 import FlatToggle from '../components/ui/FlatToggle.vue'
+import Input from '@/components/ui/Input.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
 import TagInput from '../components/ui/TagInput.vue'
 import { copyToClipboard } from '../utils/clipboard'
@@ -158,10 +160,10 @@ function dismissTokenResult(): void {
               </div>
             </dl>
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="ui-btn-primary" @click="copyToken">
+              <Button @click="copyToken">
                 {{ tokenCopied ? 'Copied' : 'Copy Token' }}
-              </button>
-              <button type="button" class="ui-btn-secondary" @click="dismissTokenResult">Dismiss</button>
+              </Button>
+              <Button variant="secondary" @click="dismissTokenResult">Dismiss</Button>
             </div>
           </div>
 
@@ -170,11 +172,10 @@ function dismissTokenResult(): void {
               <label class="block text-xs font-medium ui-text-secondary" for="token-provisioner">
                 Provisioner (optional)
               </label>
-              <input
+              <Input
                 id="token-provisioner"
                 v-model="tokenProvisioner"
-                type="text"
-                class="ui-input mt-1.5"
+                class="mt-1.5"
                 autocomplete="off"
               />
             </div>
@@ -182,17 +183,16 @@ function dismissTokenResult(): void {
               <label class="block text-xs font-medium ui-text-secondary" for="token-ttl">
                 Token TTL
               </label>
-              <input id="token-ttl" v-model="tokenTtl" type="text" class="ui-input mt-1.5" placeholder="5m" />
+              <Input id="token-ttl" v-model="tokenTtl" class="mt-1.5" placeholder="5m" />
             </div>
           </div>
 
           <div>
             <label class="block text-xs font-medium ui-text-secondary" for="token-cn">Common Name</label>
-            <input
+            <Input
               id="token-cn"
               v-model="tokenCommonName"
-              type="text"
-              class="ui-input mt-1.5"
+              class="mt-1.5"
               placeholder="pod.example.svc"
               autocomplete="off"
             />
@@ -208,14 +208,9 @@ function dismissTokenResult(): void {
             <TagInput v-model="tokenIpSans" placeholder="10.0.0.1" />
           </div>
 
-          <button
-            type="button"
-            class="ui-btn-primary"
-            :disabled="tokenGenerating"
-            @click="submitTokenGeneration"
-          >
+          <Button :disabled="tokenGenerating" @click="submitTokenGeneration">
             {{ tokenGenerating ? 'Minting…' : 'Mint Token' }}
-          </button>
+          </Button>
         </div>
       </section>
     </template>

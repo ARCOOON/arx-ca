@@ -15,6 +15,7 @@ import {
   shortenFingerprint,
 } from '../utils/ca'
 import StatusBadge from '../components/ui/StatusBadge.vue'
+import Button from '../components/ui/Button.vue'
 import { usePreferences } from '../composables/usePreferences'
 
 const { showApiHints } = usePreferences()
@@ -201,22 +202,12 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <button
-              type="button"
-              class="ui-btn-secondary"
-              :disabled="crlDownloading"
-              @click="handleDownloadCRL('pem')"
-            >
+            <Button variant="secondary" :disabled="crlDownloading" @click="handleDownloadCRL('pem')">
               {{ crlDownloading ? 'Downloading…' : 'Download CRL (PEM)' }}
-            </button>
-            <button
-              type="button"
-              class="ui-btn-secondary"
-              :disabled="crlDownloading"
-              @click="handleDownloadCRL('der')"
-            >
+            </Button>
+            <Button variant="secondary" :disabled="crlDownloading" @click="handleDownloadCRL('der')">
               Download CRL (DER)
-            </button>
+            </Button>
           </div>
         </header>
         <div class="flex flex-wrap items-center gap-2 px-4 py-3">
@@ -230,14 +221,9 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
       <section v-if="caInfo" class="ui-surface-muted">
         <header class="ui-border-b flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
           <h2 class="text-sm font-semibold ui-text-primary">Certificate Authorities</h2>
-          <button
-            type="button"
-            class="ui-btn-secondary"
-            :disabled="chainDownloading"
-            @click="handleDownloadCAChain"
-          >
+          <Button variant="secondary" :disabled="chainDownloading" @click="handleDownloadCAChain">
             {{ chainDownloading ? 'Downloading…' : 'Download CA Bundle (.zip)' }}
-          </button>
+          </Button>
         </header>
         <p v-if="chainError" class="px-4 pt-2 text-xs" style="color: var(--danger-text)" role="alert">
           {{ chainError }}
@@ -259,13 +245,9 @@ function backendTone(status: string): 'valid' | 'revoked' | 'neutral' {
                   {{ entry.cert.subject.common_name }}
                 </p>
               </div>
-              <button
-                type="button"
-                class="ui-btn-secondary shrink-0"
-                @click="downloadCertificate(entry.filename, entry.cert.pem)"
-              >
+              <Button variant="secondary" size="sm" class="shrink-0" @click="downloadCertificate(entry.filename, entry.cert.pem)">
                 Download .crt
-              </button>
+              </Button>
             </div>
             <dl class="mt-3 space-y-1.5 text-xs">
               <div class="grid grid-cols-[5.5rem_1fr] gap-2">

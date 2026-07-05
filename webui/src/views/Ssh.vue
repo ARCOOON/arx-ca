@@ -15,7 +15,9 @@ import type {
   SshRootKey,
   SshStatsResponse,
 } from '../types/api'
+import Button from '@/components/ui/Button.vue'
 import DataTable from '../components/ui/DataTable.vue'
+import Input from '@/components/ui/Input.vue'
 import Modal from '../components/ui/Modal.vue'
 import Pagination from '../components/Pagination.vue'
 import StatusBadge from '../components/ui/StatusBadge.vue'
@@ -335,9 +337,9 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <button type="button" class="ui-btn-primary" @click="openUserModal">New User Cert</button>
-            <button type="button" class="ui-btn-secondary" @click="openHostModal">New Host Cert</button>
-            <button type="button" class="ui-btn-secondary" @click="openInspectModal">Inspect Key</button>
+            <Button @click="openUserModal">New User Cert</Button>
+            <Button variant="secondary" @click="openHostModal">New Host Cert</Button>
+            <Button variant="secondary" @click="openInspectModal">Inspect Key</Button>
           </div>
         </div>
       </header>
@@ -434,13 +436,14 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
                     {{ key.fingerprint }}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  class="ui-btn-secondary shrink-0 text-[11px]"
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  class="shrink-0 text-[11px]"
                   @click="downloadRootKey(key, `${section.prefix}-${index + 1}.pub`)"
                 >
                   Download .pub
-                </button>
+                </Button>
               </div>
             </li>
           </ul>
@@ -470,10 +473,9 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label class="block text-xs font-medium ui-text-secondary">Principals</label>
-            <input
+            <Input
               v-model="userPrincipals"
-              type="text"
-              class="ui-input mt-1.5"
+              class="mt-1.5"
               placeholder="root, admin"
               autocomplete="off"
             />
@@ -481,7 +483,7 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
           </div>
           <div>
             <label class="block text-xs font-medium ui-text-secondary">TTL / validity</label>
-            <input v-model="userTtl" type="text" class="ui-input mt-1.5" placeholder="4h" />
+            <Input v-model="userTtl" class="mt-1.5" placeholder="4h" />
           </div>
         </div>
 
@@ -490,23 +492,24 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
             <p class="text-xs ui-text-secondary">
               Signed {{ userResult.certificate_type }} certificate (serial {{ userResult.serial }}).
             </p>
-            <button
-              type="button"
-              class="ui-btn-secondary text-[11px]"
+            <Button
+              variant="secondary"
+              size="sm"
+              class="text-[11px]"
               @click="downloadCertificate(userResult, 'ssh-user-cert.pub')"
             >
               Download .pub
-            </button>
+            </Button>
           </div>
           <pre class="ui-inset max-h-48 overflow-auto rounded-[var(--radius-control)] p-3 font-mono text-[10px] ui-text-secondary">{{ userResult.certificate }}</pre>
         </div>
       </div>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="userLoading" @click="closeUserModal">Cancel</button>
-        <button type="button" class="ui-btn-primary" :disabled="userLoading" @click="submitUserCertificate">
+        <Button variant="secondary" :disabled="userLoading" @click="closeUserModal">Cancel</Button>
+        <Button :disabled="userLoading" @click="submitUserCertificate">
           {{ userLoading ? 'Generating…' : 'Generate User Certificate' }}
-        </button>
+        </Button>
       </template>
     </Modal>
 
@@ -532,10 +535,9 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label class="block text-xs font-medium ui-text-secondary">Principals</label>
-            <input
+            <Input
               v-model="hostPrincipals"
-              type="text"
-              class="ui-input mt-1.5"
+              class="mt-1.5"
               placeholder="web-01.example.com, 10.0.0.5"
               autocomplete="off"
             />
@@ -543,7 +545,7 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
           </div>
           <div>
             <label class="block text-xs font-medium ui-text-secondary">TTL / validity</label>
-            <input v-model="hostTtl" type="text" class="ui-input mt-1.5" placeholder="8760h" />
+            <Input v-model="hostTtl" class="mt-1.5" placeholder="8760h" />
           </div>
         </div>
 
@@ -552,23 +554,24 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
             <p class="text-xs ui-text-secondary">
               Signed {{ hostResult.certificate_type }} certificate (serial {{ hostResult.serial }}).
             </p>
-            <button
-              type="button"
-              class="ui-btn-secondary text-[11px]"
+            <Button
+              variant="secondary"
+              size="sm"
+              class="text-[11px]"
               @click="downloadCertificate(hostResult, 'ssh-host-cert.pub')"
             >
               Download .pub
-            </button>
+            </Button>
           </div>
           <pre class="ui-inset max-h-48 overflow-auto rounded-[var(--radius-control)] p-3 font-mono text-[10px] ui-text-secondary">{{ hostResult.certificate }}</pre>
         </div>
       </div>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="hostLoading" @click="closeHostModal">Cancel</button>
-        <button type="button" class="ui-btn-primary" :disabled="hostLoading" @click="submitHostCertificate">
+        <Button variant="secondary" :disabled="hostLoading" @click="closeHostModal">Cancel</Button>
+        <Button :disabled="hostLoading" @click="submitHostCertificate">
           {{ hostLoading ? 'Generating…' : 'Generate Host Certificate' }}
-        </button>
+        </Button>
       </template>
     </Modal>
 
@@ -626,12 +629,12 @@ function downloadRootKey(key: SshRootKey, filename: string): void {
       </div>
 
       <template #footer>
-        <button type="button" class="ui-btn-secondary" :disabled="inspectLoading" @click="closeInspectModal">
+        <Button variant="secondary" :disabled="inspectLoading" @click="closeInspectModal">
           Close
-        </button>
-        <button type="button" class="ui-btn-primary" :disabled="inspectLoading" @click="submitInspect">
+        </Button>
+        <Button :disabled="inspectLoading" @click="submitInspect">
           {{ inspectLoading ? 'Inspecting…' : 'Inspect Certificate' }}
-        </button>
+        </Button>
       </template>
     </Modal>
   </div>

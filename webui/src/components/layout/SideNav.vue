@@ -16,6 +16,7 @@ import ShieldCheck from 'lucide-vue-next/dist/esm/icons/shield-check.js'
 import Webhook from 'lucide-vue-next/dist/esm/icons/webhook.js'
 import Terminal from 'lucide-vue-next/dist/esm/icons/terminal.js'
 import X from 'lucide-vue-next/dist/esm/icons/x.js'
+import Button from '../ui/Button.vue'
 
 const props = defineProps<{
   collapsed: boolean
@@ -86,14 +87,15 @@ function handleNavClick(): void {
         <p class="truncate text-sm font-semibold ui-text-primary">Arx CA</p>
         <p class="text-[10px] uppercase tracking-wide ui-text-muted">Management</p>
       </div>
-      <button
-        type="button"
-        class="ui-btn-secondary inline-flex h-7 w-7 shrink-0 items-center justify-center p-0 md:hidden"
+      <Button
+        variant="secondary"
+        size="icon"
+        class="md:hidden"
         aria-label="Close navigation menu"
         @click="emit('close-mobile')"
       >
         <X class="h-4 w-4" aria-hidden="true" />
-      </button>
+      </Button>
     </div>
 
     <nav class="custom-scrollbar flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
@@ -115,15 +117,15 @@ function handleNavClick(): void {
     </nav>
 
     <div class="ui-border-t hidden p-2 md:block">
-      <button
-        type="button"
-        class="ui-btn-secondary flex w-full items-center justify-center py-2"
+      <Button
+        variant="secondary"
+        class="w-full"
         :aria-label="collapsed ? 'Expand navigation' : 'Collapse navigation'"
         @click="toggleCollapsed"
       >
         <ChevronRight v-if="collapsed" class="h-4 w-4" aria-hidden="true" />
         <ChevronLeft v-else class="h-4 w-4" aria-hidden="true" />
-      </button>
+      </Button>
     </div>
   </aside>
 </template>

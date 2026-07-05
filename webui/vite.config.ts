@@ -1,30 +1,17 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
-
-const srcDir = fileURLToPath(new URL('./src', import.meta.url))
+import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [
-    vue({
-      features: {
-        optionsAPI: false,
-        prodDevtools: false,
-        prodHydrationMismatchDetails: false,
-        componentIdGenerator: 'filepath',
-      },
-    }),
-    tailwindcss(),
-  ],
+  plugins: [vue(), tailwindcss()],
   resolve: {
-    extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.vue'],
     alias: {
-      '@': srcDir,
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+    extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.vue'],
   },
   server: {
-    host: '0.0.0.0',
     port: 5173,
     proxy: {
       '/api': {
