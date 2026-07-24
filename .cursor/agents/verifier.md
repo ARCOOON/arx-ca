@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Validates completed work. Use after a task is marked done to confirm the implementation actually exists and functions, rather than trusting the claim.
+description: Validates completed work. Use for Step 4 to confirm the implementation actually exists and functions, rather than trusting the claim.
 model: inherit
 readonly: false
 ---
