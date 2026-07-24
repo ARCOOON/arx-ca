@@ -19,17 +19,29 @@
 ## Version Control & Git Guidelines
 - **Strict Prohibition:** NEVER execute a global `git add .` or `git commit -a`.
 - **Granular Staging:** Always analyze modifications using `git status` and `git diff`. Stage files individually (`git add <file>`) or in highly specific logical groups.
-- **Conventional Commits v1.0 & 50/72 Rule:** Every commit message MUST strictly follow the Conventional Commits specification.
-  - Allowed types: `feat`, `fix`, `chore`, `docs`, `refactor`, `style`, `test`, `build`, `ci`.
-  - For ANY change that requires context, you MUST write a multiline commit message using this exact structure:
-    1. A short header: `<type>(<optional scope>): <description>` (Max 50 characters).
-    2. One blank line.
-    3. A detailed body explaining the "what" and "why" (Wrapped at ~72 characters per line).
-  - Example multiline commit:
-    `feat(ca): integrate step-ca OIDC provisioner`
-    
-    `* Added the OpenID Connect provisioner to the PKIEngine.`
-    `* This allows clients to authenticate via external Identity`
-    `* Providers (like Okta or Keycloak) to request certificates.`
-- **Traceability:** If a single file contains multiple logical changes, separate them if possible. All commit messages and bodies MUST be in English.
 - **No AI Attribution:** You MUST NOT append any "Co-authored-by", signature, or AI attribution trailers to the commit messages. Do not mention Cursor or AI in the commit logs. The user is the sole author.
+
+# Sub-Agent Orchestration Protocol
+
+For any complex feature request or bug fix, strictly execute this pipeline sequentially. Do not use the term "Phase" for these operations; always use "Step".
+
+## Step 1: Research (Information Gathering)
+- Delegate to `@researcher`.
+- Task: Analyze existing codebase structure, map dependencies, and proactively research the latest versions, breaking changes, and official documentation for any required packages or modules.
+- Output: A comprehensive state summary, impact radius, and external package constraints.
+
+## Step 2: Plan (Architecture & Design)
+- Delegate to `@planner` using the output from Step 1.
+- Output: Architecture overview and step-by-step execution plan.
+- **Action:** Proceed to Step 3 automatically. ONLY pause for confirmation if there are missing requirements or blocking questions that require user input.
+
+## Step 3: Implement (Code Generation)
+- Delegate to `@implementer` to execute the Step 2 plan.
+- Output: Production-ready code with no placeholders.
+
+## Step 4: Code Review & Security (Conditional)
+- Delegate to `@reviewer` to audit the output of Step 3.
+- Output: Pass/Fail verdict and blocker identification.
+
+## Step 5: Documentation (Conditional)
+- Delegate to `@docs_writer` to sync specs, guides, and docstrings.
