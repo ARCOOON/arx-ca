@@ -1,11 +1,11 @@
 import { readonly, ref } from 'vue'
-import { fetchSettingsConfig } from '../api/config'
-import { fetchHealth } from '../api/health'
-import { useAuthStore } from '../store/auth'
+import { fetchHealth } from '@/api/health'
+import { fetchSettingsConfig } from '@/api/settings'
+import { useAuthStore } from '@/stores/auth'
 
 const LAST_SEEN_VERSION_KEY = 'arx_last_seen_version'
 
-const triggerChangelogModal = ref(false)
+const showChangelog = ref(false)
 let driftCheckPromise: Promise<void> | null = null
 
 function canManageSettings(roles: string[]): boolean {
@@ -16,10 +16,10 @@ function normalizeVersion(value: string): string {
   return value.trim().replace(/^v/i, '').toLowerCase()
 }
 
-function versionsDiffer(stored: string, current: string): boolean {
-  return normalizeVersion(stored) !== normalizeVersion(current)
-}
-
+/**
+ * Detect a running-binary version drift and, when the operator opted into
+ * post-update changelogs, surface the release notes modal exactly once.
+ */
 export function useUpdater() {
   async function checkVersionDrift(): Promise<void> {
     if (typeof window === 'undefined') {
@@ -39,14 +39,14 @@ export function useUpdater() {
       if (
         config.updater.view_changelog_after_update &&
         previousVersion !== null &&
-        versionsDiffer(previousVersion, currentVersion)
+        normalizeVersion(previousVersion) !== normalizeVersion(currentVersion)
       ) {
-        triggerChangelogModal.value = true
+        showChangelog.value = true
       }
 
       localStorage.setItem(LAST_SEEN_VERSION_KEY, currentVersion)
     } catch {
-      // Drift detection is best-effort during bootstrap; ignore transient failures.
+      // Drift detection is best-effort during bootstrap; ignore transient errors.
     }
   }
 
@@ -59,13 +59,13 @@ export function useUpdater() {
     })
   }
 
-  function dismissChangelogModal(): void {
-    triggerChangelogModal.value = false
+  function dismissChangelog(): void {
+    showChangelog.value = false
   }
 
   return {
-    triggerChangelogModal: readonly(triggerChangelogModal),
+    showChangelog: readonly(showChangelog),
     runVersionDriftCheck,
-    dismissChangelogModal,
+    dismissChangelog,
   }
 }

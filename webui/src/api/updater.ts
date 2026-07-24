@@ -1,15 +1,6 @@
-import type { ApiEnvelope, UpdaterChangelogResponse } from '../types/api'
-import { apiClient } from './client'
+import { request } from './client'
+import type { UpdaterChangelogResponse } from '@/types/api'
 
-export async function fetchCurrentChangelog(): Promise<UpdaterChangelogResponse> {
-  const response = await apiClient.get<ApiEnvelope<UpdaterChangelogResponse>>('/updater/current-changelog')
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-  if (!payload.data) {
-    throw new Error('Changelog response did not include data')
-  }
-  return payload.data
+export function fetchCurrentChangelog(): Promise<UpdaterChangelogResponse> {
+  return request<UpdaterChangelogResponse>('/updater/current-changelog')
 }

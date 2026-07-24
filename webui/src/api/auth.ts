@@ -1,43 +1,24 @@
+import { request } from './client'
 import type {
-  ApiEnvelope,
   CreateServiceAccountRequest,
   LoginRequest,
   LoginResponse,
   ServiceAccountResponse,
-} from '../types/api'
-import { apiClient } from './client'
+} from '@/types/api'
 
-export async function login(credentials: LoginRequest): Promise<LoginResponse> {
-  const response = await apiClient.post<ApiEnvelope<LoginResponse>>('/auth/login', credentials)
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('Login response did not include session data')
-  }
-
-  return payload.data
+export function login(payload: LoginRequest): Promise<LoginResponse> {
+  return request<LoginResponse>('/auth/login', { method: 'POST', body: payload })
 }
 
-export async function createServiceAccount(
-  request: CreateServiceAccountRequest,
+export function logoutSession(): Promise<{ status: string }> {
+  return request<{ status: string }>('/auth/logout', { method: 'POST' })
+}
+
+export function createServiceAccount(
+  payload: CreateServiceAccountRequest,
 ): Promise<ServiceAccountResponse> {
-  const response = await apiClient.post<ApiEnvelope<ServiceAccountResponse>>(
-    '/auth/service-accounts',
-    request,
-  )
-  const payload = response.data
-
-  if (payload.error) {
-    throw new Error(payload.error)
-  }
-
-  if (!payload.data) {
-    throw new Error('Service account response did not include data')
-  }
-
-  return payload.data
+  return request<ServiceAccountResponse>('/auth/service-accounts', {
+    method: 'POST',
+    body: payload,
+  })
 }
